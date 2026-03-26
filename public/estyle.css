@@ -1,0 +1,43 @@
+body {
+    background-color: #f4f6f9;
+    font-size: 14px;
+}
+
+/* SIDEBAR */
+.sidebar {
+    background: #2f3542;
+    min-height: 100vh;
+}
+
+.sidebar .nav-link {
+    color: #dcdde1;
+    padding: 8px 10px;
+    border-radius: 4px;
+}
+
+.sidebar .nav-link:hover {
+    background: #57606f;
+    color: #fff;
+}
+
+.sidebar .nav-link.active {
+    background: #1e90ff;
+    color: #fff;
+}
+
+/* CONTENIDO */
+.content-area {
+    background: #f4f6f9;
+}
+
+/* KPI */
+.kpi-card {
+    padding: 15px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+}
+
+/* TABLA */
+.table th {
+    font-weight: 600;
+}
