@@ -9,7 +9,7 @@ Route::get('/', function () {
 
 Route::view('/ingresos', 'ingresos');
 Route::view('/salidas', 'salidas');
-Route::view('/letras', 'letras');
+Route::view('/zendy/letras', 'zendy.letras');
 Route::view('/reportes', 'reportes');
 Route::view('/ventas', 'ventas');
 

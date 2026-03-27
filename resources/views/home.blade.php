@@ -52,7 +52,7 @@
                     </a>
                     <div class="collapse {{ request()->is('letras*') ? 'show' : '' }}" id="zendyMenu">
                         <ul class="nav flex-column ms-3">
-                            <li><a href="/letras" class="nav-link">Pago de letras</a></li>
+                            <li><a href="/zendy/letras" class="nav-link">Pago de letras</a></li>
                         </ul>
                     </div>
                 </li>
