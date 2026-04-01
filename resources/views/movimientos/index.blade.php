@@ -1,37 +1,30 @@
-@extends("layouts.app")
+@extends('layouts.app')
 
-@section("content")
-
-<div class="container mt-4">
-
-    <h4>Movimientos</h4>
-
+@section('content')
+<div class="container">
+    <h2>Movimientos</h2>
     <a href="/movimientos/create/ingreso" class="btn btn-success">+ Ingreso</a>
-    <a href="/movimientos/create/egreso" class="btn btn-danger">+ Egreso</a>
+    <a href="/movimientos/create/salida" class="btn btn-danger">+ Salida</a>
 
     <table class="table mt-3">
         <thead>
             <tr>
                 <th>Tipo</th>
-                <th>Descripción</th>
+                <th>Categoria</th>
                 <th>Monto</th>
                 <th>Fecha</th>
             </tr>
         </thead>
-
         <tbody>
             @foreach($movimientos as $m)
             <tr>
                 <td>{{ $m->tipo }}</td>
-                <td>{{ $m->descripcion }}</td>
+                <td>{{ $m->Categoria }}</td>
                 <td>S/ {{ $m->monto }}</td>
                 <td>{{ $m->fecha }}</td>
             </tr>
             @endforeach
         </tbody>
-
     </table>
-
 </div>
-
 @endsection

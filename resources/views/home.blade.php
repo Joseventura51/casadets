@@ -25,17 +25,12 @@
     <ul class="nav flex-column ms-3">
 
         <li>
-            <a href="/movimientos/create/ingreso" class="nav-link">
-                Ingresos
+            <a href="/movimientos" class="nav-link">
+                Movimientos
             </a>
         </li>
 
-        <li>
-            <a href="/movimientos/create/egreso" class="nav-link">
-                Salidas
-            </a>
-        </li>
-
+        
         <li>
             <a href="/ventas" class="nav-link {{ request()->is('ventas*') ? 'active' : '' }}">
                 Ventas

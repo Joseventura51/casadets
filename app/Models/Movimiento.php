@@ -8,8 +8,9 @@ class Movimiento extends Model
 {
     protected $fillable = [
     'tipo',
-    'descripcion',
+    'Categoria',
     'monto',
-    'fecha'
+    'fecha',
+    'observaciones',
 ];
 }
