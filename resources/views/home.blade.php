@@ -30,7 +30,7 @@
             </a>
         </li>
 
-        
+    
         <li>
             <a href="/ventas" class="nav-link {{ request()->is('ventas*') ? 'active' : '' }}">
                 Ventas
