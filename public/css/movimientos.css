@@ -1,0 +1,99 @@
+/* Contenedor */
+.mov-container {
+    padding-top: 30px;
+}
+
+/* Header */
+.mov-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.mov-title {
+    font-weight: 600;
+    color: #292121;
+}
+
+/* Botones */
+.btn-soft-success {
+    border: 1px solid #198754;
+    color: #198754;
+    background-color: transparent;
+}
+
+.btn-soft-success:hover {
+    background-color: #198754;
+    color: white;
+}
+
+.btn-soft-danger {
+    border: 1px solid #dc3545;
+    color: #dc3545;
+    background-color: transparent;
+}
+
+.btn-soft-danger:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Card */
+.mov-card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+/* Tabla */
+.mov-table thead {
+    background-color: #f8f9fa;
+}
+
+.mov-table th {
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #6c757d;
+    padding: 12px;
+}
+
+.mov-table td {
+    padding: 14px 12px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Tipo badge */
+.badge-soft-success {
+    background-color: #e9f7ef;
+    color: #198754;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.badge-soft-danger {
+    background-color: #fdecea;
+    color: #dc3545;
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+/* Monto */
+.text-money-success {
+    color: #198754;
+    font-weight: 600;
+}
+
+.text-money-danger {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+/* Fecha */
+.text-date {
+    color: #6c757d;
+    font-size: 14px;
+}

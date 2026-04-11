@@ -14,3 +14,4 @@ class Movimiento extends Model
     'observaciones',
 ];
 }
+ 

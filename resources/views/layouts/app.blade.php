@@ -12,6 +12,7 @@
 
     <!-- Tu CSS -->
     <link rel="stylesheet" href="{{ asset('css/estilos.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/movimientos.css') }}">
 </head>
 <body>
 
