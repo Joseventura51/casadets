@@ -1,0 +1,66 @@
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-2">
+                @extends('layouts.app')
+            </div>
+            
+            <div class="col-md-10">
+                
+                    <div class="container mov-container">
+
+                        <div class="mov-header">
+                            <h4 class="mov-title">Movimientos</h4>
+                            <div>
+                                <a href="/movimientos/create/ingreso" class="btn btn-soft-success me-2">
+                                    + Ingreso
+                                </a>
+                                <a href="/movimientos/create/salida" class="btn btn-soft-danger">
+                                    + Salida
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="card mov-card">
+                            <table class="table mov-table mb-0">
+
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Categoría</th>
+                                        <th>Monto</th>
+                                        <th>Fecha</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @foreach($movimientos as $m)
+                                    <tr>
+                                        <td>
+                                            <span class="{{ $m->tipo == 'ingreso' ? 'badge-soft-success' : 'badge-soft-danger' }}">
+                                                {{ ucfirst($m->tipo) }}
+                                            </span>
+                                        </td>
+
+                                        <td>{{ $m->Categoria }}</td>
+
+                                        <td class="{{ $m->tipo == 'ingreso' ? 'text-money-success' : 'text-money-danger' }}">
+                                            S/ {{ number_format($m->monto, 2) }}
+                                        </td>
+
+                                        <td class="text-date">
+                                            {{ \Carbon\Carbon::parse($m->fecha)->format('d M Y') }}
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+
+                            </table>
+                        </div>
+
+                    </div>
+            </div>
+
+        </div>
+
+    </div>
+    
