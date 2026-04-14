@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 class Movimiento extends Model
 {
     protected $fillable = [
-    'tipo',
-    'Categoria',
-    'monto',
-    'fecha',
-    'observaciones',
-];
+        'tipo',
+        'categoria',
+        'documento_tipo',
+        'documento_numero',
+        'monto',
+        'fecha',
+        'observaciones',
+    ];
 }

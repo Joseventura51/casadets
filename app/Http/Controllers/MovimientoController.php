@@ -24,18 +24,26 @@ class MovimientoController extends Controller
     // Guarda el movimiento en la base de datos
     public function store(Request $request)
     {
-        // Valida que los campos estén completos
         $request->validate([
-            'tipo'        => 'required',
-            'descripcion' => 'required',
-            'monto'       => 'required|numeric',
-            'fecha'       => 'required|date',
+            'tipo' => 'required|in:ingreso,salida',
+            'categoria' => 'required|string|max:255',
+            'documento_tipo' => 'required|in:factura,proforma',
+            'documento_numero' => 'required|string|max:255',
+            'monto' => 'required|numeric|min:0.01',
+            'fecha' => 'required|date',
+            'observaciones' => 'nullable|string',
         ]);
 
-        // Crea el registro en la tabla movimientos
-        Movimiento::create($request->all());
+        Movimiento::create($request->only([
+            'tipo',
+            'categoria',
+            'documento_tipo',
+            'documento_numero',
+            'monto',
+            'fecha',
+            'observaciones',
+        ]));
 
-        // Redirige según si fue ingreso o salida
         return redirect('/movimientos')->with('success', 'Movimiento registrado');
     }
 }

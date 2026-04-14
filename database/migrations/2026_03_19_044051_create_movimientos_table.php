@@ -14,7 +14,9 @@
             Schema::create('movimientos', function (Blueprint $table) {
                 $table->id();
                 $table->string('tipo');
-                $table->string('Categoria');
+                $table->string('categoria');
+                $table->string('documento_tipo');
+                $table->string('documento_numero');
                 $table->decimal('monto',10,2);
                 $table->date('fecha');
                 $table->text('observaciones')->nullable();
