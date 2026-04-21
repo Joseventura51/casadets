@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Gvc5smKuTvcWOPLCrqCWd"
+uri = "file://exports/casadets-modulos.zip"
+type = "unspecified"
+title = "Módulos Caja, Ventas y Vendedores (CASADETS)"
