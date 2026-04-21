@@ -6,9 +6,14 @@
         <h3 class="mb-0">Ventas</h3>
         <p class="text-muted mb-0">Registro de ventas por vendedor.</p>
     </div>
-    <a href="/casadets/ventas/create" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> Nueva venta
-    </a>
+    <div class="d-flex gap-2">
+        <a href="/casadets/ventas/import" class="btn btn-outline-success">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Importar Excel
+        </a>
+        <a href="/casadets/ventas/create" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Nueva venta
+        </a>
+    </div>
 </div>
 
 <div class="card mb-3">

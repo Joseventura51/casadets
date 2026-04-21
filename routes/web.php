@@ -5,6 +5,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\VendedorController;
 use App\Http\Controllers\VentaController;
+use App\Http\Controllers\VentaImportController;
 use App\Http\Controllers\CajaController;
 
 Route::get('/', [HomeController::class, 'index']);
@@ -32,5 +33,7 @@ Route::delete('/casadets/vendedores/{vendedor}', [VendedorController::class, 'de
 Route::get('/casadets/ventas', [VentaController::class, 'index']);
 Route::get('/casadets/ventas/create', [VentaController::class, 'create']);
 Route::post('/casadets/ventas', [VentaController::class, 'store']);
+Route::get('/casadets/ventas/import', [VentaImportController::class, 'form']);
+Route::post('/casadets/ventas/import', [VentaImportController::class, 'process']);
 Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
