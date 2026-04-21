@@ -52,16 +52,22 @@
                     <thead class="table-light">
                         <tr>
                             <th>Vendedor</th>
-                            <th>Producto</th>
-                            <th class="text-end">Monto</th>
+                            <th>Productos</th>
+                            <th class="text-end">Total</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($ventasHoy as $v)
                         <tr>
                             <td>{{ $v->vendedor->nombre ?? '—' }}</td>
-                            <td>{{ $v->producto }}</td>
-                            <td class="text-end">S/ {{ number_format($v->monto, 2) }}</td>
+                            <td>
+                                @if($v->detalles->count() == 1)
+                                    {{ $v->detalles->first()->producto }}
+                                @else
+                                    {{ $v->detalles->count() }} productos
+                                @endif
+                            </td>
+                            <td class="text-end">S/ {{ number_format($v->total, 2) }}</td>
                         </tr>
                         @empty
                         <tr><td colspan="3" class="text-center text-muted py-3">Sin ventas hoy</td></tr>

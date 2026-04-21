@@ -13,7 +13,7 @@ class CajaController extends Controller
     {
         $fecha = $request->input('fecha', Carbon::today()->toDateString());
 
-        $ventas = Venta::with('vendedor')
+        $ventas = Venta::with(['vendedor', 'detalles'])
             ->whereDate('fecha', $fecha)
             ->orderBy('id', 'desc')
             ->get();
@@ -22,14 +22,14 @@ class CajaController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
-        $totalVentas = $ventas->sum('monto');
+        $totalVentas = $ventas->sum('total');
         $totalIngresos = $movimientos->where('tipo', 'ingreso')->sum('monto');
         $totalSalidas = $movimientos->where('tipo', 'salida')->sum('monto');
         $balance = $totalVentas + $totalIngresos - $totalSalidas;
 
-        $ventasPorMetodo = $ventas->groupBy('metodo_pago')->map(fn($g) => $g->sum('monto'));
+        $ventasPorMetodo = $ventas->groupBy('metodo_pago')->map(fn($g) => $g->sum('total'));
         $ventasPorVendedor = $ventas->groupBy(fn($v) => $v->vendedor->nombre ?? 'Sin vendedor')
-            ->map(fn($g) => $g->sum('monto'));
+            ->map(fn($g) => $g->sum('total'));
 
         return view('casadets.caja.index', compact(
             'fecha',

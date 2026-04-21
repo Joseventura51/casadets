@@ -46,10 +46,10 @@
                 <tr>
                     <th>Fecha</th>
                     <th>Vendedor</th>
-                    <th>Producto</th>
+                    <th>Productos</th>
                     <th>Pago</th>
                     <th>Documento</th>
-                    <th class="text-end">Monto</th>
+                    <th class="text-end">Total</th>
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
@@ -58,7 +58,14 @@
                 <tr>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
-                    <td>{{ $v->producto }}</td>
+                    <td>
+                        @if($v->detalles->count() == 1)
+                            {{ $v->detalles->first()->producto }}
+                        @else
+                            <span class="badge bg-info text-dark">{{ $v->detalles->count() }} productos</span>
+                            <small class="text-muted d-block">{{ $v->detalles->pluck('producto')->take(2)->implode(', ') }}{{ $v->detalles->count() > 2 ? '…' : '' }}</small>
+                        @endif
+                    </td>
                     <td><span class="badge bg-light text-dark">{{ ucfirst($v->metodo_pago) }}</span></td>
                     <td>
                         @if($v->documento_tipo)
@@ -67,8 +74,9 @@
                             <span class="text-muted">—</span>
                         @endif
                     </td>
-                    <td class="text-end fw-semibold">S/ {{ number_format($v->monto, 2) }}</td>
+                    <td class="text-end fw-semibold">S/ {{ number_format($v->total, 2) }}</td>
                     <td class="text-end">
+                        <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
                         <form action="/casadets/ventas/{{ $v->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar venta?')">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-outline-danger">Eliminar</button>
@@ -83,7 +91,7 @@
             <tfoot>
                 <tr class="table-light">
                     <th colspan="5" class="text-end">Total</th>
-                    <th class="text-end">S/ {{ number_format($ventas->sum('monto'), 2) }}</th>
+                    <th class="text-end">S/ {{ number_format($ventas->sum('total'), 2) }}</th>
                     <th></th>
                 </tr>
             </tfoot>

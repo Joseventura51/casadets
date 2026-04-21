@@ -14,7 +14,7 @@ class HomeController extends Controller
 
         $totalVentasMes = Venta::whereMonth('fecha', $hoy->month)
             ->whereYear('fecha', $hoy->year)
-            ->sum('monto');
+            ->sum('total');
 
         $totalIngresosMes = Movimiento::where('tipo', 'ingreso')
             ->whereMonth('fecha', $hoy->month)
@@ -28,7 +28,7 @@ class HomeController extends Controller
 
         $balanceMes = $totalVentasMes + $totalIngresosMes - $totalSalidasMes;
 
-        $ventasHoy = Venta::with('vendedor')
+        $ventasHoy = Venta::with(['vendedor', 'detalles'])
             ->whereDate('fecha', $hoy)
             ->orderBy('id', 'desc')
             ->limit(5)

@@ -32,4 +32,5 @@ Route::delete('/casadets/vendedores/{vendedor}', [VendedorController::class, 'de
 Route::get('/casadets/ventas', [VentaController::class, 'index']);
 Route::get('/casadets/ventas/create', [VentaController::class, 'create']);
 Route::post('/casadets/ventas', [VentaController::class, 'store']);
+Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
