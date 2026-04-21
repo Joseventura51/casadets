@@ -1,124 +1,112 @@
-@extends("layouts.app")
+@extends('layouts.app')
 
-@section("content")
-
-<div class="container-fluid">
-    <div class="row">
-
-        <!-- SIDEBAR -->
-        <div class="col-md-2 sidebar p-3">
-            <h5 class="text-center fw-bold mb-4">Sistema</h5>
-
-            <ul class="nav flex-column">
-
-                <li class="nav-item">
-                    <a href="/" class="nav-link {{ request()->is('/') ? 'active' : '' }}">
-                        Dashboard
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="collapse" href="#casadetsMenu">
-                        CASADETS
-                    </a>
-                    <div class="collapse {{ request()->is('ingresos*') || request()->is('salidas*') || request()->is('ventas*') ? 'show' : '' }}" id="casadetsMenu">
-    <ul class="nav flex-column ms-3">
-
-        <li>
-            <a href="/movimientos" class="nav-link">
-                Movimientos
-            </a>
-        </li>
-
-    
-        <li>
-            <a href="/ventas" class="nav-link {{ request()->is('ventas*') ? 'active' : '' }}">
-                Ventas
-            </a>
-        </li>
-
-    </ul>
+@section('content')
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-0">Dashboard</h3>
+        <p class="text-muted mb-0">Resumen del mes en curso</p>
+    </div>
+    <a href="/casadets/caja" class="btn btn-primary">
+        <i class="bi bi-cash-coin me-1"></i> Ver Caja del día
+    </a>
 </div>
-                </li>
 
-                <li class="nav-item">
-                    <a class="nav-link" data-bs-toggle="collapse" href="#zendyMenu">
-                        ZENDY
-                    </a>
-                    <div class="collapse {{ request()->is('letras*') ? 'show' : '' }}" id="zendyMenu">
-                        <ul class="nav flex-column ms-3">
-                            <li><a href="/zendy/letras" class="nav-link">Pago de letras</a></li>
-                        </ul>
-                    </div>
-                </li>
-
-                <li class="nav-item mt-3">
-                    <a href="/reportes" class="nav-link">Reportes</a>
-                </li>
-
-            </ul>
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card kpi-card">
+            <div class="text-muted small">Ventas del mes</div>
+            <h4 class="text-primary mb-0">S/ {{ number_format($totalVentasMes, 2) }}</h4>
         </div>
-
-        <!-- CONTENIDO -->
-        <div class="col-md-10 content-area p-4">
-
-            <h4 class="mb-4">Dashboard</h4>
-
-            <!-- INDICADORES -->
-            <div class="row g-3">
-
-                <div class="col-md-4">
-                    <div class="card kpi-card">
-                        <div>Total Ingresos</div>
-                        <h5 class="text-success">S/ 5,000</h5>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card kpi-card">
-                        <div>Total Salidas</div>
-                        <h5 class="text-danger">S/ 2,000</h5>
-                    </div>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="card kpi-card">
-                        <div>Balance</div>
-                        <h5 class="text-primary">S/ 3,000</h5>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- TABLA -->
-            <div class="card mt-4">
-                <div class="card-header">
-                    Últimos movimientos
-                </div>
-
-                <div class="card-body p-0">
-                    <table class="table table-sm table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Tipo</th>
-                                <th>Monto</th>
-                                <th>Fecha</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Ingreso</td>
-                                <td>S/ 1000</td>
-                                <td>2026-03-18</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
+    </div>
+    <div class="col-md-3">
+        <div class="card kpi-card">
+            <div class="text-muted small">Ingresos del mes</div>
+            <h4 class="text-success mb-0">S/ {{ number_format($totalIngresosMes, 2) }}</h4>
         </div>
-
+    </div>
+    <div class="col-md-3">
+        <div class="card kpi-card">
+            <div class="text-muted small">Salidas del mes</div>
+            <h4 class="text-danger mb-0">S/ {{ number_format($totalSalidasMes, 2) }}</h4>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card kpi-card">
+            <div class="text-muted small">Balance</div>
+            <h4 class="mb-0 {{ $balanceMes >= 0 ? 'text-success' : 'text-danger' }}">
+                S/ {{ number_format($balanceMes, 2) }}
+            </h4>
+        </div>
     </div>
 </div>
 
+<div class="row g-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-cart3 me-1"></i> Ventas de hoy</span>
+                <a href="/casadets/ventas" class="small">Ver todas</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Vendedor</th>
+                            <th>Producto</th>
+                            <th class="text-end">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($ventasHoy as $v)
+                        <tr>
+                            <td>{{ $v->vendedor->nombre ?? '—' }}</td>
+                            <td>{{ $v->producto }}</td>
+                            <td class="text-end">S/ {{ number_format($v->monto, 2) }}</td>
+                        </tr>
+                        @empty
+                        <tr><td colspan="3" class="text-center text-muted py-3">Sin ventas hoy</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-arrow-left-right me-1"></i> Últimos movimientos</span>
+                <a href="/movimientos" class="small">Ver todos</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Categoría</th>
+                            <th class="text-end">Monto</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($ultimosMovimientos as $m)
+                        <tr>
+                            <td>
+                                <span class="badge {{ $m->tipo == 'ingreso' ? 'bg-success' : 'bg-danger' }}">
+                                    {{ ucfirst($m->tipo) }}
+                                </span>
+                            </td>
+                            <td>{{ $m->categoria }}</td>
+                            <td class="text-end">S/ {{ number_format($m->monto, 2) }}</td>
+                            <td>{{ \Carbon\Carbon::parse($m->fecha)->format('d/m/Y') }}</td>
+                        </tr>
+                        @empty
+                        <tr><td colspan="4" class="text-center text-muted py-3">Sin movimientos</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
