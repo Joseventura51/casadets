@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Movimiento;
 use App\Models\Venta;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class HomeController extends Controller
@@ -14,7 +15,8 @@ class HomeController extends Controller
 
         $totalVentasMes = Venta::whereMonth('fecha', $hoy->month)
             ->whereYear('fecha', $hoy->year)
-            ->sum('total');
+            ->select(DB::raw('COALESCE(SUM(total + ajuste), 0) as t'))
+            ->value('t');
 
         $totalIngresosMes = Movimiento::where('tipo', 'ingreso')
             ->whereMonth('fecha', $hoy->month)

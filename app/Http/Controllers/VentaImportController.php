@@ -24,7 +24,7 @@ class VentaImportController extends Controller
         return view('casadets.ventas.import', compact('vendedores'));
     }
 
-    public function process(Request $request)
+    public function preview(Request $request)
     {
         $request->validate([
             'archivo' => 'required|file|mimes:xlsx,xls,csv|max:10240',
@@ -43,7 +43,6 @@ class VentaImportController extends Controller
             return back()->with('error', 'El archivo está vacío o no tiene datos.');
         }
 
-        // Detectar columnas por nombre del encabezado
         $headers = array_map(fn($h) => strtolower(trim((string) $h)), $rows[0]);
         $mapa = $this->mapearColumnas($headers);
 
@@ -52,7 +51,6 @@ class VentaImportController extends Controller
             return back()->with('error', 'Faltan columnas en el Excel: ' . implode(', ', $faltantes));
         }
 
-        // Agrupar por documento (Doc + Serie + NroDocumen)
         $grupos = [];
         for ($i = 1; $i < count($rows); $i++) {
             $r = $rows[$i];
@@ -62,7 +60,7 @@ class VentaImportController extends Controller
             $producto = trim((string) ($r[$mapa['producto']] ?? ''));
 
             if ($producto === '' || ($doc === '' && $serie === '' && $numero === '')) {
-                continue; // fila vacía
+                continue;
             }
 
             $key = $doc . '|' . $serie . '|' . $numero;
@@ -74,6 +72,7 @@ class VentaImportController extends Controller
                     'serie' => $serie,
                     'numero' => $numero,
                     'detalles' => [],
+                    'total' => 0,
                 ];
             }
 
@@ -87,40 +86,75 @@ class VentaImportController extends Controller
                 'precio_unitario' => $precio,
                 'subtotal' => $total,
             ];
+            $grupos[$key]['total'] += $total;
         }
 
         if (empty($grupos)) {
             return back()->with('error', 'No se encontraron filas válidas en el archivo.');
         }
 
-        $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma'];
-        $vendedorId = $request->vendedor_id;
-        $metodoPago = $request->metodo_pago;
-        $totalCreadas = 0;
+        $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
-        DB::transaction(function () use ($grupos, $vendedorId, $metodoPago, $tiposDoc, &$totalCreadas) {
-            foreach ($grupos as $g) {
-                $totalVenta = array_sum(array_column($g['detalles'], 'subtotal'));
-                $tipoLetra = strtoupper($g['doc']);
+        return view('casadets.ventas.import_preview', [
+            'grupos' => array_values($grupos),
+            'vendedores' => $vendedores,
+            'vendedor_id_default' => $request->vendedor_id,
+            'metodo_pago' => $request->metodo_pago,
+        ]);
+    }
+
+    public function confirm(Request $request)
+    {
+        $data = $request->validate([
+            'metodo_pago' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
+            'ventas' => 'required|array|min:1',
+            'ventas.*.fecha' => 'required|date',
+            'ventas.*.doc' => 'nullable|string|max:10',
+            'ventas.*.serie' => 'nullable|string|max:50',
+            'ventas.*.numero' => 'nullable|string|max:50',
+            'ventas.*.vendedor_id' => 'required|exists:vendedores,id',
+            'ventas.*.total_cobrado' => 'required|numeric|min:0',
+            'ventas.*.detalles' => 'required|array|min:1',
+            'ventas.*.detalles.*.producto' => 'required|string|max:255',
+            'ventas.*.detalles.*.cantidad' => 'required|numeric|min:0',
+            'ventas.*.detalles.*.precio_unitario' => 'required|numeric|min:0',
+            'ventas.*.detalles.*.subtotal' => 'required|numeric|min:0',
+        ]);
+
+        $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma'];
+        $totalCreadas = 0;
+        $totalDetalles = 0;
+
+        DB::transaction(function () use ($data, $tiposDoc, &$totalCreadas, &$totalDetalles) {
+            foreach ($data['ventas'] as $g) {
+                $totalReal = array_sum(array_column($g['detalles'], 'subtotal'));
+                $totalCobrado = (float) $g['total_cobrado'];
+                $ajuste = round($totalCobrado - $totalReal, 2);
+                $tipoLetra = strtoupper($g['doc'] ?? '');
 
                 $venta = Venta::create([
-                    'vendedor_id' => $vendedorId,
-                    'total' => $totalVenta,
-                    'metodo_pago' => $metodoPago,
+                    'vendedor_id' => $g['vendedor_id'],
+                    'total' => $totalReal,
+                    'ajuste' => $ajuste,
+                    'metodo_pago' => $data['metodo_pago'],
                     'documento_tipo' => $tiposDoc[$tipoLetra] ?? null,
-                    'documento_numero' => trim($g['serie'] . '-' . $g['numero'], '-'),
+                    'documento_numero' => trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-'),
                     'observaciones' => 'Importado desde Excel',
                     'fecha' => $g['fecha'],
                 ]);
 
                 foreach ($g['detalles'] as $d) {
-                    $venta->detalles()->create($d);
+                    $venta->detalles()->create([
+                        'producto' => $d['producto'],
+                        'cantidad' => $d['cantidad'],
+                        'precio_unitario' => $d['precio_unitario'],
+                        'subtotal' => $d['subtotal'],
+                    ]);
+                    $totalDetalles++;
                 }
                 $totalCreadas++;
             }
         });
-
-        $totalDetalles = array_sum(array_map(fn($g) => count($g['detalles']), $grupos));
 
         return redirect('/casadets/ventas')->with('success',
             "Importación completada: $totalCreadas venta(s) con $totalDetalles producto(s)."
@@ -159,18 +193,13 @@ class VentaImportController extends Controller
     {
         if (empty($valor)) return Carbon::today()->toDateString();
 
-        // Si viene como número de Excel
         if (is_numeric($valor)) {
             try {
                 return Carbon::instance(ExcelDate::excelToDateTimeObject((float) $valor))->toDateString();
-            } catch (\Exception $e) {
-                // sigue intentando como texto
-            }
+            } catch (\Exception $e) {}
         }
 
         $valor = trim((string) $valor);
-
-        // Formatos comunes: dd/mm/YYYY, dd-mm-YYYY, YYYY-mm-dd
         $formatos = ['d/m/Y', 'd-m-Y', 'Y-m-d', 'd/m/y'];
         foreach ($formatos as $f) {
             try {

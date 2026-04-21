@@ -34,6 +34,7 @@ Route::get('/casadets/ventas', [VentaController::class, 'index']);
 Route::get('/casadets/ventas/create', [VentaController::class, 'create']);
 Route::post('/casadets/ventas', [VentaController::class, 'store']);
 Route::get('/casadets/ventas/import', [VentaImportController::class, 'form']);
-Route::post('/casadets/ventas/import', [VentaImportController::class, 'process']);
+Route::post('/casadets/ventas/import', [VentaImportController::class, 'preview']);
+Route::post('/casadets/ventas/import/confirm', [VentaImportController::class, 'confirm']);
 Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);

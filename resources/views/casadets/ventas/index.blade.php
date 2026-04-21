@@ -79,7 +79,14 @@
                             <span class="text-muted">—</span>
                         @endif
                     </td>
-                    <td class="text-end fw-semibold">S/ {{ number_format($v->total, 2) }}</td>
+                    <td class="text-end fw-semibold">
+                        S/ {{ number_format($v->total_cobrado, 2) }}
+                        @if($v->ajuste != 0)
+                            <br><small class="{{ $v->ajuste > 0 ? 'text-success' : 'text-danger' }}">
+                                ({{ $v->ajuste > 0 ? '+' : '' }}{{ number_format($v->ajuste, 2) }})
+                            </small>
+                        @endif
+                    </td>
                     <td class="text-end">
                         <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
                         <form action="/casadets/ventas/{{ $v->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar venta?')">
@@ -95,8 +102,8 @@
             @if($ventas->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="5" class="text-end">Total</th>
-                    <th class="text-end">S/ {{ number_format($ventas->sum('total'), 2) }}</th>
+                    <th colspan="5" class="text-end">Total cobrado</th>
+                    <th class="text-end">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
                     <th></th>
                 </tr>
             </tfoot>

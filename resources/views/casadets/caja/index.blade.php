@@ -15,8 +15,13 @@
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card kpi-card">
-            <div class="text-muted small">Ventas del día</div>
+            <div class="text-muted small">Ventas del día <small class="text-muted">(cobrado)</small></div>
             <h4 class="text-primary mb-0">S/ {{ number_format($totalVentas, 2) }}</h4>
+            @if($totalAjustes != 0)
+                <small class="{{ $totalAjustes > 0 ? 'text-success' : 'text-danger' }}">
+                    Ajustes: {{ $totalAjustes > 0 ? '+' : '' }}S/ {{ number_format($totalAjustes, 2) }}
+                </small>
+            @endif
         </div>
     </div>
     <div class="col-md-3">
@@ -109,7 +114,14 @@
                         @endif
                     </td>
                     <td>{{ ucfirst($v->metodo_pago) }}</td>
-                    <td class="text-end">S/ {{ number_format($v->total, 2) }}</td>
+                    <td class="text-end">
+                        S/ {{ number_format($v->total_cobrado, 2) }}
+                        @if($v->ajuste != 0)
+                            <br><small class="{{ $v->ajuste > 0 ? 'text-success' : 'text-danger' }}">
+                                ({{ $v->ajuste > 0 ? '+' : '' }}{{ number_format($v->ajuste, 2) }})
+                            </small>
+                        @endif
+                    </td>
                 </tr>
                 @empty
                 <tr><td colspan="4" class="text-center text-muted py-3">Sin ventas en este día</td></tr>

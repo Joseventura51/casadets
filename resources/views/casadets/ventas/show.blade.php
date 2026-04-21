@@ -36,9 +36,21 @@
                 @endforeach
             </tbody>
             <tfoot>
+                <tr>
+                    <th colspan="3" class="text-end text-muted">Total productos</th>
+                    <th class="text-end">S/ {{ number_format($venta->total, 2) }}</th>
+                </tr>
+                @if($venta->ajuste != 0)
+                <tr>
+                    <th colspan="3" class="text-end text-muted">Ajuste</th>
+                    <th class="text-end {{ $venta->ajuste > 0 ? 'text-success' : 'text-danger' }}">
+                        {{ $venta->ajuste > 0 ? '+' : '' }}S/ {{ number_format($venta->ajuste, 2) }}
+                    </th>
+                </tr>
+                @endif
                 <tr class="table-light">
-                    <th colspan="3" class="text-end">TOTAL</th>
-                    <th class="text-end fs-5">S/ {{ number_format($venta->total, 2) }}</th>
+                    <th colspan="3" class="text-end">TOTAL COBRADO</th>
+                    <th class="text-end fs-5">S/ {{ number_format($venta->total_cobrado, 2) }}</th>
                 </tr>
             </tfoot>
         </table>
