@@ -20,13 +20,13 @@ class VendedorController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge(['activo' => $request->has('activo')]);
+
         $data = $request->validate([
             'nombre' => 'required|string|max:255',
             'telefono' => 'nullable|string|max:50',
-            'activo' => 'nullable|boolean',
+            'activo' => 'boolean',
         ]);
-
-        $data['activo'] = $request->has('activo');
 
         Vendedor::create($data);
 
@@ -40,13 +40,13 @@ class VendedorController extends Controller
 
     public function update(Request $request, Vendedor $vendedor)
     {
+        $request->merge(['activo' => $request->has('activo')]);
+
         $data = $request->validate([
             'nombre' => 'required|string|max:255',
             'telefono' => 'nullable|string|max:50',
-            'activo' => 'nullable|boolean',
+            'activo' => 'boolean',
         ]);
-
-        $data['activo'] = $request->has('activo');
 
         $vendedor->update($data);
 
