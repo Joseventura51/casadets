@@ -38,10 +38,9 @@
                 <div>
                     <strong>Venta #{{ $i + 1 }}</strong>
                     <span class="text-muted ms-2">{{ \Carbon\Carbon::parse($g['fecha'])->format('d/m/Y') }}</span>
-                    @if($g['doc'])
+                    @if($g['serie'] || $g['numero'])
                         <span class="badge {{ strtoupper($g['doc']) == 'B' ? 'bg-secondary' : 'bg-primary' }} ms-2">
-                            {{ strtoupper($g['doc']) == 'B' ? 'Boleta' : (strtoupper($g['doc']) == 'F' ? 'Factura' : $g['doc']) }}
-                            {{ $g['serie'] }}-{{ $g['numero'] }}
+                            {{ trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-') }}
                         </span>
                     @endif
                 </div>
