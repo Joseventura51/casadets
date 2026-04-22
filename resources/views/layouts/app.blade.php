@@ -43,6 +43,11 @@
                                 </a>
                             </li>
                             <li>
+                                <a href="/casadets/compras" class="nav-link {{ request()->is('casadets/compras*') ? 'active' : '' }}">
+                                    <i class="bi bi-bag me-2"></i>Compras
+                                </a>
+                            </li>
+                            <li>
                                 <a href="/casadets/vendedores" class="nav-link {{ request()->is('casadets/vendedores*') ? 'active' : '' }}">
                                     <i class="bi bi-people me-2"></i>Vendedores
                                 </a>

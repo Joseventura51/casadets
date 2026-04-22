@@ -19,12 +19,21 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="GET" class="row g-2 align-items-end">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Vendedor</label>
                 <select name="vendedor_id" class="form-select form-select-sm">
                     <option value="">Todos</option>
                     @foreach($vendedores as $v)
                         <option value="{{ $v->id }}" {{ request('vendedor_id') == $v->id ? 'selected' : '' }}>{{ $v->nombre }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Tipo</label>
+                <select name="tipo" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    @foreach(['factura'=>'Factura','boleta'=>'Boleta','proforma'=>'Proforma'] as $k=>$lbl)
+                        <option value="{{ $k }}" {{ request('tipo')==$k ? 'selected' : '' }}>{{ $lbl }}</option>
                     @endforeach
                 </select>
             </div>
@@ -36,7 +45,7 @@
                 <label class="form-label small mb-1">Hasta</label>
                 <input type="date" name="hasta" value="{{ request('hasta') }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-3 d-flex gap-2">
+            <div class="col-md-2 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary">Filtrar</button>
                 <a href="/casadets/ventas" class="btn btn-sm btn-outline-secondary">Limpiar</a>
             </div>
@@ -89,6 +98,7 @@
                     </td>
                     <td class="text-end">
                         <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
+                        <a href="/casadets/ventas/{{ $v->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
                         <form action="/casadets/ventas/{{ $v->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar venta?')">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-outline-danger">Eliminar</button>

@@ -3,7 +3,10 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Venta #{{ $venta->id }}</h3>
-    <a href="/casadets/ventas" class="btn btn-outline-secondary btn-sm">← Volver</a>
+    <div class="d-flex gap-2">
+        <a href="/casadets/ventas/{{ $venta->id }}/edit" class="btn btn-primary btn-sm"><i class="bi bi-pencil"></i> Editar</a>
+        <a href="/casadets/ventas" class="btn btn-outline-secondary btn-sm">← Volver</a>
+    </div>
 </div>
 
 <div class="row g-3 mb-3">
@@ -61,4 +64,36 @@
     </div>
     @endif
 </div>
+
+@if($venta->compras->count())
+<div class="card mt-3">
+    <div class="card-header">Compras vinculadas <small class="text-muted">(productos no propios)</small></div>
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Empresa</th>
+                    <th>Documento</th>
+                    <th>Producto</th>
+                    <th class="text-end">Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($venta->compras as $c)
+                <tr>
+                    <td>{{ $c->fecha->format('d/m/Y') }}</td>
+                    <td>{{ $c->empresa }}</td>
+                    <td>{{ $c->documento_tipo ? ucfirst($c->documento_tipo) : '' }} {{ $c->documento_numero }}</td>
+                    <td>{{ $c->producto ?? '—' }}</td>
+                    <td class="text-end">S/ {{ number_format($c->monto_total, 2) }}</td>
+                    <td><a href="/casadets/compras/{{ $c->id }}" class="btn btn-sm btn-outline-secondary">Ver</a></td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+</div>
+@endif
 @endsection

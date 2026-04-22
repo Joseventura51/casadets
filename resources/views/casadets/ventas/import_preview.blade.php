@@ -1,6 +1,9 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $metodos = ['efectivo','tarjeta','yape','plin','transferencia'];
+@endphp
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0">Vista previa de importación</h3>
@@ -15,17 +18,22 @@
     </div>
 @endif
 
+@if(!empty($duplicadosExistentes))
+    <div class="alert alert-danger">
+        <strong>Facturas ya registradas en el sistema:</strong> {{ implode(', ', $duplicadosExistentes) }}.
+        Si las dejas, la importación será rechazada. Elimina o cambia el número de esas ventas.
+    </div>
+@endif
+
 <div class="alert alert-warning small mb-3">
     <i class="bi bi-pencil-square"></i>
-    Puedes <strong>cambiar el vendedor</strong>, <strong>editar productos</strong> (nombre, cantidad, precio), <strong>eliminar productos o ventas completas</strong>, y <strong>ajustar el total cobrado</strong> si el cliente pagó un monto distinto.
+    Puedes <strong>cambiar el vendedor</strong>, <strong>el método de pago</strong>, <strong>editar productos</strong>, <strong>eliminar productos o ventas completas</strong>, y <strong>ajustar el total cobrado</strong>.
 </div>
 
 <form action="/casadets/ventas/import/confirm" method="POST" id="formImport">
     @csrf
-    <input type="hidden" name="metodo_pago" value="{{ $metodo_pago }}">
 
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <span class="text-muted"><strong>Método de pago:</strong> {{ ucfirst($metodo_pago) }}</span>
+    <div class="d-flex justify-content-end mb-3">
         <button type="submit" class="btn btn-success">
             <i class="bi bi-check-lg"></i> Confirmar e importar todo
         </button>
@@ -33,18 +41,25 @@
 
     <div id="ventasContainer">
         @foreach($grupos as $i => $g)
-        <div class="card mb-3 venta-card" data-idx="{{ $i }}">
+        @php
+            $numFmt = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $esDup = in_array($numFmt, $duplicadosExistentes);
+        @endphp
+        <div class="card mb-3 venta-card {{ $esDup ? 'border-danger' : '' }}" data-idx="{{ $i }}">
             <div class="card-header bg-light d-flex justify-content-between align-items-center">
                 <div>
                     <strong>Venta #{{ $i + 1 }}</strong>
                     <span class="text-muted ms-2">{{ \Carbon\Carbon::parse($g['fecha'])->format('d/m/Y') }}</span>
-                    @if($g['serie'] || $g['numero'])
+                    @if($numFmt)
                         <span class="badge {{ strtoupper($g['doc']) == 'B' ? 'bg-secondary' : 'bg-primary' }} ms-2">
-                            {{ trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-') }}
+                            {{ $numFmt }}
                         </span>
                     @endif
+                    @if($esDup)
+                        <span class="badge bg-danger ms-2"><i class="bi bi-exclamation-triangle"></i> Factura duplicada</span>
+                    @endif
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-venta" title="Eliminar esta venta completa">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-venta" title="Eliminar esta venta">
                     <i class="bi bi-trash"></i> Eliminar venta
                 </button>
             </div>
@@ -56,7 +71,7 @@
                 <input type="hidden" name="ventas[{{ $i }}][numero]" value="{{ $g['numero'] }}">
 
                 <div class="row g-3 mb-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label small text-muted mb-1">Vendedor</label>
                         <select name="ventas[{{ $i }}][vendedor_id]" class="form-select form-select-sm" required>
                             @foreach($vendedores as $v)
@@ -64,8 +79,16 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted mb-1">Total real (productos)</label>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Método pago</label>
+                        <select name="ventas[{{ $i }}][metodo_pago]" class="form-select form-select-sm" required>
+                            @foreach($metodos as $m)
+                                <option value="{{ $m }}" {{ $m == $metodo_pago_default ? 'selected' : '' }}>{{ ucfirst($m) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Total real</label>
                         <div class="form-control form-control-sm bg-light text-end fw-semibold total-real-display">
                             S/ {{ number_format($g['total'], 2) }}
                         </div>
@@ -153,66 +176,41 @@ function recalcVenta(card) {
     card.dataset.totalReal = totalReal;
     recalcDiferencia(card);
 }
-
 function recalcDiferencia(card) {
     const real = parseFloat(card.dataset.totalReal) || 0;
     const cob = parseFloat(card.querySelector('.total-cobrado').value) || 0;
     const d = cob - real;
     const dif = card.querySelector('.diferencia');
     let txt = 'S/ ' + d.toFixed(2);
-    if (d > 0.005) {
-        dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-success';
-        txt = '+' + txt;
-    } else if (d < -0.005) {
-        dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-danger';
-    } else {
-        dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-muted';
-    }
+    if (d > 0.005) { dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-success'; txt = '+' + txt; }
+    else if (d < -0.005) { dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-danger'; }
+    else { dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-muted'; }
     dif.textContent = txt;
 }
-
 function actualizarContador() {
     const n = document.querySelectorAll('.venta-card').length;
     document.getElementById('contadorVentas').textContent = n;
     document.getElementById('sinVentas').style.display = n === 0 ? '' : 'none';
 }
-
 document.querySelectorAll('.venta-card').forEach(card => {
     recalcVenta(card);
-
     card.addEventListener('input', e => {
-        if (e.target.matches('.cantidad-input, .precio-input')) {
-            recalcVenta(card);
-        } else if (e.target.matches('.total-cobrado')) {
-            recalcDiferencia(card);
-        }
+        if (e.target.matches('.cantidad-input, .precio-input')) recalcVenta(card);
+        else if (e.target.matches('.total-cobrado')) recalcDiferencia(card);
     });
-
     card.querySelector('.btn-eliminar-venta').addEventListener('click', () => {
-        if (confirm('¿Eliminar esta venta completa? No se importará.')) {
-            card.remove();
-            actualizarContador();
-        }
+        if (confirm('¿Eliminar esta venta completa? No se importará.')) { card.remove(); actualizarContador(); }
     });
-
     card.querySelectorAll('.btn-eliminar-producto').forEach(btn => {
         btn.addEventListener('click', () => {
             const filas = card.querySelectorAll('.producto-row');
-            if (filas.length <= 1) {
-                alert('No puedes eliminar el último producto. Si la venta está vacía, elimina la venta completa.');
-                return;
-            }
-            btn.closest('tr').remove();
-            recalcVenta(card);
+            if (filas.length <= 1) { alert('No puedes eliminar el último producto. Elimina la venta completa.'); return; }
+            btn.closest('tr').remove(); recalcVenta(card);
         });
     });
 });
-
 document.getElementById('formImport').addEventListener('submit', e => {
-    if (document.querySelectorAll('.venta-card').length === 0) {
-        e.preventDefault();
-        alert('No hay ventas para importar.');
-    }
+    if (document.querySelectorAll('.venta-card').length === 0) { e.preventDefault(); alert('No hay ventas para importar.'); }
 });
 </script>
 @endsection

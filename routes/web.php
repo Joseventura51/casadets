@@ -7,6 +7,7 @@ use App\Http\Controllers\VendedorController;
 use App\Http\Controllers\VentaController;
 use App\Http\Controllers\VentaImportController;
 use App\Http\Controllers\CajaController;
+use App\Http\Controllers\CompraController;
 
 Route::get('/', [HomeController::class, 'index']);
 
@@ -37,4 +38,15 @@ Route::get('/casadets/ventas/import', [VentaImportController::class, 'form']);
 Route::post('/casadets/ventas/import', [VentaImportController::class, 'preview']);
 Route::post('/casadets/ventas/import/confirm', [VentaImportController::class, 'confirm']);
 Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
+Route::get('/casadets/ventas/{venta}/edit', [VentaController::class, 'edit']);
+Route::put('/casadets/ventas/{venta}', [VentaController::class, 'update']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
+
+// CASADETS — Compras
+Route::get('/casadets/compras', [CompraController::class, 'index']);
+Route::get('/casadets/compras/create', [CompraController::class, 'create']);
+Route::post('/casadets/compras', [CompraController::class, 'store']);
+Route::get('/casadets/compras/{compra}', [CompraController::class, 'show']);
+Route::get('/casadets/compras/{compra}/edit', [CompraController::class, 'edit']);
+Route::put('/casadets/compras/{compra}', [CompraController::class, 'update']);
+Route::delete('/casadets/compras/{compra}', [CompraController::class, 'destroy']);

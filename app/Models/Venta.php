@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Venta extends Model
@@ -35,7 +36,11 @@ class Venta extends Model
         return $this->hasMany(VentaDetalle::class);
     }
 
-    // Total que realmente se cobró (productos +/- ajuste)
+    public function compras(): BelongsToMany
+    {
+        return $this->belongsToMany(Compra::class, 'compra_venta')->withTimestamps();
+    }
+
     public function getTotalCobradoAttribute(): float
     {
         return (float) $this->total + (float) $this->ajuste;

@@ -12,6 +12,8 @@ use Carbon\Carbon;
 
 class VentaImportController extends Controller
 {
+    private array $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma'];
+
     public function form()
     {
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
@@ -93,26 +95,30 @@ class VentaImportController extends Controller
             return back()->with('error', 'No se encontraron filas válidas en el archivo.');
         }
 
+        // Detectar facturas que YA existen en BD para advertir antes de confirmar
+        $existentes = $this->buscarFacturasExistentes(array_values($grupos));
+
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
         return view('casadets.ventas.import_preview', [
             'grupos' => array_values($grupos),
             'vendedores' => $vendedores,
             'vendedor_id_default' => $request->vendedor_id,
-            'metodo_pago' => $request->metodo_pago,
+            'metodo_pago_default' => $request->metodo_pago,
+            'duplicadosExistentes' => $existentes,
         ]);
     }
 
     public function confirm(Request $request)
     {
         $data = $request->validate([
-            'metodo_pago' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
             'ventas' => 'required|array|min:1',
             'ventas.*.fecha' => 'required|date',
             'ventas.*.doc' => 'nullable|string|max:10',
             'ventas.*.serie' => 'nullable|string|max:50',
             'ventas.*.numero' => 'nullable|string|max:50',
             'ventas.*.vendedor_id' => 'required|exists:vendedores,id',
+            'ventas.*.metodo_pago' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
             'ventas.*.total_cobrado' => 'required|numeric|min:0',
             'ventas.*.detalles' => 'required|array|min:1',
             'ventas.*.detalles.*.producto' => 'required|string|max:255',
@@ -120,11 +126,16 @@ class VentaImportController extends Controller
             'ventas.*.detalles.*.precio_unitario' => 'required|numeric|min:0',
         ]);
 
-        $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma'];
+        // Validar unicidad de facturas (entre sí y vs BD)
+        $errores = $this->validarFacturasUnicas($data['ventas']);
+        if (!empty($errores)) {
+            return back()->withInput()->with('error', 'No se importó nada. ' . implode(' ', $errores));
+        }
+
         $totalCreadas = 0;
         $totalDetalles = 0;
 
-        DB::transaction(function () use ($data, $tiposDoc, &$totalCreadas, &$totalDetalles) {
+        DB::transaction(function () use ($data, &$totalCreadas, &$totalDetalles) {
             foreach ($data['ventas'] as $g) {
                 $detallesCalc = array_map(function ($d) {
                     $sub = round((float) $d['cantidad'] * (float) $d['precio_unitario'], 2);
@@ -140,14 +151,15 @@ class VentaImportController extends Controller
                 $totalCobrado = (float) $g['total_cobrado'];
                 $ajuste = round($totalCobrado - $totalReal, 2);
                 $tipoLetra = strtoupper($g['doc'] ?? '');
+                $numero = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
                 $venta = Venta::create([
                     'vendedor_id' => $g['vendedor_id'],
                     'total' => $totalReal,
                     'ajuste' => $ajuste,
-                    'metodo_pago' => $data['metodo_pago'],
-                    'documento_tipo' => $tiposDoc[$tipoLetra] ?? null,
-                    'documento_numero' => trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-'),
+                    'metodo_pago' => $g['metodo_pago'],
+                    'documento_tipo' => $this->tiposDoc[$tipoLetra] ?? null,
+                    'documento_numero' => $numero ?: null,
                     'observaciones' => 'Importado desde Excel',
                     'fecha' => $g['fecha'],
                 ]);
@@ -163,6 +175,53 @@ class VentaImportController extends Controller
         return redirect('/casadets/ventas')->with('success',
             "Importación completada: $totalCreadas venta(s) con $totalDetalles producto(s)."
         );
+    }
+
+    private function buscarFacturasExistentes(array $grupos): array
+    {
+        $numeros = [];
+        foreach ($grupos as $g) {
+            if (strtoupper($g['doc'] ?? '') === 'F') {
+                $num = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+                if ($num !== '') $numeros[] = $num;
+            }
+        }
+        if (empty($numeros)) return [];
+
+        return Venta::where('documento_tipo', 'factura')
+            ->whereIn('documento_numero', $numeros)
+            ->pluck('documento_numero')
+            ->toArray();
+    }
+
+    private function validarFacturasUnicas(array $ventas): array
+    {
+        $errores = [];
+        $vistos = [];
+        $aBuscar = [];
+
+        foreach ($ventas as $g) {
+            if (strtoupper($g['doc'] ?? '') !== 'F') continue;
+            $num = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            if ($num === '') continue;
+
+            if (isset($vistos[$num])) {
+                $errores[] = "La factura $num está duplicada en el archivo.";
+            }
+            $vistos[$num] = true;
+            $aBuscar[] = $num;
+        }
+
+        if (!empty($aBuscar)) {
+            $existentes = Venta::where('documento_tipo', 'factura')
+                ->whereIn('documento_numero', $aBuscar)
+                ->pluck('documento_numero')
+                ->toArray();
+            foreach ($existentes as $e) {
+                $errores[] = "La factura $e ya existe en el sistema.";
+            }
+        }
+        return $errores;
     }
 
     private function mapearColumnas(array $headers): array
