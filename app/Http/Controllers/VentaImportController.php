@@ -118,7 +118,6 @@ class VentaImportController extends Controller
             'ventas.*.detalles.*.producto' => 'required|string|max:255',
             'ventas.*.detalles.*.cantidad' => 'required|numeric|min:0',
             'ventas.*.detalles.*.precio_unitario' => 'required|numeric|min:0',
-            'ventas.*.detalles.*.subtotal' => 'required|numeric|min:0',
         ]);
 
         $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma'];
@@ -127,7 +126,17 @@ class VentaImportController extends Controller
 
         DB::transaction(function () use ($data, $tiposDoc, &$totalCreadas, &$totalDetalles) {
             foreach ($data['ventas'] as $g) {
-                $totalReal = array_sum(array_column($g['detalles'], 'subtotal'));
+                $detallesCalc = array_map(function ($d) {
+                    $sub = round((float) $d['cantidad'] * (float) $d['precio_unitario'], 2);
+                    return [
+                        'producto' => $d['producto'],
+                        'cantidad' => $d['cantidad'],
+                        'precio_unitario' => $d['precio_unitario'],
+                        'subtotal' => $sub,
+                    ];
+                }, $g['detalles']);
+
+                $totalReal = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
                 $totalCobrado = (float) $g['total_cobrado'];
                 $ajuste = round($totalCobrado - $totalReal, 2);
                 $tipoLetra = strtoupper($g['doc'] ?? '');
@@ -143,13 +152,8 @@ class VentaImportController extends Controller
                     'fecha' => $g['fecha'],
                 ]);
 
-                foreach ($g['detalles'] as $d) {
-                    $venta->detalles()->create([
-                        'producto' => $d['producto'],
-                        'cantidad' => $d['cantidad'],
-                        'precio_unitario' => $d['precio_unitario'],
-                        'subtotal' => $d['subtotal'],
-                    ]);
+                foreach ($detallesCalc as $d) {
+                    $venta->detalles()->create($d);
                     $totalDetalles++;
                 }
                 $totalCreadas++;

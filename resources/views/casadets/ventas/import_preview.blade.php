@@ -4,7 +4,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0">Vista previa de importación</h3>
-        <p class="text-muted mb-0">Revisa y edita las ventas antes de guardar. Detectadas: <strong>{{ count($grupos) }}</strong> venta(s).</p>
+        <p class="text-muted mb-0">Revisa, edita y confirma. Detectadas: <strong id="contadorVentas">{{ count($grupos) }}</strong> venta(s).</p>
     </div>
     <a href="/casadets/ventas/import" class="btn btn-outline-secondary btn-sm">← Cancelar</a>
 </div>
@@ -15,123 +15,205 @@
     </div>
 @endif
 
-<div class="alert alert-warning small">
+<div class="alert alert-warning small mb-3">
     <i class="bi bi-pencil-square"></i>
-    Puedes <strong>cambiar el vendedor</strong> de cada venta y <strong>ajustar el total cobrado</strong> si el cliente pagó un monto distinto al del comprobante (ej: redondeo, descuento manual). Los productos del comprobante quedan tal cual.
+    Puedes <strong>cambiar el vendedor</strong>, <strong>editar productos</strong> (nombre, cantidad, precio), <strong>eliminar productos o ventas completas</strong>, y <strong>ajustar el total cobrado</strong> si el cliente pagó un monto distinto.
 </div>
 
-<form action="/casadets/ventas/import/confirm" method="POST">
+<form action="/casadets/ventas/import/confirm" method="POST" id="formImport">
     @csrf
     <input type="hidden" name="metodo_pago" value="{{ $metodo_pago }}">
 
-    <div class="card">
-        <div class="card-header bg-white d-flex justify-content-between align-items-center">
-            <span><strong>Método de pago para todas:</strong> {{ ucfirst($metodo_pago) }}</span>
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-check-lg"></i> Confirmar e importar todo
-            </button>
-        </div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <span class="text-muted"><strong>Método de pago:</strong> {{ ucfirst($metodo_pago) }}</span>
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-lg"></i> Confirmar e importar todo
+        </button>
+    </div>
 
-        <div class="table-responsive">
-            <table class="table mb-0 align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width:90px;">Fecha</th>
-                        <th style="width:130px;">Documento</th>
-                        <th>Productos</th>
-                        <th style="width:170px;">Vendedor</th>
-                        <th style="width:120px;" class="text-end">Total real</th>
-                        <th style="width:130px;" class="text-end">Total cobrado</th>
-                        <th style="width:110px;" class="text-end">Diferencia</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($grupos as $i => $g)
-                    <tr data-idx="{{ $i }}">
-                        <td>
-                            {{ \Carbon\Carbon::parse($g['fecha'])->format('d/m/Y') }}
-                            <input type="hidden" name="ventas[{{ $i }}][fecha]" value="{{ $g['fecha'] }}">
-                        </td>
-                        <td>
-                            @if($g['doc'])
-                                <span class="badge {{ strtoupper($g['doc']) == 'B' ? 'bg-secondary' : 'bg-primary' }}">
-                                    {{ strtoupper($g['doc']) == 'B' ? 'Boleta' : (strtoupper($g['doc']) == 'F' ? 'Factura' : $g['doc']) }}
-                                </span><br>
-                                <small>{{ $g['serie'] }}-{{ $g['numero'] }}</small>
-                            @else
-                                <span class="text-muted">—</span>
-                            @endif
-                            <input type="hidden" name="ventas[{{ $i }}][doc]" value="{{ $g['doc'] }}">
-                            <input type="hidden" name="ventas[{{ $i }}][serie]" value="{{ $g['serie'] }}">
-                            <input type="hidden" name="ventas[{{ $i }}][numero]" value="{{ $g['numero'] }}">
-                        </td>
-                        <td>
-                            <small>
-                                @foreach($g['detalles'] as $j => $d)
-                                    <div>• {{ $d['producto'] }} <span class="text-muted">({{ rtrim(rtrim(number_format($d['cantidad'], 2), '0'), '.') }} × S/ {{ number_format($d['precio_unitario'], 2) }})</span></div>
-                                    <input type="hidden" name="ventas[{{ $i }}][detalles][{{ $j }}][producto]" value="{{ $d['producto'] }}">
-                                    <input type="hidden" name="ventas[{{ $i }}][detalles][{{ $j }}][cantidad]" value="{{ $d['cantidad'] }}">
-                                    <input type="hidden" name="ventas[{{ $i }}][detalles][{{ $j }}][precio_unitario]" value="{{ $d['precio_unitario'] }}">
-                                    <input type="hidden" name="ventas[{{ $i }}][detalles][{{ $j }}][subtotal]" value="{{ $d['subtotal'] }}">
-                                @endforeach
-                            </small>
-                        </td>
-                        <td>
-                            <select name="ventas[{{ $i }}][vendedor_id]" class="form-select form-select-sm" required>
-                                @foreach($vendedores as $v)
-                                    <option value="{{ $v->id }}" {{ $v->id == $vendedor_id_default ? 'selected' : '' }}>{{ $v->nombre }}</option>
-                                @endforeach
-                            </select>
-                        </td>
-                        <td class="text-end">
-                            <span class="text-muted total-real" data-total="{{ $g['total'] }}">S/ {{ number_format($g['total'], 2) }}</span>
-                        </td>
-                        <td>
-                            <input type="number" name="ventas[{{ $i }}][total_cobrado]"
-                                value="{{ number_format($g['total'], 2, '.', '') }}"
-                                step="0.01" min="0"
-                                class="form-control form-control-sm text-end total-cobrado" required>
-                        </td>
-                        <td class="text-end">
-                            <span class="diferencia fw-semibold">S/ 0.00</span>
-                        </td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+    <div id="ventasContainer">
+        @foreach($grupos as $i => $g)
+        <div class="card mb-3 venta-card" data-idx="{{ $i }}">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Venta #{{ $i + 1 }}</strong>
+                    <span class="text-muted ms-2">{{ \Carbon\Carbon::parse($g['fecha'])->format('d/m/Y') }}</span>
+                    @if($g['doc'])
+                        <span class="badge {{ strtoupper($g['doc']) == 'B' ? 'bg-secondary' : 'bg-primary' }} ms-2">
+                            {{ strtoupper($g['doc']) == 'B' ? 'Boleta' : (strtoupper($g['doc']) == 'F' ? 'Factura' : $g['doc']) }}
+                            {{ $g['serie'] }}-{{ $g['numero'] }}
+                        </span>
+                    @endif
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-venta" title="Eliminar esta venta completa">
+                    <i class="bi bi-trash"></i> Eliminar venta
+                </button>
+            </div>
 
-        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
-            <a href="/casadets/ventas/import" class="btn btn-outline-secondary">← Volver</a>
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-check-lg"></i> Confirmar e importar todo
-            </button>
+            <div class="card-body">
+                <input type="hidden" name="ventas[{{ $i }}][fecha]" value="{{ $g['fecha'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][doc]" value="{{ $g['doc'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][serie]" value="{{ $g['serie'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][numero]" value="{{ $g['numero'] }}">
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-1">Vendedor</label>
+                        <select name="ventas[{{ $i }}][vendedor_id]" class="form-select form-select-sm" required>
+                            @foreach($vendedores as $v)
+                                <option value="{{ $v->id }}" {{ $v->id == $vendedor_id_default ? 'selected' : '' }}>{{ $v->nombre }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Total real (productos)</label>
+                        <div class="form-control form-control-sm bg-light text-end fw-semibold total-real-display">
+                            S/ {{ number_format($g['total'], 2) }}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Total cobrado</label>
+                        <input type="number" name="ventas[{{ $i }}][total_cobrado]"
+                            value="{{ number_format($g['total'], 2, '.', '') }}"
+                            step="0.01" min="0"
+                            class="form-control form-control-sm text-end fw-semibold total-cobrado" required>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Diferencia</label>
+                        <div class="form-control form-control-sm text-end fw-semibold diferencia bg-light">S/ 0.00</div>
+                    </div>
+                </div>
+
+                <table class="table table-sm align-middle mb-0 productos-tabla">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Producto</th>
+                            <th style="width:90px;" class="text-end">Cantidad</th>
+                            <th style="width:120px;" class="text-end">Precio unit.</th>
+                            <th style="width:120px;" class="text-end">Subtotal</th>
+                            <th style="width:50px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($g['detalles'] as $j => $d)
+                        <tr class="producto-row">
+                            <td>
+                                <input type="text" name="ventas[{{ $i }}][detalles][{{ $j }}][producto]"
+                                    value="{{ $d['producto'] }}" class="form-control form-control-sm" required>
+                            </td>
+                            <td>
+                                <input type="number" name="ventas[{{ $i }}][detalles][{{ $j }}][cantidad]"
+                                    value="{{ rtrim(rtrim(number_format($d['cantidad'], 2, '.', ''), '0'), '.') }}"
+                                    step="0.01" min="0"
+                                    class="form-control form-control-sm text-end cantidad-input" required>
+                            </td>
+                            <td>
+                                <input type="number" name="ventas[{{ $i }}][detalles][{{ $j }}][precio_unitario]"
+                                    value="{{ number_format($d['precio_unitario'], 2, '.', '') }}"
+                                    step="0.01" min="0"
+                                    class="form-control form-control-sm text-end precio-input" required>
+                            </td>
+                            <td class="text-end subtotal-display">S/ {{ number_format($d['subtotal'], 2) }}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-producto" title="Eliminar producto">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
+        @endforeach
+    </div>
+
+    <div id="sinVentas" class="alert alert-secondary text-center" style="display:none;">
+        No quedan ventas para importar. <a href="/casadets/ventas/import">Volver</a>.
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+        <a href="/casadets/ventas/import" class="btn btn-outline-secondary">← Volver</a>
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-check-lg"></i> Confirmar e importar todo
+        </button>
     </div>
 </form>
 
 <script>
-document.querySelectorAll('tr[data-idx]').forEach(tr => {
-    const real = parseFloat(tr.querySelector('.total-real').dataset.total) || 0;
-    const cob = tr.querySelector('.total-cobrado');
-    const dif = tr.querySelector('.diferencia');
+function recalcVenta(card) {
+    let totalReal = 0;
+    card.querySelectorAll('.producto-row').forEach(row => {
+        const c = parseFloat(row.querySelector('.cantidad-input').value) || 0;
+        const p = parseFloat(row.querySelector('.precio-input').value) || 0;
+        const sub = c * p;
+        row.querySelector('.subtotal-display').textContent = 'S/ ' + sub.toFixed(2);
+        totalReal += sub;
+    });
+    card.querySelector('.total-real-display').textContent = 'S/ ' + totalReal.toFixed(2);
+    card.dataset.totalReal = totalReal;
+    recalcDiferencia(card);
+}
 
-    function actualizar() {
-        const v = parseFloat(cob.value) || 0;
-        const d = v - real;
-        let txt = 'S/ ' + d.toFixed(2);
-        if (d > 0) {
-            dif.className = 'diferencia fw-semibold text-success';
-            txt = '+' + txt;
-        } else if (d < 0) {
-            dif.className = 'diferencia fw-semibold text-danger';
-        } else {
-            dif.className = 'diferencia text-muted';
-        }
-        dif.textContent = txt;
+function recalcDiferencia(card) {
+    const real = parseFloat(card.dataset.totalReal) || 0;
+    const cob = parseFloat(card.querySelector('.total-cobrado').value) || 0;
+    const d = cob - real;
+    const dif = card.querySelector('.diferencia');
+    let txt = 'S/ ' + d.toFixed(2);
+    if (d > 0.005) {
+        dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-success';
+        txt = '+' + txt;
+    } else if (d < -0.005) {
+        dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-danger';
+    } else {
+        dif.className = 'form-control form-control-sm text-end fw-semibold diferencia bg-light text-muted';
     }
-    cob.addEventListener('input', actualizar);
-    actualizar();
+    dif.textContent = txt;
+}
+
+function actualizarContador() {
+    const n = document.querySelectorAll('.venta-card').length;
+    document.getElementById('contadorVentas').textContent = n;
+    document.getElementById('sinVentas').style.display = n === 0 ? '' : 'none';
+}
+
+document.querySelectorAll('.venta-card').forEach(card => {
+    recalcVenta(card);
+
+    card.addEventListener('input', e => {
+        if (e.target.matches('.cantidad-input, .precio-input')) {
+            recalcVenta(card);
+        } else if (e.target.matches('.total-cobrado')) {
+            recalcDiferencia(card);
+        }
+    });
+
+    card.querySelector('.btn-eliminar-venta').addEventListener('click', () => {
+        if (confirm('¿Eliminar esta venta completa? No se importará.')) {
+            card.remove();
+            actualizarContador();
+        }
+    });
+
+    card.querySelectorAll('.btn-eliminar-producto').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const filas = card.querySelectorAll('.producto-row');
+            if (filas.length <= 1) {
+                alert('No puedes eliminar el último producto. Si la venta está vacía, elimina la venta completa.');
+                return;
+            }
+            btn.closest('tr').remove();
+            recalcVenta(card);
+        });
+    });
+});
+
+document.getElementById('formImport').addEventListener('submit', e => {
+    if (document.querySelectorAll('.venta-card').length === 0) {
+        e.preventDefault();
+        alert('No hay ventas para importar.');
+    }
 });
 </script>
 @endsection
