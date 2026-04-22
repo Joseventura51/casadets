@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Collection;
 
 class Compra extends Model
 {
@@ -26,8 +27,18 @@ class Compra extends Model
         'monto_total' => 'decimal:2',
     ];
 
-    public function ventas(): BelongsToMany
+    public function detalles(): BelongsToMany
     {
-        return $this->belongsToMany(Venta::class, 'compra_venta')->withTimestamps();
+        return $this->belongsToMany(VentaDetalle::class, 'compra_venta_detalle', 'compra_id', 'venta_detalle_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Ventas únicas vinculadas a esta compra (derivadas de los detalles).
+     */
+    public function getVentasAttribute(): Collection
+    {
+        $this->loadMissing('detalles.venta.vendedor');
+        return collect($this->detalles->pluck('venta')->filter()->unique('id')->values()->all());
     }
 }

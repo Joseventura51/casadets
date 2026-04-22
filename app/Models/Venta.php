@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Venta extends Model
@@ -36,9 +35,13 @@ class Venta extends Model
         return $this->hasMany(VentaDetalle::class);
     }
 
-    public function compras(): BelongsToMany
+    /**
+     * Compras vinculadas a esta venta (vía sus detalles/productos).
+     */
+    public function getComprasAttribute(): \Illuminate\Support\Collection
     {
-        return $this->belongsToMany(Compra::class, 'compra_venta')->withTimestamps();
+        $this->loadMissing('detalles.compras');
+        return collect($this->detalles->flatMap->compras->unique('id')->values()->all());
     }
 
     public function getTotalCobradoAttribute(): float

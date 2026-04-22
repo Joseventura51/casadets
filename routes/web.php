@@ -43,6 +43,7 @@ Route::put('/casadets/ventas/{venta}', [VentaController::class, 'update']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
 
 // CASADETS — Compras
+Route::get('/casadets/ventas/{venta}/detalles.json', [CompraController::class, 'detallesVenta']);
 Route::get('/casadets/compras', [CompraController::class, 'index']);
 Route::get('/casadets/compras/create', [CompraController::class, 'create']);
 Route::post('/casadets/compras', [CompraController::class, 'store']);

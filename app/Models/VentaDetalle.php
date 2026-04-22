@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class VentaDetalle extends Model
 {
@@ -26,5 +27,11 @@ class VentaDetalle extends Model
     public function venta(): BelongsTo
     {
         return $this->belongsTo(Venta::class);
+    }
+
+    public function compras(): BelongsToMany
+    {
+        return $this->belongsToMany(Compra::class, 'compra_venta_detalle', 'venta_detalle_id', 'compra_id')
+            ->withTimestamps();
     }
 }

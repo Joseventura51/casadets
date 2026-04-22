@@ -61,8 +61,9 @@
                     <td class="text-end">S/ {{ number_format($c->monto_unitario, 2) }}</td>
                     <td class="text-end fw-semibold">S/ {{ number_format($c->monto_total, 2) }}</td>
                     <td class="text-center">
-                        @if($c->ventas->count())
-                            <span class="badge bg-info text-dark">{{ $c->ventas->count() }}</span>
+                        @php $nv = $c->detalles->pluck('venta_id')->unique()->count(); $nd = $c->detalles->count(); @endphp
+                        @if($nd)
+                            <span class="badge bg-info text-dark" title="{{ $nd }} producto(s) en {{ $nv }} factura(s)">{{ $nv }}f / {{ $nd }}p</span>
                         @else
                             <span class="text-muted">—</span>
                         @endif

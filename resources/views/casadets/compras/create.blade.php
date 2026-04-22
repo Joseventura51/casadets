@@ -8,6 +8,6 @@
 
 <form action="/casadets/compras" method="POST">
     @csrf
-    @include('casadets.compras._form', ['vinculadas' => []])
+    @include('casadets.compras._form', ['detallesSeleccionados' => []])
 </form>
 @endsection

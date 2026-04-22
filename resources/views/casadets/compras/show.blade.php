@@ -1,6 +1,10 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    // Agrupar detalles vinculados por venta
+    $porVenta = $compra->detalles->groupBy('venta_id');
+@endphp
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Compra #{{ $compra->id }}</h3>
     <div class="d-flex gap-2">
@@ -17,7 +21,7 @@
 </div>
 
 <div class="card mb-3">
-    <div class="card-header">Detalle</div>
+    <div class="card-header">Detalle de la compra</div>
     <div class="card-body">
         <p class="mb-1"><strong>Producto:</strong> {{ $compra->producto ?? '—' }}</p>
         <p class="mb-1"><strong>Cantidad:</strong> {{ rtrim(rtrim(number_format($compra->cantidad, 2), '0'), '.') }}</p>
@@ -38,34 +42,44 @@
 </div>
 
 <div class="card">
-    <div class="card-header">Ventas vinculadas</div>
-    @if($compra->ventas->count())
-    <div class="table-responsive">
-        <table class="table mb-0 align-middle">
-            <thead class="table-light">
-                <tr>
-                    <th>Fecha</th>
-                    <th>Vendedor</th>
-                    <th>Documento</th>
-                    <th class="text-end">Total cobrado</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($compra->ventas as $v)
-                <tr>
-                    <td>{{ $v->fecha->format('d/m/Y') }}</td>
-                    <td>{{ $v->vendedor->nombre ?? '—' }}</td>
-                    <td>{{ $v->documento_tipo ? ucfirst($v->documento_tipo) : '' }} {{ $v->documento_numero }}</td>
-                    <td class="text-end">S/ {{ number_format($v->total_cobrado, 2) }}</td>
-                    <td><a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a></td>
-                </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
+    <div class="card-header">Productos vinculados de facturas</div>
+    @if($porVenta->count())
+        @foreach($porVenta as $ventaId => $detalles)
+            @php $venta = $detalles->first()->venta; @endphp
+            <div class="border-bottom">
+                <div class="px-3 py-2 bg-light d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ $venta->documento_tipo ? ucfirst($venta->documento_tipo) : '' }} {{ $venta->documento_numero }}</strong>
+                        <span class="text-muted small ms-2">{{ $venta->fecha->format('d/m/Y') }} · {{ $venta->vendedor->nombre ?? '—' }}</span>
+                    </div>
+                    <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-sm btn-outline-secondary">Ver venta</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Producto</th>
+                                <th class="text-end">Cantidad</th>
+                                <th class="text-end">Precio venta</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($detalles as $d)
+                            <tr>
+                                <td>{{ $d->producto }}</td>
+                                <td class="text-end">{{ rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.') }}</td>
+                                <td class="text-end">S/ {{ number_format($d->precio_unitario, 2) }}</td>
+                                <td class="text-end">S/ {{ number_format($d->subtotal, 2) }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endforeach
     @else
-    <div class="card-body text-center text-muted py-4">Esta compra no está vinculada a ninguna venta.</div>
+        <div class="card-body text-center text-muted py-4">Esta compra no tiene productos vinculados.</div>
     @endif
 </div>
 @endsection
