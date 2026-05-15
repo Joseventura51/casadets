@@ -29,9 +29,7 @@ class VentaImportController extends Controller
     public function preview(Request $request)
     {
         $request->validate([
-            'archivo' => 'required|file|mimes:xlsx,xls,csv|max:10240',
-            'vendedor_id' => 'required|exists:vendedores,id',
-            'metodo_pago' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
+            'archivo' => 'required|file|mimes:xlsx,xls,csv|max:10240',      
         ]);
 
         try {
@@ -95,16 +93,30 @@ class VentaImportController extends Controller
             return back()->with('error', 'No se encontraron filas válidas en el archivo.');
         }
 
+        $grupos = array_values($grupos);
+
+        usort($grupos, function ($a,$b){
+
+            $serie = strcmp($a['serie'], $b['serie']);
+
+            if ($serie !== 0){
+                return $serie;
+            }
+            return intval($a['numero']) - intval($b['numero']);
+        });
+
+        $existentes = $this->buscarFacturasExistentes($grupos);
+
         // Detectar facturas que YA existen en BD para advertir antes de confirmar
         $existentes = $this->buscarFacturasExistentes(array_values($grupos));
 
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
         return view('casadets.ventas.import_preview', [
-            'grupos' => array_values($grupos),
+            'grupos' => $grupos,
             'vendedores' => $vendedores,
-            'vendedor_id_default' => $request->vendedor_id,
-            'metodo_pago_default' => $request->metodo_pago,
+            'vendedor_id_default' => 1,
+            'metodo_pago_default' => 'efectivo',
             'duplicadosExistentes' => $existentes,
         ]);
     }
@@ -150,8 +162,11 @@ class VentaImportController extends Controller
                 $totalReal = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
                 $totalCobrado = (float) $g['total_cobrado'];
                 $ajuste = round($totalCobrado - $totalReal, 2);
-                $tipoLetra = strtoupper($g['doc'] ?? '');
-                $numero = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+                $tipoLetra = strtoupper(trim($g['doc']??''));
+                if ($tipoLetra === 'PROFORMA'){
+                    $tipoLetra = 'P';
+                }
+                $numero = trim(($g['doc'] ?? '').($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
                 $venta = Venta::create([
                     'vendedor_id' => $g['vendedor_id'],

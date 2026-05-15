@@ -25,25 +25,7 @@
 
         <form action="/casadets/ventas/import" method="POST" enctype="multipart/form-data" class="row g-3">
             @csrf
-
-            <div class="col-md-4">
-                <label class="form-label">Vendedor a asignar</label>
-                <select name="vendedor_id" class="form-select" required>
-                    <option value="">Seleccionar</option>
-                    @foreach($vendedores as $v)
-                        <option value="{{ $v->id }}">{{ $v->nombre }}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            <div class="col-md-4">
-                <label class="form-label">Método de pago</label>
-                <select name="metodo_pago" class="form-select" required>
-                    @foreach(['efectivo','tarjeta','yape','plin','transferencia'] as $m)
-                        <option value="{{ $m }}">{{ ucfirst($m) }}</option>
-                    @endforeach
-                </select>
-            </div>
+            
 
             <div class="col-md-4">
                 <label class="form-label">Archivo Excel (.xlsx, .xls, .csv)</label>
@@ -60,3 +42,4 @@
     </div>
 </div>
 @endsection
+<script></script>

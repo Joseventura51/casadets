@@ -42,7 +42,7 @@
     <div id="ventasContainer">
         @foreach($grupos as $i => $g)
         @php
-            $numFmt = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $numFmt = trim(($g['doc' ?? '']).($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             $esDup = in_array($numFmt, $duplicadosExistentes);
         @endphp
         <div class="card mb-3 venta-card {{ $esDup ? 'border-danger' : '' }}" data-idx="{{ $i }}">
