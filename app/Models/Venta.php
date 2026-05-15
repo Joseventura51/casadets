@@ -48,4 +48,7 @@ class Venta extends Model
     {
         return (float) $this->total + (float) $this->ajuste;
     }
+     Public function pagos(){
+        return $this->hasMany(VentaPago::class);
+    }
 }
