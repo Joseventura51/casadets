@@ -12,7 +12,7 @@ use Carbon\Carbon;
 
 class VentaImportController extends Controller
 {
-    private array $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma'];
+    private array $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma', 'PR' => 'proforma'];
 
     public function form()
     {
