@@ -79,14 +79,48 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label small text-muted mb-1">Método pago</label>
-                        <select name="ventas[{{ $i }}][metodo_pago]" class="form-select form-select-sm" required>
-                            @foreach($metodos as $m)
-                                <option value="{{ $m }}" {{ $m == $metodo_pago_default ? 'selected' : '' }}>{{ ucfirst($m) }}</option>
-                            @endforeach
-                        </select>
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted mb-1">
+                                Metodos de pago
+                        </label>
+
+                        <div class="pagos-container">
+
+                            <div class="row g-2 align-items-center pago-item mb-2">
+                                <select name="ventas[{{$i}}][pagos][0][metodo]" 
+                                        class="form-select form-select-sm metodo-pago"
+                                        >
+                                        @foreach($metodos as $m)
+                                        <option value="{{$m}}">
+                                                {{ ucfirst($m) }}
+                                        </option>
+                                        @endforeach
+                                </select>
+                            </div>
+
+                            <div class="col-4">
+                                <input type="number"
+                                       step="0.01"
+                                       min="0"
+                                       value="{{number_format ($g['total'],2,'.','')}}"
+                                       name="ventas[{{ $i }}][pagos][0][monto]"
+                                       class="form-control form-control-sm monto-pago"
+                                       >
+                            </div>
+
+                            <div class="col-4">
+                                <button type="button" class="btn btn-outline-danger btn-sm eliminar-pago">
+                                    X
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm agregar-pago mt-2">
+                                    +PAGO
+                                </button>
+                            </div>
+                            
+                        </div>
+                        
                     </div>
+                    
                     <div class="col-md-2">
                         <label class="form-label small text-muted mb-1">Total real</label>
                         <div class="form-control form-control-sm bg-light text-end fw-semibold total-real-display">
