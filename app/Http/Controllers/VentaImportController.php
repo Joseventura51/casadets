@@ -133,8 +133,10 @@ class VentaImportController extends Controller
             'ventas.*.serie' => 'nullable|string|max:50',
             'ventas.*.numero' => 'nullable|string|max:50',
             'ventas.*.vendedor_id' => 'required|exists:vendedores,id',
-            'ventas.*.metodo_pago' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
             'ventas.*.total_cobrado' => 'required|numeric|min:0',
+            'ventas.*.pagos' => 'required|array|min:1',
+            'ventas.*.pagos.*.metodo' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
+            'ventas.*.pagos.*.monto' => 'required|numeric|min:0',
             'ventas.*.detalles' => 'required|array|min:1',
             'ventas.*.detalles.*.producto' => 'required|string|max:255',
             'ventas.*.detalles.*.cantidad' => 'required|numeric|min:0',
@@ -163,19 +165,22 @@ class VentaImportController extends Controller
                 }, $g['detalles']);
 
                 $totalReal = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
-                $totalCobrado = (float) $g['total_cobrado'];
-                $ajuste = round($totalCobrado - $totalReal, 2);
                 $tipoLetra = strtoupper(trim($g['doc']??''));
                 if ($tipoLetra === 'PROFORMA'){
                     $tipoLetra = 'P';
                 }
                 $numero = trim(($g['doc'] ?? '').($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
+                // Construir string de métodos (únicos, en orden de aparición)
+                $metodosPago = collect($g['pagos'])->pluck('metodo')->unique()->values()->implode(',');
+                $totalCobrado = round(collect($g['pagos'])->sum(fn($p) => (float) $p['monto']), 2);
+                $ajuste = round($totalCobrado - $totalReal, 2);
+
                 $venta = Venta::create([
                     'vendedor_id' => $g['vendedor_id'],
                     'total' => $totalReal,
                     'ajuste' => $ajuste,
-                    'metodo_pago' => $g['metodo_pago'],
+                    'metodo_pago' => $metodosPago,
                     'documento_tipo' => $this->tiposDoc[$tipoLetra] ?? null,
                     'documento_numero' => $numero ?: null,
                     'observaciones' => 'Importado desde Excel',
