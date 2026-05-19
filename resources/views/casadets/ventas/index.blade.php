@@ -69,6 +69,9 @@
             </thead>
             <tbody>
                 @forelse($ventas as $v)
+                @php
+                    $metodosArr = array_filter(explode(',', $v->metodo_pago ?? ''));
+                @endphp
                 <tr>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
@@ -80,7 +83,15 @@
                             <small class="text-muted d-block">{{ $v->detalles->pluck('producto')->take(2)->implode(', ') }}{{ $v->detalles->count() > 2 ? '…' : '' }}</small>
                         @endif
                     </td>
-                    <td><span class="badge bg-light text-dark">{{ ucfirst($v->metodo_pago) }}</span></td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-1">
+                            @forelse($metodosArr as $m)
+                                <span class="badge bg-light text-dark border">{{ ucfirst(trim($m)) }}</span>
+                            @empty
+                                <span class="text-muted">—</span>
+                            @endforelse
+                        </div>
+                    </td>
                     <td>
                         @if($v->documento_tipo)
                             {{ ucfirst($v->documento_tipo) }} {{ $v->documento_numero }}
@@ -97,12 +108,17 @@
                         @endif
                     </td>
                     <td class="text-end">
-                        <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
-                        <a href="/casadets/ventas/{{ $v->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
-                        <form action="/casadets/ventas/{{ $v->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar venta?')">
-                            @csrf @method('DELETE')
-                            <button class="btn btn-sm btn-outline-danger">Eliminar</button>
-                        </form>
+                        <div class="d-flex justify-content-end gap-1 flex-wrap">
+                            <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
+                            <a href="/casadets/ventas/{{ $v->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
+                            <a href="/casadets/ventas/{{ $v->id }}/pago" class="btn btn-sm btn-outline-success" title="Verificar pago">
+                                <i class="bi bi-cash-stack"></i>
+                            </a>
+                            <form action="/casadets/ventas/{{ $v->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar venta?')">
+                                @csrf @method('DELETE')
+                                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 @empty

@@ -2,9 +2,9 @@
 
 @section('content')
 @php
-    // Agrupar detalles vinculados por venta
     $porVenta = $compra->detalles->groupBy('venta_id');
 @endphp
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Compra #{{ $compra->id }}</h3>
     <div class="d-flex gap-2">
@@ -20,29 +20,40 @@
     <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Total</small><h6 class="mb-0 text-primary">S/ {{ number_format($compra->monto_total, 2) }}</h6></div></div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-header">Detalle de la compra</div>
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-bag me-1"></i> Detalle de la compra</div>
     <div class="card-body">
-        <p class="mb-1"><strong>Producto:</strong> {{ $compra->producto ?? '—' }}</p>
-        <p class="mb-1"><strong>Cantidad:</strong> {{ rtrim(rtrim(number_format($compra->cantidad, 2), '0'), '.') }}</p>
-        <p class="mb-1"><strong>Monto unitario:</strong> S/ {{ number_format($compra->monto_unitario, 2) }}</p>
-        <p class="mb-1"><strong>Sugerido (cant × unit.):</strong> S/ {{ number_format($compra->cantidad * $compra->monto_unitario, 2) }}</p>
-        <p class="mb-0"><strong>Monto total:</strong> S/ {{ number_format($compra->monto_total, 2) }}
-            @php $diff = $compra->monto_total - ($compra->cantidad * $compra->monto_unitario); @endphp
-            @if(abs($diff) > 0.005)
-                <small class="{{ $diff > 0 ? 'text-success' : 'text-danger' }}">
-                    (diferencia con sugerido: {{ $diff > 0 ? '+' : '' }}S/ {{ number_format($diff, 2) }})
-                </small>
-            @endif
-        </p>
+        <div class="row g-2">
+            <div class="col-md-6"><span class="text-muted small">Producto:</span><br><strong>{{ $compra->producto ?? '—' }}</strong></div>
+            <div class="col-md-2 text-center">
+                <span class="text-muted small">Cantidad</span><br>
+                <strong>{{ rtrim(rtrim(number_format($compra->cantidad, 2), '0'), '.') }}</strong>
+            </div>
+            <div class="col-md-2 text-end">
+                <span class="text-muted small">Unitario</span><br>
+                <strong>S/ {{ number_format($compra->monto_unitario, 2) }}</strong>
+            </div>
+            <div class="col-md-2 text-end">
+                <span class="text-muted small">Total</span><br>
+                <strong class="text-primary fs-5">S/ {{ number_format($compra->monto_total, 2) }}</strong>
+                @php $diff = $compra->monto_total - ($compra->cantidad * $compra->monto_unitario); @endphp
+                @if(abs($diff) > 0.005)
+                    <br><small class="{{ $diff > 0 ? 'text-success' : 'text-danger' }}">
+                        dif. {{ $diff > 0 ? '+' : '' }}S/ {{ number_format($diff, 2) }}
+                    </small>
+                @endif
+            </div>
+        </div>
         @if($compra->observaciones)
-            <hr><small class="text-muted">Observaciones:</small> {{ $compra->observaciones }}
+            <hr class="my-2"><small class="text-muted">Obs:</small> {{ $compra->observaciones }}
         @endif
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header">Productos vinculados de facturas</div>
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-link-45deg me-1 text-warning"></i> Productos vinculados de facturas
+    </div>
     @if($porVenta->count())
         @foreach($porVenta as $ventaId => $detalles)
             @php $venta = $detalles->first()->venta; @endphp
@@ -59,16 +70,22 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Producto</th>
-                                <th class="text-end">Cantidad</th>
+                                <th class="text-end">Cant. venta</th>
+                                <th class="text-end text-warning-emphasis">Cant. comprada</th>
                                 <th class="text-end">Precio venta</th>
-                                <th class="text-end">Subtotal</th>
+                                <th class="text-end">Subtotal venta</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach($detalles as $d)
                             <tr>
                                 <td>{{ $d->producto }}</td>
-                                <td class="text-end">{{ rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.') }}</td>
+                                <td class="text-end text-muted">{{ rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.') }}</td>
+                                <td class="text-end">
+                                    <span class="badge bg-warning text-dark">
+                                        {{ rtrim(rtrim(number_format($d->pivot->cantidad ?? 1, 2), '0'), '.') }}
+                                    </span>
+                                </td>
                                 <td class="text-end">S/ {{ number_format($d->precio_unitario, 2) }}</td>
                                 <td class="text-end">S/ {{ number_format($d->subtotal, 2) }}</td>
                             </tr>
@@ -79,7 +96,9 @@
             </div>
         @endforeach
     @else
-        <div class="card-body text-center text-muted py-4">Esta compra no tiene productos vinculados.</div>
+        <div class="card-body text-center text-muted py-4">
+            <i class="bi bi-info-circle me-1"></i> Esta compra no tiene productos vinculados a ninguna factura.
+        </div>
     @endif
 </div>
 @endsection

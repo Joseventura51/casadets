@@ -31,7 +31,9 @@ class CompraController extends Controller
     public function create()
     {
         $facturas = $this->facturasDisponibles();
-        return view('casadets.compras.create', compact('facturas'));
+        $compra = new Compra();
+        $detallesSeleccionados = [];
+        return view('casadets.compras.create', compact('facturas', 'compra', 'detallesSeleccionados'));
     }
 
     public function store(Request $request)
@@ -39,7 +41,7 @@ class CompraController extends Controller
         $data = $this->validar($request);
         DB::transaction(function () use ($data, $request) {
             $compra = Compra::create($data);
-            $compra->detalles()->sync($request->input('detalles', []));
+            $compra->detalles()->sync($this->buildDetallesSync($request));
         });
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
     }
@@ -56,7 +58,6 @@ class CompraController extends Controller
         $facturas = $this->facturasDisponibles();
         $detallesSeleccionados = $compra->detalles->pluck('id')->toArray();
 
-        // Asegurar que las facturas con detalles ya seleccionados estén en la lista
         $ventasYa = $compra->detalles->pluck('venta')->filter()->unique('id');
         foreach ($ventasYa as $v) {
             if (!$facturas->contains('id', $v->id)) {
@@ -72,9 +73,9 @@ class CompraController extends Controller
         $data = $this->validar($request);
         DB::transaction(function () use ($data, $request, $compra) {
             $compra->update($data);
-            $compra->detalles()->sync($request->input('detalles', []));
+            $compra->detalles()->sync($this->buildDetallesSync($request));
         });
-        return redirect('/casadets/compras')->with('success', 'Compra actualizada.');
+        return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');
     }
 
     public function destroy(Compra $compra)
@@ -91,19 +92,36 @@ class CompraController extends Controller
         $venta->load(['detalles', 'vendedor']);
         return response()->json([
             'venta' => [
-                'id' => $venta->id,
-                'fecha' => $venta->fecha->format('d/m/Y'),
-                'documento' => trim(ucfirst((string) $venta->documento_tipo) . ' ' . (string) $venta->documento_numero),
+                'id'       => $venta->id,
+                'fecha'    => $venta->fecha->format('d/m/Y'),
+                'documento'=> trim(ucfirst((string) $venta->documento_tipo) . ' ' . (string) $venta->documento_numero),
                 'vendedor' => $venta->vendedor->nombre ?? '—',
             ],
             'detalles' => $venta->detalles->map(fn($d) => [
-                'id' => $d->id,
-                'producto' => $d->producto,
-                'cantidad' => (float) $d->cantidad,
-                'precio_unitario' => (float) $d->precio_unitario,
-                'subtotal' => (float) $d->subtotal,
+                'id'             => $d->id,
+                'producto'       => $d->producto,
+                'cantidad'       => (float) $d->cantidad,
+                'precio_unitario'=> (float) $d->precio_unitario,
+                'subtotal'       => (float) $d->subtotal,
             ]),
         ]);
+    }
+
+    /* ── Helpers ─────────────────────────────────────────────── */
+
+    /**
+     * Builds the sync array with pivot `cantidad` for each selected detalle.
+     * Input: detalles[] = [1,2,3], detalles_cantidad[1]=2, detalles_cantidad[2]=1
+     */
+    private function buildDetallesSync(Request $request): array
+    {
+        $ids       = $request->input('detalles', []);
+        $cantidades = $request->input('detalles_cantidad', []);
+        $sync = [];
+        foreach ($ids as $id) {
+            $sync[(int) $id] = ['cantidad' => (float) ($cantidades[$id] ?? 1)];
+        }
+        return $sync;
     }
 
     private function facturasDisponibles()
@@ -119,17 +137,15 @@ class CompraController extends Controller
     private function validar(Request $request): array
     {
         return $request->validate([
-            'empresa' => 'required|string|max:255',
-            'documento_tipo' => 'nullable|string|max:50',
+            'empresa'          => 'required|string|max:255',
+            'documento_tipo'   => 'nullable|string|max:50',
             'documento_numero' => 'nullable|string|max:100',
-            'fecha' => 'required|date',
-            'producto' => 'nullable|string|max:255',
-            'cantidad' => 'required|numeric|min:0',
-            'monto_unitario' => 'required|numeric|min:0',
-            'monto_total' => 'required|numeric|min:0',
-            'observaciones' => 'nullable|string',
-            'detalles' => 'nullable|array',
-            'detalles.*' => 'integer|exists:venta_detalles,id',
+            'fecha'            => 'required|date',
+            'producto'         => 'nullable|string|max:255',
+            'cantidad'         => 'required|numeric|min:0',
+            'monto_unitario'   => 'required|numeric|min:0',
+            'monto_total'      => 'required|numeric|min:0',
+            'observaciones'    => 'nullable|string',
         ]);
     }
 }
