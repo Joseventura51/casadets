@@ -23,7 +23,10 @@ class VentaImportController extends Controller
                 ->with('error', 'Primero registra al menos un vendedor.');
         }
 
-        return view('casadets.ventas.import', compact('vendedores'));
+        $vendedorDefault = $vendedores->first(fn($v) => stripos($v->nombre, 'jovi') !== false)
+            ?? $vendedores->first();
+
+        return view('casadets.ventas.import', compact('vendedores', 'vendedorDefault'));
     }
 
     public function preview(Request $request)

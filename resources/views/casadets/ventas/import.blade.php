@@ -45,44 +45,8 @@
             </div>
         </div>
 
-        {{-- Defaults de vendedor y método de pago --}}
-        <div class="col-md-6">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body">
-                    <label class="form-label fw-semibold">
-                        <i class="bi bi-person me-1 text-primary"></i> Vendedor por defecto
-                    </label>
-                    <select name="vendedor_id" class="form-select" required>
-                        <option value="">— Seleccionar —</option>
-                        @foreach($vendedores as $v)
-                            <option value="{{ $v->id }}" {{ old('vendedor_id') == $v->id ? 'selected' : '' }}>
-                                {{ $v->nombre }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <small class="text-muted">Se aplica a todas las ventas del archivo. Puedes cambiarlo fila por fila en la previsualización.</small>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body">
-                    <label class="form-label fw-semibold">
-                        <i class="bi bi-credit-card me-1 text-primary"></i> Método de pago por defecto
-                    </label>
-                    <select name="metodo_pago" class="form-select" required>
-                        <option value="">— Seleccionar —</option>
-                        @foreach(['efectivo','tarjeta','yape','plin','transferencia'] as $m)
-                            <option value="{{ $m }}" {{ old('metodo_pago') == $m ? 'selected' : '' }}>
-                                {{ ucfirst($m) }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <small class="text-muted">Se aplica a todas las ventas. También editable fila por fila en la previsualización.</small>
-                </div>
-            </div>
-        </div>
+        <input type="hidden" name="vendedor_id" value="{{ $vendedorDefault->id }}">
+        <input type="hidden" name="metodo_pago" value="efectivo">
 
         {{-- Info columnas --}}
         <div class="col-12">
