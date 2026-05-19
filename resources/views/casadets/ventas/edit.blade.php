@@ -60,6 +60,14 @@
                     <label class="form-label">Número documento</label>
                     <input type="text" name="documento_numero" value="{{ old('documento_numero', $venta->documento_numero) }}" class="form-control" placeholder="F002-953">
                 </div>
+                <div class="col-md-3">
+                    <label class="form-label">Estado</label>
+                    <select name="estado" class="form-select">
+                        @foreach(['pendiente'=>'Pendiente','pagado'=>'Pagado','anulado'=>'Anulado'] as $k=>$lbl)
+                            <option value="{{ $k }}" {{ $k == old('estado', $venta->estado ?? 'pendiente') ? 'selected' : '' }}>{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                </div>
                 <div class="col-12">
                     <label class="form-label">Observaciones</label>
                     <textarea name="observaciones" class="form-control" rows="2">{{ old('observaciones', $venta->observaciones) }}</textarea>

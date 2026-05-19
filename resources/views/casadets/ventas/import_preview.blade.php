@@ -118,7 +118,7 @@
                                 <div class="input-group input-group-sm" style="width:110px;">
                                     <span class="input-group-text py-0 px-1 bg-white border-end-0 small text-muted">S/</span>
                                     <input type="number" name="ventas[{{ $i }}][pagos][0][monto]"
-                                        value="{{ number_format($g['total'], 2, '.', '') }}"
+                                        value="0"
                                         step="0.01" min="0"
                                         class="form-control form-control-sm text-end monto-pago border-start-0"
                                         style="width:75px;" required>

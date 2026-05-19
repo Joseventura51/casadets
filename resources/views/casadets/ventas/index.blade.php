@@ -1,6 +1,16 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+.fila-pagado  { background: #d1e7dd !important; }
+.fila-anulado { background: #f8d7da !important; opacity:.85; }
+.estado-badge { font-size:.72rem; padding:.2rem .55rem; border-radius:20px; font-weight:600; }
+.estado-pagado  { background:#198754; color:#fff; }
+.estado-pendiente { background:#dee2e6; color:#495057; }
+.estado-anulado { background:#dc3545; color:#fff; }
+.btn-estado { font-size:.72rem; padding:.15rem .45rem; border-radius:20px; cursor:pointer; border:1px solid; white-space:nowrap; }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0">Ventas</h3>
@@ -37,11 +47,20 @@
                     @endforeach
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Estado</label>
+                <select name="estado" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    @foreach(['pendiente'=>'Pendiente','pagado'=>'Pagado','anulado'=>'Anulado'] as $k=>$lbl)
+                        <option value="{{ $k }}" {{ request('estado')==$k ? 'selected' : '' }}>{{ $lbl }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Desde</label>
                 <input type="date" name="desde" value="{{ request('desde') }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Hasta</label>
                 <input type="date" name="hasta" value="{{ request('hasta') }}" class="form-control form-control-sm">
             </div>
@@ -58,6 +77,7 @@
         <table class="table mb-0 align-middle">
             <thead class="table-light">
                 <tr>
+                    <th>Estado</th>
                     <th>Fecha</th>
                     <th>Vendedor</th>
                     <th>Productos</th>
@@ -71,8 +91,43 @@
                 @forelse($ventas as $v)
                 @php
                     $metodosArr = array_filter(explode(',', $v->metodo_pago ?? ''));
+                    $estado = $v->estado ?? 'pendiente';
+                    $filaClase = $estado === 'pagado' ? 'fila-pagado' : ($estado === 'anulado' ? 'fila-anulado' : '');
                 @endphp
-                <tr>
+                <tr class="{{ $filaClase }}">
+                    <td>
+                        {{-- Badge de estado actual --}}
+                        <span class="estado-badge estado-{{ $estado }}">
+                            @if($estado === 'pagado') <i class="bi bi-check-circle-fill me-1"></i>Pagado
+                            @elseif($estado === 'anulado') <i class="bi bi-x-circle-fill me-1"></i>Anulado
+                            @else <i class="bi bi-clock me-1"></i>Pendiente
+                            @endif
+                        </span>
+                        {{-- Botones de cambio de estado --}}
+                        <div class="d-flex gap-1 mt-1 flex-wrap">
+                            @if($estado !== 'pagado')
+                            <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST" class="d-inline">
+                                @csrf
+                                <input type="hidden" name="estado" value="pagado">
+                                <button class="btn-estado border-success text-success bg-transparent">✓ Pagado</button>
+                            </form>
+                            @endif
+                            @if($estado !== 'pendiente')
+                            <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST" class="d-inline">
+                                @csrf
+                                <input type="hidden" name="estado" value="pendiente">
+                                <button class="btn-estado border-secondary text-secondary bg-transparent">⏳ Pendiente</button>
+                            </form>
+                            @endif
+                            @if($estado !== 'anulado')
+                            <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST" class="d-inline">
+                                @csrf
+                                <input type="hidden" name="estado" value="anulado">
+                                <button class="btn-estado border-danger text-danger bg-transparent">✕ Anular</button>
+                            </form>
+                            @endif
+                        </div>
+                    </td>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
                     <td>
@@ -122,13 +177,13 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="7" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
                 @endforelse
             </tbody>
             @if($ventas->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="5" class="text-end">Total cobrado</th>
+                    <th colspan="6" class="text-end">Total cobrado</th>
                     <th class="text-end">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
                     <th></th>
                 </tr>

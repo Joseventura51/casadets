@@ -18,6 +18,7 @@ class VentaController extends Controller
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
         if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
+        if ($request->filled('estado'))      $query->where('estado', $request->estado);
         if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
         if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
 
@@ -116,6 +117,7 @@ class VentaController extends Controller
                     ->ignore($venta->id)],
             'fecha'            => 'required|date',
             'observaciones'    => 'nullable|string',
+            'estado'           => 'nullable|in:pendiente,pagado,anulado',
             'productos'        => 'required|array|min:1',
             'productos.*.producto'       => 'required|string|max:255',
             'productos.*.cantidad'       => 'required|numeric|min:0.01',
@@ -137,6 +139,7 @@ class VentaController extends Controller
                 'documento_numero' => $data['documento_numero'] ?? null,
                 'fecha'            => $data['fecha'],
                 'observaciones'    => $data['observaciones'] ?? null,
+                'estado'           => $data['estado'] ?? $venta->estado ?? 'pendiente',
                 'total'            => $nuevoTotal,
                 'ajuste'           => $nuevoAjuste,
             ]);
@@ -182,6 +185,17 @@ class VentaController extends Controller
         ]);
 
         return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Pago verificado correctamente.');
+    }
+
+    /* ─── Estado rápido ────────────────────────────────────── */
+
+    public function updateEstado(Request $request, Venta $venta)
+    {
+        $data = $request->validate([
+            'estado' => 'required|in:pendiente,pagado,anulado',
+        ]);
+        $venta->update(['estado' => $data['estado']]);
+        return back();
     }
 
     /* ─── Eliminar ─────────────────────────────────────────── */

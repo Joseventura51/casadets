@@ -17,6 +17,7 @@ class Venta extends Model
         'documento_numero',
         'observaciones',
         'fecha',
+        'estado',
     ];
 
     protected $casts = [

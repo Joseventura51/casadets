@@ -42,6 +42,7 @@ Route::get('/casadets/ventas/{venta}/edit', [VentaController::class, 'edit']);
 Route::put('/casadets/ventas/{venta}', [VentaController::class, 'update']);
 Route::get('/casadets/ventas/{venta}/pago', [VentaController::class, 'pago']);
 Route::post('/casadets/ventas/{venta}/pago', [VentaController::class, 'updatePago']);
+Route::post('/casadets/ventas/{venta}/estado', [VentaController::class, 'updateEstado']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
 
 // CASADETS — Compras
