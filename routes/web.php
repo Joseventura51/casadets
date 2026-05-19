@@ -8,6 +8,7 @@ use App\Http\Controllers\VentaController;
 use App\Http\Controllers\VentaImportController;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CompraController;
+use App\Http\Controllers\ClienteController;
 
 Route::get('/', [HomeController::class, 'index']);
 
@@ -44,6 +45,14 @@ Route::get('/casadets/ventas/{venta}/pago', [VentaController::class, 'pago']);
 Route::post('/casadets/ventas/{venta}/pago', [VentaController::class, 'updatePago']);
 Route::post('/casadets/ventas/{venta}/estado', [VentaController::class, 'updateEstado']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
+
+// CASADETS — Clientes
+Route::get('/casadets/clientes', [ClienteController::class, 'index']);
+Route::get('/casadets/clientes/create', [ClienteController::class, 'create']);
+Route::post('/casadets/clientes', [ClienteController::class, 'store']);
+Route::get('/casadets/clientes/{cliente}/edit', [ClienteController::class, 'edit']);
+Route::put('/casadets/clientes/{cliente}', [ClienteController::class, 'update']);
+Route::delete('/casadets/clientes/{cliente}', [ClienteController::class, 'destroy']);
 
 // CASADETS — Compras
 Route::get('/casadets/ventas/{venta}/detalles.json', [CompraController::class, 'detallesVenta']);

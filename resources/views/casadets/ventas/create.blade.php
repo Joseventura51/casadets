@@ -27,6 +27,16 @@
                     </select>
                 </div>
 
+                <div class="col-md-4">
+                    <label class="form-label">Cliente <small class="text-muted">(opcional)</small></label>
+                    <select name="cliente_id" class="form-select">
+                        <option value="">— Sin cliente —</option>
+                        @foreach($clientes as $c)
+                            <option value="{{ $c->id }}" {{ old('cliente_id') == $c->id ? 'selected' : '' }}>{{ $c->nombre }}{{ $c->documento ? ' · '.$c->documento : '' }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
                 <div class="col-md-3">
                     <label class="form-label">Fecha</label>
                     <input type="date" name="fecha" value="{{ old('fecha', now()->toDateString()) }}" class="form-control" required>

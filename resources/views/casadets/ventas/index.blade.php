@@ -47,6 +47,15 @@
                 </select>
             </div>
             <div class="col-md-2">
+                <label class="form-label small mb-1">Cliente</label>
+                <select name="cliente_id" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    @foreach($clientes as $c)
+                        <option value="{{ $c->id }}" {{ request('cliente_id') == $c->id ? 'selected' : '' }}>{{ $c->nombre }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Estado</label>
                 <select name="estado" class="form-select form-select-sm">
                     <option value="">Todos</option>
@@ -79,6 +88,7 @@
                     <th style="width:125px;">Estado</th>
                     <th>Fecha</th>
                     <th>Vendedor</th>
+                    <th>Cliente</th>
                     <th>Productos</th>
                     <th>Pago</th>
                     <th>Documento</th>
@@ -108,6 +118,14 @@
                     </td>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
+                    <td>
+                        @if($v->cliente)
+                            <span class="fw-semibold">{{ $v->cliente->nombre }}</span>
+                            @if($v->cliente->documento)<br><small class="text-muted">{{ $v->cliente->documento }}</small>@endif
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
                     <td>
                         @if($v->detalles->count() == 1)
                             {{ $v->detalles->first()->producto }}
@@ -161,7 +179,7 @@
             @if($ventas->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="6" class="text-end">Total cobrado</th>
+                    <th colspan="7" class="text-end">Total cobrado</th>
                     <th class="text-end">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
                     <th></th>
                 </tr>

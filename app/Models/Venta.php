@@ -5,11 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Cliente;
 
 class Venta extends Model
 {
     protected $fillable = [
         'vendedor_id',
+        'cliente_id',
         'total',
         'ajuste',
         'metodo_pago',
@@ -29,6 +31,11 @@ class Venta extends Model
     public function vendedor(): BelongsTo
     {
         return $this->belongsTo(Vendedor::class);
+    }
+
+    public function cliente(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class);
     }
 
     public function detalles(): HasMany

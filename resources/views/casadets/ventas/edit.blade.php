@@ -43,6 +43,17 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">Cliente <small class="text-muted">(opcional)</small></label>
+                    <select name="cliente_id" class="form-select">
+                        <option value="">— Sin cliente —</option>
+                        @foreach($clientes as $c)
+                            <option value="{{ $c->id }}" {{ $c->id == old('cliente_id', $venta->cliente_id) ? 'selected' : '' }}>
+                                {{ $c->nombre }}{{ $c->documento ? ' · '.$c->documento : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label class="form-label">Fecha</label>
                     <input type="date" name="fecha" value="{{ old('fecha', $venta->fecha->format('Y-m-d')) }}" class="form-control" required>

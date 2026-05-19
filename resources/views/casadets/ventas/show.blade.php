@@ -21,19 +21,31 @@
 </div>
 
 <div class="row g-3 mb-3">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card kpi-card">
             <small class="text-muted">Fecha</small>
             <h6 class="mb-0">{{ $venta->fecha->format('d/m/Y') }}</h6>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card kpi-card">
             <small class="text-muted">Vendedor</small>
             <h6 class="mb-0">{{ $venta->vendedor->nombre ?? '—' }}</h6>
         </div>
     </div>
     <div class="col-md-3">
+        <div class="card kpi-card">
+            <small class="text-muted">Cliente</small>
+            @if($venta->cliente)
+                <h6 class="mb-0">{{ $venta->cliente->nombre }}</h6>
+                @if($venta->cliente->documento)<small class="text-muted">{{ $venta->cliente->documento }}</small>@endif
+                @if($venta->cliente->telefono)<small class="text-muted d-block"><i class="bi bi-telephone me-1"></i>{{ $venta->cliente->telefono }}</small>@endif
+            @else
+                <h6 class="mb-0 text-muted">—</h6>
+            @endif
+        </div>
+    </div>
+    <div class="col-md-2">
         <div class="card kpi-card">
             <small class="text-muted">Pago</small>
             <div class="d-flex flex-wrap gap-1 mt-1">

@@ -48,6 +48,11 @@
                                 </a>
                             </li>
                             <li>
+                                <a href="/casadets/clientes" class="nav-link {{ request()->is('casadets/clientes*') ? 'active' : '' }}">
+                                    <i class="bi bi-person-lines-fill me-2"></i>Clientes
+                                </a>
+                            </li>
+                            <li>
                                 <a href="/casadets/vendedores" class="nav-link {{ request()->is('casadets/vendedores*') ? 'active' : '' }}">
                                     <i class="bi bi-people me-2"></i>Vendedores
                                 </a>

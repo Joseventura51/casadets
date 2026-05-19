@@ -14,7 +14,7 @@ class VentaController extends Controller
 
     public function index(Request $request)
     {
-        $query = Venta::with(['vendedor', 'detalles']);
+        $query = Venta::with(['vendedor', 'cliente', 'detalles']);
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
         if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
@@ -31,17 +31,20 @@ class VentaController extends Controller
               ->orderBy('fecha', 'desc')
               ->orderBy('id', 'desc');
 
-        $ventas    = $query->get();
-        $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
+        if ($request->filled('cliente_id'))  $query->where('cliente_id', $request->cliente_id);
 
-        return view('casadets.ventas.index', compact('ventas', 'vendedores'));
+        $ventas     = $query->get();
+        $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
+        $clientes   = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
+
+        return view('casadets.ventas.index', compact('ventas', 'vendedores', 'clientes'));
     }
 
     /* ─── Detalle ──────────────────────────────────────────── */
 
     public function show(Venta $venta)
     {
-        $venta->load(['vendedor', 'detalles.compras']);
+        $venta->load(['vendedor', 'cliente', 'detalles.compras']);
         return view('casadets.ventas.show', compact('venta'));
     }
 
@@ -54,13 +57,15 @@ class VentaController extends Controller
             return redirect('/casadets/vendedores/create')
                 ->with('error', 'Primero registra al menos un vendedor.');
         }
-        return view('casadets.ventas.create', compact('vendedores'));
+        $clientes = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
+        return view('casadets.ventas.create', compact('vendedores', 'clientes'));
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
             'vendedor_id'      => 'required|exists:vendedores,id',
+            'cliente_id'       => 'nullable|exists:clientes,id',
             'metodo_pago'      => 'required|string|max:100',
             'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
             'documento_numero' => ['nullable','string','max:255',
@@ -77,6 +82,7 @@ class VentaController extends Controller
             $total = collect($data['productos'])->sum(fn($p) => $p['cantidad'] * $p['precio_unitario']);
             $venta = Venta::create([
                 'vendedor_id'      => $data['vendedor_id'],
+                'cliente_id'       => $data['cliente_id'] ?? null,
                 'total'            => round($total, 2),
                 'metodo_pago'      => $data['metodo_pago'],
                 'documento_tipo'   => $data['documento_tipo'] ?? null,
@@ -103,13 +109,15 @@ class VentaController extends Controller
     {
         $venta->load('detalles');
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
-        return view('casadets.ventas.edit', compact('venta', 'vendedores'));
+        $clientes   = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
+        return view('casadets.ventas.edit', compact('venta', 'vendedores', 'clientes'));
     }
 
     public function update(Request $request, Venta $venta)
     {
         $data = $request->validate([
             'vendedor_id'      => 'required|exists:vendedores,id',
+            'cliente_id'       => 'nullable|exists:clientes,id',
             'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
             'documento_numero' => ['nullable','string','max:255',
                 Rule::unique('ventas')
@@ -135,6 +143,7 @@ class VentaController extends Controller
 
             $venta->update([
                 'vendedor_id'      => $data['vendedor_id'],
+                'cliente_id'       => $data['cliente_id'] ?? null,
                 'documento_tipo'   => $data['documento_tipo'] ?? null,
                 'documento_numero' => $data['documento_numero'] ?? null,
                 'fecha'            => $data['fecha'],
