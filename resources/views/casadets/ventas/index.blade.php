@@ -4,11 +4,10 @@
 <style>
 .fila-pagado  { background: #d1e7dd !important; }
 .fila-anulado { background: #f8d7da !important; opacity:.85; }
-.estado-badge { font-size:.72rem; padding:.2rem .55rem; border-radius:20px; font-weight:600; }
-.estado-pagado  { background:#198754; color:#fff; }
-.estado-pendiente { background:#dee2e6; color:#495057; }
-.estado-anulado { background:#dc3545; color:#fff; }
-.btn-estado { font-size:.72rem; padding:.15rem .45rem; border-radius:20px; cursor:pointer; border:1px solid; white-space:nowrap; }
+.select-estado { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; font-weight:600; cursor:pointer; border:1.5px solid; appearance:none; -webkit-appearance:none; text-align:center; min-width:110px; }
+.select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
+.select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
+.select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -77,7 +76,7 @@
         <table class="table mb-0 align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>Estado</th>
+                    <th style="width:125px;">Estado</th>
                     <th>Fecha</th>
                     <th>Vendedor</th>
                     <th>Productos</th>
@@ -96,37 +95,16 @@
                 @endphp
                 <tr class="{{ $filaClase }}">
                     <td>
-                        {{-- Badge de estado actual --}}
-                        <span class="estado-badge estado-{{ $estado }}">
-                            @if($estado === 'pagado') <i class="bi bi-check-circle-fill me-1"></i>Pagado
-                            @elseif($estado === 'anulado') <i class="bi bi-x-circle-fill me-1"></i>Anulado
-                            @else <i class="bi bi-clock me-1"></i>Pendiente
-                            @endif
-                        </span>
-                        {{-- Botones de cambio de estado --}}
-                        <div class="d-flex gap-1 mt-1 flex-wrap">
-                            @if($estado !== 'pagado')
-                            <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST" class="d-inline">
-                                @csrf
-                                <input type="hidden" name="estado" value="pagado">
-                                <button class="btn-estado border-success text-success bg-transparent">✓ Pagado</button>
-                            </form>
-                            @endif
-                            @if($estado !== 'pendiente')
-                            <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST" class="d-inline">
-                                @csrf
-                                <input type="hidden" name="estado" value="pendiente">
-                                <button class="btn-estado border-secondary text-secondary bg-transparent">⏳ Pendiente</button>
-                            </form>
-                            @endif
-                            @if($estado !== 'anulado')
-                            <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST" class="d-inline">
-                                @csrf
-                                <input type="hidden" name="estado" value="anulado">
-                                <button class="btn-estado border-danger text-danger bg-transparent">✕ Anular</button>
-                            </form>
-                            @endif
-                        </div>
+                        <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
+                            @csrf
+                            <select name="estado"
+                                class="select-estado est-{{ $estado }}"
+                                onchange="this.form.submit()">
+                                <option value="pendiente" {{ $estado==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
+                                <option value="pagado"    {{ $estado==='pagado'   ?'selected':'' }}>✓ Pagado</option>
+                                <option value="anulado"   {{ $estado==='anulado'  ?'selected':'' }}>✕ Anulado</option>
+                            </select>
+                        </form>
                     </td>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
@@ -192,4 +170,13 @@
         </table>
     </div>
 </div>
+
+<script>
+// Actualizar color del select al cambiar valor
+document.querySelectorAll('.select-estado').forEach(sel => {
+    sel.addEventListener('change', function() {
+        this.className = 'select-estado est-' + this.value;
+    });
+});
+</script>
 @endsection

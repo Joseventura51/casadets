@@ -151,7 +151,10 @@
             <tbody>
                 @foreach($comprasVinculadas as $c)
                 @php
-                    $detallesDeLaVenta = $c->detalles->filter(fn($d) => $d->venta_id == $venta->id);
+                    // Productos de esta venta que tienen esta compra vinculada
+                    $detallesConEstaCompra = $venta->detalles->filter(
+                        fn($d) => $d->compras->contains('id', $c->id)
+                    );
                 @endphp
                 <tr>
                     <td class="fw-semibold">{{ $c->empresa }}</td>
@@ -161,15 +164,16 @@
                         <br><small class="text-muted">{{ $c->fecha->format('d/m/Y') }}</small>
                     </td>
                     <td>
-                        @foreach($detallesDeLaVenta as $d)
+                        @foreach($detallesConEstaCompra as $d)
+                            @php $compraDelDetalle = $d->compras->firstWhere('id', $c->id); @endphp
                             <span class="badge bg-light text-dark border me-1">
                                 {{ $d->producto }}
-                                @if($d->pivot->cantidad != 1)
-                                    <span class="text-muted">× {{ rtrim(rtrim(number_format($d->pivot->cantidad,2),'0'),'.') }}</span>
+                                @if(($compraDelDetalle->pivot->cantidad ?? 1) != 1)
+                                    <span class="text-muted">× {{ rtrim(rtrim(number_format($compraDelDetalle->pivot->cantidad,2),'0'),'.') }}</span>
                                 @endif
                             </span>
                         @endforeach
-                        @if($detallesDeLaVenta->isEmpty())
+                        @if($detallesConEstaCompra->isEmpty())
                             <span class="text-muted small">—</span>
                         @endif
                     </td>

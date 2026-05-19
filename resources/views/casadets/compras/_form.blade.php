@@ -19,7 +19,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label">Fecha *</label>
-                <input type="date" name="fecha" value="{{ old('fecha', isset($compra) ? $compra->fecha->format('Y-m-d') : date('Y-m-d')) }}" class="form-control" required>
+                <input type="date" name="fecha" value="{{ old('fecha', $compra->fecha ? $compra->fecha->format('Y-m-d') : date('Y-m-d')) }}" class="form-control" required>
             </div>
             <div class="col-md-3">
                 <label class="form-label">Tipo documento</label>
