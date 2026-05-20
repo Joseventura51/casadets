@@ -17,32 +17,22 @@ class VentaController extends Controller
 {
     /* ─── Listado ─────────────────────────────────────────── */
 
-    public function index(Request $request)
+    public function index()
     {
-        $query = Venta::with(['vendedor', 'cliente', 'detalles']);
+        $ventas = Venta::with(['vendedor', 'cliente', 'detalles'])
+            ->orderByRaw("CASE WHEN documento_tipo='factura' THEN 0
+                               WHEN documento_tipo='boleta'  THEN 1
+                               WHEN documento_tipo='proforma' THEN 2
+                               ELSE 3 END")
+            ->orderByRaw('LENGTH(COALESCE(documento_numero,""))')
+            ->orderBy('documento_numero')
+            ->orderBy('fecha', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
-        if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
-        if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
-        if ($request->filled('estado'))      $query->where('estado', $request->estado);
-        if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
-        if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
-
-        $query->orderByRaw("CASE WHEN documento_tipo='factura' THEN 0
-                                 WHEN documento_tipo='boleta'  THEN 1
-                                 WHEN documento_tipo='proforma' THEN 2
-                                 ELSE 3 END")
-              ->orderByRaw('LENGTH(COALESCE(documento_numero,""))')
-              ->orderBy('documento_numero')
-              ->orderBy('fecha', 'desc')
-              ->orderBy('id', 'desc');
-
-        if ($request->filled('cliente_id'))  $query->where('cliente_id', $request->cliente_id);
-
-        $ventas     = $query->get();
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
-        $clientes   = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
 
-        return view('casadets.ventas.index', compact('ventas', 'vendedores', 'clientes'));
+        return view('casadets.ventas.index', compact('ventas', 'vendedores'));
     }
 
     /* ─── Detalle ──────────────────────────────────────────── */

@@ -8,6 +8,41 @@
 .select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
 .select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
+
+.filter-input {
+    font-size: .82rem;
+    border-radius: 7px;
+    border: 1.5px solid #e0e0e0;
+    padding: .3rem .55rem;
+    background: #fafafa;
+    transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+}
+.filter-input:focus {
+    outline: none;
+    border-color: #0d6efd;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(13,110,253,.1);
+}
+.filter-label {
+    font-size: .7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #6c757d;
+    margin-bottom: .25rem;
+    display: block;
+}
+.filter-bar {
+    background: #fff;
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    border: 1px solid #e9ecef;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}
+.fila-oculta { display: none !important; }
+#contadorFiltro { font-size: .8rem; color: #6c757d; }
+#contadorFiltro span { font-weight: 700; color: #212529; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -19,8 +54,7 @@
         <a href="/casadets/ventas/import" class="btn btn-outline-success">
             <i class="bi bi-file-earmark-spreadsheet"></i> Importar Excel
         </a>
-        <a href="/casadets/ventas/export?{{ http_build_query(request()->only(['vendedor_id','tipo','estado','desde','hasta','cliente_id'])) }}"
-           class="btn btn-outline-secondary">
+        <a id="btnExportar" href="/casadets/ventas/export" class="btn btn-outline-secondary">
             <i class="bi bi-download"></i> Exportar Excel
         </a>
         <a href="/casadets/ventas/create" class="btn btn-primary">
@@ -29,64 +63,65 @@
     </div>
 </div>
 
-<div class="card mb-3">
-    <div class="card-body">
-        <form method="GET" class="row g-2 align-items-end">
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Vendedor</label>
-                <select name="vendedor_id" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    @foreach($vendedores as $v)
-                        <option value="{{ $v->id }}" {{ request('vendedor_id') == $v->id ? 'selected' : '' }}>{{ $v->nombre }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Tipo</label>
-                <select name="tipo" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    @foreach(['factura'=>'Factura','boleta'=>'Boleta','proforma'=>'Proforma'] as $k=>$lbl)
-                        <option value="{{ $k }}" {{ request('tipo')==$k ? 'selected' : '' }}>{{ $lbl }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Cliente</label>
-                <select name="cliente_id" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    @foreach($clientes as $c)
-                        <option value="{{ $c->id }}" {{ request('cliente_id') == $c->id ? 'selected' : '' }}>{{ $c->nombre }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Estado</label>
-                <select name="estado" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    @foreach(['pendiente'=>'Pendiente','pagado'=>'Pagado','anulado'=>'Anulado'] as $k=>$lbl)
-                        <option value="{{ $k }}" {{ request('estado')==$k ? 'selected' : '' }}>{{ $lbl }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Desde</label>
-                <input type="date" name="desde" value="{{ request('desde') }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Hasta</label>
-                <input type="date" name="hasta" value="{{ request('hasta') }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button class="btn btn-sm btn-outline-primary">Filtrar</button>
-                <a href="/casadets/ventas" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-            </div>
-        </form>
+{{-- FILTROS EN VIVO --}}
+<div class="filter-bar mb-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-md col-6">
+            <label class="filter-label">Vendedor</label>
+            <input type="text" id="fVendedor" class="filter-input" placeholder="Buscar…">
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Cliente</label>
+            <input type="text" id="fCliente" class="filter-input" placeholder="Nombre o RUC…">
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Estado</label>
+            <select id="fEstado" class="filter-input">
+                <option value="">Todos</option>
+                <option value="pendiente">⏳ Pendiente</option>
+                <option value="pagado">✓ Pagado</option>
+                <option value="anulado">✕ Anulado</option>
+            </select>
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Fecha</label>
+            <input type="text" id="fFecha" class="filter-input" placeholder="ej. 19/05/2026">
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Producto</label>
+            <input type="text" id="fProducto" class="filter-input" placeholder="Buscar…">
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Pago</label>
+            <select id="fPago" class="filter-input">
+                <option value="">Todos</option>
+                @foreach(['efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'] as $k=>$lbl)
+                    <option value="{{ $k }}">{{ $lbl }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Documento</label>
+            <input type="text" id="fDocumento" class="filter-input" placeholder="ej. F001-001">
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Total</label>
+            <input type="text" id="fTotal" class="filter-input" placeholder="ej. 84.48">
+        </div>
+        <div class="col-auto">
+            <button id="btnLimpiar" class="btn btn-sm btn-outline-secondary" style="height:32px; padding:.2rem .75rem; font-size:.82rem;">
+                <i class="bi bi-x-lg me-1"></i>Limpiar
+            </button>
+        </div>
+    </div>
+    <div class="mt-2" id="contadorFiltro" style="display:none;">
+        Mostrando <span id="cntVisible">0</span> de <span id="cntTotal">0</span> ventas
     </div>
 </div>
 
 <div class="card">
     <div class="table-responsive">
-        <table class="table mb-0 align-middle">
+        <table class="table mb-0 align-middle" id="tablaVentas">
             <thead class="table-light">
                 <tr>
                     <th style="width:125px;">Estado</th>
@@ -106,8 +141,18 @@
                     $metodosArr = array_filter(explode(',', $v->metodo_pago ?? ''));
                     $estado = $v->estado ?? 'pendiente';
                     $filaClase = $estado === 'pagado' ? 'fila-pagado' : ($estado === 'anulado' ? 'fila-anulado' : '');
+                    $productosTexto = $v->detalles->pluck('producto')->implode(' ');
+                    $clienteTexto   = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                 @endphp
-                <tr class="{{ $filaClase }}">
+                <tr class="{{ $filaClase }} fila-venta"
+                    data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
+                    data-cliente="{{ strtolower($clienteTexto) }}"
+                    data-estado="{{ $estado }}"
+                    data-fecha="{{ $v->fecha->format('d/m/Y') }}"
+                    data-productos="{{ strtolower($productosTexto) }}"
+                    data-pago="{{ strtolower($v->metodo_pago ?? '') }}"
+                    data-documento="{{ strtolower(($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '')) }}"
+                    data-total="{{ number_format($v->total_cobrado, 2) }}">
                     <td>
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
                             @csrf
@@ -177,14 +222,14 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="8" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
+                <tr id="filaVacia"><td colspan="9" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
                 @endforelse
             </tbody>
             @if($ventas->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="7" class="text-end">Total cobrado</th>
-                    <th class="text-end">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
+                    <th colspan="7" class="text-end">Total cobrado (visibles)</th>
+                    <th class="text-end" id="totalVisible">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
                     <th></th>
                 </tr>
             </tfoot>
@@ -193,12 +238,96 @@
     </div>
 </div>
 
+<div id="filaNoResultados" class="text-center text-muted py-4" style="display:none;">
+    <i class="bi bi-search me-1"></i> Sin resultados para los filtros aplicados.
+</div>
+
 <script>
-// Actualizar color del select al cambiar valor
 document.querySelectorAll('.select-estado').forEach(sel => {
     sel.addEventListener('change', function() {
         this.className = 'select-estado est-' + this.value;
     });
+});
+
+// ── Filtrado en vivo ──────────────────────────────────────────
+const filtros = {
+    vendedor:  document.getElementById('fVendedor'),
+    cliente:   document.getElementById('fCliente'),
+    estado:    document.getElementById('fEstado'),
+    fecha:     document.getElementById('fFecha'),
+    productos: document.getElementById('fProducto'),
+    pago:      document.getElementById('fPago'),
+    documento: document.getElementById('fDocumento'),
+    total:     document.getElementById('fTotal'),
+};
+
+const filas       = document.querySelectorAll('.fila-venta');
+const cntVisible  = document.getElementById('cntVisible');
+const cntTotal    = document.getElementById('cntTotal');
+const contador    = document.getElementById('contadorFiltro');
+const noResultados = document.getElementById('filaNoResultados');
+const totalVisible = document.getElementById('totalVisible');
+
+if (cntTotal) cntTotal.textContent = filas.length;
+
+function normalizar(str) {
+    return str.toLowerCase()
+        .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
+        .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
+        .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+}
+
+function aplicarFiltros() {
+    const vals = {};
+    for (const [k, el] of Object.entries(filtros)) {
+        vals[k] = normalizar(el.value.trim());
+    }
+
+    const hayFiltro = Object.values(vals).some(v => v !== '');
+    let visibles = 0;
+    let totalCobrado = 0;
+
+    filas.forEach(tr => {
+        const d = {
+            vendedor:  normalizar(tr.dataset.vendedor  || ''),
+            cliente:   normalizar(tr.dataset.cliente   || ''),
+            estado:    normalizar(tr.dataset.estado    || ''),
+            fecha:     normalizar(tr.dataset.fecha     || ''),
+            productos: normalizar(tr.dataset.productos || ''),
+            pago:      normalizar(tr.dataset.pago      || ''),
+            documento: normalizar(tr.dataset.documento || ''),
+            total:     normalizar(tr.dataset.total     || ''),
+        };
+
+        const visible =
+            (!vals.vendedor  || d.vendedor.includes(vals.vendedor))  &&
+            (!vals.cliente   || d.cliente.includes(vals.cliente))    &&
+            (!vals.estado    || d.estado === vals.estado)             &&
+            (!vals.fecha     || d.fecha.includes(vals.fecha))        &&
+            (!vals.productos || d.productos.includes(vals.productos)) &&
+            (!vals.pago      || d.pago.includes(vals.pago))          &&
+            (!vals.documento || d.documento.includes(vals.documento)) &&
+            (!vals.total     || d.total.includes(vals.total));
+
+        tr.classList.toggle('fila-oculta', !visible);
+
+        if (visible) {
+            visibles++;
+            totalCobrado += parseFloat(tr.dataset.total) || 0;
+        }
+    });
+
+    if (cntVisible) cntVisible.textContent = visibles;
+    if (contador) contador.style.display = hayFiltro ? '' : 'none';
+    if (noResultados) noResultados.style.display = (hayFiltro && visibles === 0) ? '' : 'none';
+    if (totalVisible) totalVisible.textContent = 'S/ ' + totalCobrado.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+Object.values(filtros).forEach(el => el.addEventListener('input', aplicarFiltros));
+
+document.getElementById('btnLimpiar').addEventListener('click', () => {
+    Object.values(filtros).forEach(el => el.value = '');
+    aplicarFiltros();
 });
 </script>
 @endsection
