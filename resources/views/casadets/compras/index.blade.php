@@ -42,9 +42,7 @@
                     <th>Fecha</th>
                     <th>Empresa</th>
                     <th>Documento</th>
-                    <th>Producto</th>
-                    <th class="text-end">Cant.</th>
-                    <th class="text-end">M. unit.</th>
+                    <th>Productos</th>
                     <th class="text-end">Total</th>
                     <th class="text-center">Ventas</th>
                     <th class="text-end">Acciones</th>
@@ -55,15 +53,26 @@
                 <tr>
                     <td>{{ $c->fecha->format('d/m/Y') }}</td>
                     <td>{{ $c->empresa }}</td>
-                    <td>{{ $c->documento_tipo ? ucfirst($c->documento_tipo) : '' }} {{ $c->documento_numero }}</td>
-                    <td>{{ $c->producto ?? '—' }}</td>
-                    <td class="text-end">{{ rtrim(rtrim(number_format($c->cantidad, 2), '0'), '.') }}</td>
-                    <td class="text-end">S/ {{ number_format($c->monto_unitario, 2) }}</td>
+                    <td class="text-muted small">{{ $c->documento_tipo ? ucfirst($c->documento_tipo) : '' }} {{ $c->documento_numero }}</td>
+                    <td>
+                        @if($c->lineas->count())
+                            @foreach($c->lineas->take(2) as $l)
+                                <div class="small">{{ $l->producto ?? '—' }}
+                                    <span class="text-muted">× {{ rtrim(rtrim(number_format($l->cantidad,2),'0'),'.') }}</span>
+                                </div>
+                            @endforeach
+                            @if($c->lineas->count() > 2)
+                                <small class="text-muted">+ {{ $c->lineas->count() - 2 }} más</small>
+                            @endif
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
+                    </td>
                     <td class="text-end fw-semibold">S/ {{ number_format($c->monto_total, 2) }}</td>
                     <td class="text-center">
                         @php $nv = $c->detalles->pluck('venta_id')->unique()->count(); $nd = $c->detalles->count(); @endphp
                         @if($nd)
-                            <span class="badge bg-info text-dark" title="{{ $nd }} producto(s) en {{ $nv }} factura(s)">{{ $nv }}f / {{ $nd }}p</span>
+                            <span class="badge bg-info text-dark" title="{{ $nd }} producto(s) en {{ $nv }} venta(s)">{{ $nv }}v / {{ $nd }}p</span>
                         @else
                             <span class="text-muted">—</span>
                         @endif
@@ -78,13 +87,13 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="9" class="text-center text-muted py-4">No hay compras registradas.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">No hay compras registradas.</td></tr>
                 @endforelse
             </tbody>
             @if($compras->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="6" class="text-end">Total comprado</th>
+                    <th colspan="4" class="text-end">Total comprado</th>
                     <th class="text-end">S/ {{ number_format($compras->sum('monto_total'), 2) }}</th>
                     <th colspan="2"></th>
                 </tr>

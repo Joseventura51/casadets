@@ -101,20 +101,6 @@ class CompraController extends Controller
         return redirect('/casadets/compras')->with('success', 'Compra eliminada.');
     }
 
-    public function consultaDocumento(Request $request)
-    {
-        $query     = trim($request->input('q', ''));
-        $resultados = collect();
-        if ($query) {
-            $resultados = Venta::with(['vendedor', 'detalles', 'cliente'])
-                ->where('documento_numero', 'like', '%' . $query . '%')
-                ->orderBy('fecha', 'desc')
-                ->limit(20)
-                ->get();
-        }
-        return view('casadets.compras.consulta', compact('resultados', 'query'));
-    }
-
     public function detallesVenta(Venta $venta)
     {
         $venta->load(['detalles', 'vendedor']);

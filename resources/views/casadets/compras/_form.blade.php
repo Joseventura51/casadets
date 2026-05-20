@@ -1,7 +1,14 @@
 @php
     $tipos = ['boleta','factura','guia','recibo','otro'];
-    $detallesYa = $compra->detalles ?? collect();
-    $cantidadesYa = $detallesYa->keyBy('id')->map(fn($d) => $d->pivot->cantidad ?? 1);
+    $detallesYa    = $compra->detalles ?? collect();
+    $cantidadesYa  = $detallesYa->keyBy('id')->map(fn($d) => $d->pivot->cantidad ?? 1);
+    $lineasYa      = $compra->exists ? ($compra->lineas ?? collect()) : collect();
+    $lineasJsonData = $lineasYa->map(fn($l) => [
+        'producto'       => $l->producto ?? '',
+        'cantidad'       => (float) $l->cantidad,
+        'monto_unitario' => (float) $l->monto_unitario,
+        'monto_total'    => (float) $l->monto_total,
+    ]);
 @endphp
 @if($errors->any())
 <div class="alert alert-danger">
@@ -12,7 +19,7 @@
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-white fw-semibold"><i class="bi bi-receipt me-1"></i> Datos de la compra</div>
     <div class="card-body">
-        <div class="row g-3">
+        <div class="row g-3 mb-3">
             <div class="col-md-6">
                 <label class="form-label">Empresa / Proveedor *</label>
                 <input type="text" name="empresa" value="{{ old('empresa', $compra->empresa ?? '') }}" class="form-control" required>
@@ -35,34 +42,37 @@
                 <input type="text" name="documento_numero" value="{{ old('documento_numero', $compra->documento_numero ?? '') }}" class="form-control" placeholder="Ej. F001-123">
             </div>
             <div class="col-md-8">
-                <label class="form-label">Producto / Descripción general</label>
-                <input type="text" name="producto" value="{{ old('producto', $compra->producto ?? '') }}" class="form-control" placeholder="Ej. CERAMICO 60x60">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Cantidad *</label>
-                <input type="number" step="0.01" min="0" name="cantidad" id="cantidad" value="{{ old('cantidad', $compra->cantidad ?? 1) }}" class="form-control text-end" required>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Monto unitario *</label>
-                <input type="number" step="0.01" min="0" name="monto_unitario" id="monto_unitario" value="{{ old('monto_unitario', $compra->monto_unitario ?? 0) }}" class="form-control text-end" required>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">
-                    Monto total *
-                    <button type="button" id="recalcularTotal" class="btn btn-link btn-sm p-0 ms-1">
-                        <i class="bi bi-arrow-clockwise"></i> Recalcular
-                    </button>
-                </label>
-                <input type="number" step="0.01" min="0" name="monto_total" id="monto_total" value="{{ old('monto_total', $compra->monto_total ?? 0) }}" class="form-control text-end fw-semibold" required>
-                <small class="text-muted">Editable. Si lo cambias, no afecta al unitario.</small>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Sugerido (cant × unit.)</label>
-                <div class="form-control bg-light text-end" id="sugerido">S/ 0.00</div>
-            </div>
-            <div class="col-12">
                 <label class="form-label">Observaciones</label>
                 <textarea name="observaciones" class="form-control" rows="2">{{ old('observaciones', $compra->observaciones ?? '') }}</textarea>
+            </div>
+        </div>
+
+        {{-- Tabla de productos --}}
+        <div class="border rounded overflow-hidden">
+            <div class="bg-light px-3 py-2 fw-semibold d-flex justify-content-between align-items-center border-bottom">
+                <span><i class="bi bi-list-ul me-1"></i> Productos comprados</span>
+                <button type="button" id="btnAgregarLinea" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-plus-lg me-1"></i> Agregar producto
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Producto / Descripción</th>
+                            <th class="text-end" style="width:95px;">Cantidad</th>
+                            <th class="text-end" style="width:105px;">P. unitario</th>
+                            <th class="text-end" style="width:115px;">Total línea</th>
+                            <th style="width:38px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="lineasBody"></tbody>
+                </table>
+            </div>
+            <div class="px-3 py-2 bg-light border-top d-flex justify-content-end align-items-center gap-3">
+                <span class="text-muted small">Total general</span>
+                <span id="totalGeneral" class="fs-5 fw-bold text-primary">S/ 0.00</span>
+                <input type="hidden" name="monto_total" id="monto_total" value="0">
             </div>
         </div>
     </div>
@@ -108,6 +118,78 @@
 </div>
 
 <script>
+// ── Helpers ────────────────────────────────────────────────────
+function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ── Líneas de productos ────────────────────────────────────────
+const lineasIniciales = @json($lineasJsonData);
+const lineasBody      = document.getElementById('lineasBody');
+const totalGeneralEl  = document.getElementById('totalGeneral');
+const montoTotalInput = document.getElementById('monto_total');
+let lineaIdx = 0;
+
+function actualizarTotalGeneral() {
+    let sum = 0;
+    lineasBody.querySelectorAll('.linea-total').forEach(i => sum += parseFloat(i.value) || 0);
+    totalGeneralEl.textContent = 'S/ ' + sum.toFixed(2);
+    montoTotalInput.value = sum.toFixed(2);
+}
+
+function agregarLinea(prod = '', cant = 1, unit = 0, tot = null) {
+    const idx  = lineaIdx++;
+    const calc = tot !== null ? parseFloat(tot).toFixed(2) : (cant * unit).toFixed(2);
+    const tr   = document.createElement('tr');
+    tr.innerHTML = `
+        <td>
+            <input type="text" name="lineas[${idx}][producto]" value="${escHtml(prod)}"
+                class="form-control form-control-sm" placeholder="Producto o descripción">
+        </td>
+        <td>
+            <input type="number" name="lineas[${idx}][cantidad]" value="${cant}"
+                step="0.01" min="0" class="form-control form-control-sm text-end linea-cant">
+        </td>
+        <td>
+            <input type="number" name="lineas[${idx}][monto_unitario]" value="${unit}"
+                step="0.01" min="0" class="form-control form-control-sm text-end linea-unit">
+        </td>
+        <td>
+            <input type="number" name="lineas[${idx}][monto_total]" value="${calc}"
+                step="0.01" min="0" class="form-control form-control-sm text-end linea-total fw-semibold">
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger btn-q-linea px-1">
+                <i class="bi bi-x"></i>
+            </button>
+        </td>`;
+    const cantI = tr.querySelector('.linea-cant');
+    const unitI = tr.querySelector('.linea-unit');
+    const totI  = tr.querySelector('.linea-total');
+    const recalc = () => {
+        totI.value = ((parseFloat(cantI.value) || 0) * (parseFloat(unitI.value) || 0)).toFixed(2);
+        actualizarTotalGeneral();
+    };
+    cantI.addEventListener('input', recalc);
+    unitI.addEventListener('input', recalc);
+    totI.addEventListener('input', actualizarTotalGeneral);
+    tr.querySelector('.btn-q-linea').addEventListener('click', () => {
+        tr.remove();
+        actualizarTotalGeneral();
+    });
+    lineasBody.appendChild(tr);
+    actualizarTotalGeneral();
+}
+
+document.getElementById('btnAgregarLinea').addEventListener('click', () => agregarLinea());
+
+if (lineasIniciales.length > 0) {
+    lineasIniciales.forEach(l => agregarLinea(l.producto, l.cantidad, l.monto_unitario, l.monto_total));
+} else {
+    agregarLinea();
+}
+
+// ── Vinculación con ventas ─────────────────────────────────────
 const facturasCargadas = new Set();
 const container   = document.getElementById('facturasContainer');
 const sinSel      = document.getElementById('sinSeleccion');
@@ -117,7 +199,6 @@ const facturasIniciales      = @json(
     ($detallesYa->pluck('venta')->filter()->unique('id')->values()->map(fn($v)=>$v->id))->toArray()
 );
 
-// ── Datos de ventas disponibles ───────────────────────────────
 @php
 $ventasJson = $facturas->map(fn($f) => [
     'id'            => $f->id,
@@ -132,23 +213,6 @@ $ventasJson = $facturas->map(fn($f) => [
 @endphp
 const todasLasVentas = @json($ventasJson);
 
-// ── Montos/sugerido ────────────────────────────────────────────
-const cant  = document.getElementById('cantidad');
-const unit  = document.getElementById('monto_unitario');
-const total = document.getElementById('monto_total');
-const sug   = document.getElementById('sugerido');
-function calcSugerido() {
-    const c = parseFloat(cant.value)||0, u = parseFloat(unit.value)||0;
-    sug.textContent = 'S/ ' + (c*u).toFixed(2);
-}
-cant.addEventListener('input', calcSugerido);
-unit.addEventListener('input', calcSugerido);
-document.getElementById('recalcularTotal').addEventListener('click', () => {
-    total.value = ((parseFloat(cant.value)||0)*(parseFloat(unit.value)||0)).toFixed(2);
-});
-calcSugerido();
-
-// ── Buscador con dropdown ──────────────────────────────────────
 const buscador = document.getElementById('ventaBuscador');
 const dropdown = document.getElementById('ventaDropdown');
 
@@ -164,16 +228,16 @@ function mostrarDropdown() {
     const res = filtrarVentas();
     dropdown.innerHTML = '';
     if (res.length === 0) {
-        dropdown.innerHTML = '<div style="padding:.5rem .9rem; color:#6c757d; font-size:.85rem;">Sin resultados</div>';
+        dropdown.innerHTML = '<div style="padding:.5rem .9rem;color:#6c757d;font-size:.85rem;">Sin resultados</div>';
     } else {
         res.forEach(v => {
             const item = document.createElement('div');
-            item.style.cssText = 'padding:.45rem .9rem; cursor:pointer; font-size:.85rem; border-bottom:1px solid #f1f3f5;';
+            item.style.cssText = 'padding:.45rem .9rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid #f1f3f5;';
             item.innerHTML = `<span class="badge bg-secondary me-1" style="font-size:.7rem;">${escHtml(v.tipo)}</span>`
                 + `<strong>${escHtml(v.numero)}</strong>`
                 + ` <span class="text-muted small">· ${v.fecha_display} · ${escHtml(v.vendedor)} · S/ ${v.total}</span>`;
             if (v.productos) {
-                item.innerHTML += `<div style="font-size:.78rem;color:#888;margin-top:1px;">${escHtml(v.productos.slice(0,80))}</div>`;
+                item.innerHTML += `<div style="font-size:.78rem;color:#888;margin-top:1px;">${escHtml(v.productos.slice(0, 80))}</div>`;
             }
             item.addEventListener('mouseover', () => item.style.background = '#f0f4ff');
             item.addEventListener('mouseout',  () => item.style.background = '');
@@ -193,7 +257,6 @@ buscador.addEventListener('focus', mostrarDropdown);
 buscador.addEventListener('input', mostrarDropdown);
 buscador.addEventListener('blur',  () => setTimeout(() => { dropdown.style.display = 'none'; buscador.value = ''; }, 200));
 
-// ── Vinculación ────────────────────────────────────────────────
 function actualizarSinSel() {
     sinSel.style.display = container.querySelectorAll('input.detalle-check:checked').length ? 'none' : '';
 }
@@ -256,11 +319,11 @@ function renderFactura(data) {
                     value="${checked ? cantPivot : 1}"
                     step="0.01" min="0.01" max="${d.cantidad}"
                     class="form-control form-control-sm text-end cantidad-comprada"
-                    style="width:80px; display:inline-block;"
+                    style="width:80px;display:inline-block;"
                     ${!checked ? 'disabled' : ''}>
             </td>`;
         tbody.appendChild(tr);
-        const cb       = tr.querySelector('.detalle-check');
+        const cb        = tr.querySelector('.detalle-check');
         const cantInput = tr.querySelector('.cantidad-comprada');
         cb.addEventListener('change', () => {
             cantInput.disabled = !cb.checked;
@@ -280,10 +343,6 @@ function renderFactura(data) {
         all.forEach(c => { c.checked = algunoSinMarcar; c.dispatchEvent(new Event('change')); });
     });
     container.appendChild(card);
-}
-
-function escHtml(s) {
-    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
 facturasIniciales.forEach(id => cargarFactura(id));

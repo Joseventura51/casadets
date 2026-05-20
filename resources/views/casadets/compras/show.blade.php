@@ -1,9 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-@php
-    $porVenta = $compra->detalles->groupBy('venta_id');
-@endphp
+@php $porVenta = $compra->detalles->groupBy('venta_id'); @endphp
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Compra #{{ $compra->id }}</h3>
@@ -20,39 +18,49 @@
     <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Total</small><h6 class="mb-0 text-primary">S/ {{ number_format($compra->monto_total, 2) }}</h6></div></div>
 </div>
 
+@if($compra->observaciones)
+<div class="alert alert-light border mb-3"><small class="text-muted">Observaciones:</small> {{ $compra->observaciones }}</div>
+@endif
+
 <div class="card border-0 shadow-sm mb-3">
-    <div class="card-header bg-white fw-semibold"><i class="bi bi-bag me-1"></i> Detalle de la compra</div>
-    <div class="card-body">
-        <div class="row g-2">
-            <div class="col-md-6"><span class="text-muted small">Producto:</span><br><strong>{{ $compra->producto ?? '—' }}</strong></div>
-            <div class="col-md-2 text-center">
-                <span class="text-muted small">Cantidad</span><br>
-                <strong>{{ rtrim(rtrim(number_format($compra->cantidad, 2), '0'), '.') }}</strong>
-            </div>
-            <div class="col-md-2 text-end">
-                <span class="text-muted small">Unitario</span><br>
-                <strong>S/ {{ number_format($compra->monto_unitario, 2) }}</strong>
-            </div>
-            <div class="col-md-2 text-end">
-                <span class="text-muted small">Total</span><br>
-                <strong class="text-primary fs-5">S/ {{ number_format($compra->monto_total, 2) }}</strong>
-                @php $diff = $compra->monto_total - ($compra->cantidad * $compra->monto_unitario); @endphp
-                @if(abs($diff) > 0.005)
-                    <br><small class="{{ $diff > 0 ? 'text-success' : 'text-danger' }}">
-                        dif. {{ $diff > 0 ? '+' : '' }}S/ {{ number_format($diff, 2) }}
-                    </small>
-                @endif
-            </div>
-        </div>
-        @if($compra->observaciones)
-            <hr class="my-2"><small class="text-muted">Obs:</small> {{ $compra->observaciones }}
-        @endif
+    <div class="card-header bg-white fw-semibold"><i class="bi bi-list-ul me-1"></i> Productos comprados</div>
+    @if($compra->lineas->count())
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Producto / Descripción</th>
+                    <th class="text-end" style="width:100px;">Cantidad</th>
+                    <th class="text-end" style="width:110px;">P. Unitario</th>
+                    <th class="text-end" style="width:120px;">Total línea</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($compra->lineas as $l)
+                <tr>
+                    <td>{{ $l->producto ?? '—' }}</td>
+                    <td class="text-end">{{ rtrim(rtrim(number_format($l->cantidad, 2), '0'), '.') }}</td>
+                    <td class="text-end">S/ {{ number_format($l->monto_unitario, 2) }}</td>
+                    <td class="text-end fw-semibold">S/ {{ number_format($l->monto_total, 2) }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <th colspan="3" class="text-end">Total general</th>
+                    <th class="text-end text-primary fs-6">S/ {{ number_format($compra->monto_total, 2) }}</th>
+                </tr>
+            </tfoot>
+        </table>
     </div>
+    @else
+    <div class="card-body text-center text-muted py-3">Sin líneas de producto registradas.</div>
+    @endif
 </div>
 
 <div class="card border-0 shadow-sm">
     <div class="card-header bg-white fw-semibold">
-        <i class="bi bi-link-45deg me-1 text-warning"></i> Productos vinculados de facturas
+        <i class="bi bi-link-45deg me-1 text-warning"></i> Productos vinculados de ventas
     </div>
     @if($porVenta->count())
         @foreach($porVenta as $ventaId => $detalles)
@@ -97,7 +105,7 @@
         @endforeach
     @else
         <div class="card-body text-center text-muted py-4">
-            <i class="bi bi-info-circle me-1"></i> Esta compra no tiene productos vinculados a ninguna factura.
+            <i class="bi bi-info-circle me-1"></i> Esta compra no tiene productos vinculados a ninguna venta.
         </div>
     @endif
 </div>
