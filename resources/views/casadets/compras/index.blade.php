@@ -44,7 +44,7 @@
                     <th>Documento</th>
                     <th>Productos</th>
                     <th class="text-end">Total</th>
-                    <th>Ventas vinculadas</th>
+                    <th>Venta vinculada</th>
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
@@ -54,31 +54,44 @@
                     <td>{{ $c->fecha->format('d/m/Y') }}</td>
                     <td>{{ $c->empresa }}</td>
                     <td class="text-muted small">{{ $c->documento_tipo ? ucfirst($c->documento_tipo) : '' }} {{ $c->documento_numero }}</td>
-                    <td>
+                    <td style="max-width:220px;">
                         @if($c->lineas->count())
-                            @foreach($c->lineas->take(2) as $l)
-                                <div class="small">{{ $l->producto ?? '—' }}
-                                    <span class="text-muted">× {{ rtrim(rtrim(number_format($l->cantidad,2),'0'),'.') }}</span>
-                                </div>
-                            @endforeach
-                            @if($c->lineas->count() > 2)
-                                <small class="text-muted">+ {{ $c->lineas->count() - 2 }} más</small>
+                            @php
+                                $primera = $c->lineas->first();
+                                $resto   = $c->lineas->count() - 1;
+                                $titulo  = $c->lineas->map(fn($l) => $l->producto.' × '.rtrim(rtrim(number_format($l->cantidad,2),'0'),'.'))->join("\n");
+                            @endphp
+                            <span class="small d-block text-truncate" title="{{ $titulo }}" data-bs-toggle="tooltip" data-bs-placement="top" style="white-space:nowrap;">
+                                {{ $primera->producto ?? '—' }}
+                                <span class="text-muted">× {{ rtrim(rtrim(number_format($primera->cantidad,2),'0'),'.') }}</span>
+                            </span>
+                            @if($resto > 0)
+                                <small class="text-muted">+ {{ $resto }} más</small>
                             @endif
                         @else
                             <span class="text-muted">—</span>
                         @endif
                     </td>
                     <td class="text-end fw-semibold">S/ {{ number_format($c->monto_total, 2) }}</td>
-                    <td>
+                    <td style="max-width:180px;">
                         @php
                             $ventasVinculadas = $c->detalles->pluck('venta')->filter()->unique('id')->values();
+                            $primeraVenta     = $ventasVinculadas->first();
+                            $restoVentas      = $ventasVinculadas->count() - 1;
+                            $tituloVentas     = $ventasVinculadas->map(fn($v) => ucfirst($v->documento_tipo ?? '').' '.$v->documento_numero)->join("\n");
                         @endphp
-                        @if($ventasVinculadas->count())
-                            @foreach($ventasVinculadas as $vv)
-                                <a href="/casadets/ventas/{{ $vv->id }}" class="badge bg-light text-dark border text-decoration-none me-1" style="font-size:.75rem;">
-                                    {{ ucfirst($vv->documento_tipo ?? '') }} {{ $vv->documento_numero }}
-                                </a>
-                            @endforeach
+                        @if($primeraVenta)
+                            <a href="/casadets/ventas/{{ $primeraVenta->id }}"
+                               class="badge bg-light text-dark border text-decoration-none"
+                               style="font-size:.75rem; white-space:nowrap;">
+                                {{ ucfirst($primeraVenta->documento_tipo ?? '') }} {{ $primeraVenta->documento_numero }}
+                            </a>
+                            @if($restoVentas > 0)
+                                <span class="badge bg-secondary ms-1" style="font-size:.7rem; cursor:default;"
+                                      data-bs-toggle="tooltip" data-bs-placement="top" title="{{ $tituloVentas }}">
+                                    +{{ $restoVentas }} más
+                                </span>
+                            @endif
                         @else
                             <span class="text-muted">—</span>
                         @endif
