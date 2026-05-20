@@ -288,8 +288,8 @@ class VentaImportController extends Controller
             'precio'       => ['precio_unitario', 'preciounit', 'precio'],
             'cantidad'     => ['cantidad', 'unidades', 'cant'],
             'total'        => ['total', 'subtotal', 'importe'],
-            'razon_social' => ['razon_social', 'razon social', 'denominacion', 'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
-            'ruc'          => ['ruc_cliente', 'nro_ruc', 'nroruc', 'ruc', 'documento'],
+            'razon_social' => ['nombrerazonsocial', 'razon_social', 'razon social', 'denominacion', 'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
+            'ruc'          => ['ruc', 'ruc_cliente', 'nro_ruc', 'nroruc', 'documento'],
         ];
 
         $mapa = [];

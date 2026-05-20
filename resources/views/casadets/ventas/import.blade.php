@@ -57,10 +57,17 @@
                         @foreach(['fecha_emisi','Doc','Serie','NroDocumen','Producto','Precio','Cantidad','Total'] as $col)
                             <code class="badge bg-light text-dark border" style="font-size:.8rem;">{{ $col }}</code>
                         @endforeach
+                        <code class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.8rem;">
+                            <i class="bi bi-building me-1"></i>NombreRazonSocial
+                        </code>
+                        <code class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.8rem;">
+                            <i class="bi bi-hash me-1"></i>Ruc
+                        </code>
                     </div>
                     <ul class="mb-0 small text-muted">
                         <li>Filas con mismo <strong>Doc + Serie + Número</strong> se agrupan en <strong>una sola venta</strong>.</li>
                         <li><strong>B</strong> = Boleta · <strong>F</strong> = Factura · <strong>P</strong> = Proforma.</li>
+                        <li><strong>NombreRazonSocial</strong> y <strong>Ruc</strong> se usan para crear o vincular el cliente automáticamente.</li>
                         <li>Las demás columnas del archivo se ignoran.</li>
                     </ul>
                 </div>
