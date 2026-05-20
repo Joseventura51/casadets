@@ -59,6 +59,7 @@ class VentaImportController extends Controller
         }
 
         $grupos = [];
+        $sinDocContador = 0;
         for ($i = 1; $i < count($rows); $i++) {
             $r = $rows[$i];
             $doc = trim((string) ($r[$mapa['doc']] ?? ''));
@@ -66,11 +67,16 @@ class VentaImportController extends Controller
             $numero = trim((string) ($r[$mapa['nro']] ?? ''));
             $producto = trim((string) ($r[$mapa['producto']] ?? ''));
 
-            if ($producto === '' || ($doc === '' && $serie === '' && $numero === '')) {
+            if ($producto === '') {
                 continue;
             }
 
-            $key = $doc . '|' . $serie . '|' . $numero;
+            // Si no hay ningún campo de documento, cada fila es su propio grupo
+            if ($doc === '' && $serie === '' && $numero === '') {
+                $key = '__sinDoc__' . $sinDocContador++;
+            } else {
+                $key = $doc . '|' . $serie . '|' . $numero;
+            }
 
             if (!isset($grupos[$key])) {
                 $razonSocial = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
@@ -116,19 +122,23 @@ class VentaImportController extends Controller
             return intval($a['numero']) - intval($b['numero']);
         });
 
-        $existentes = $this->buscarFacturasExistentes($grupos);
+        // Detectar documentos que YA existen en BD y auto-excluirlos
+        $grupos = array_values($grupos);
+        [$gruposNuevos, $omitidos] = $this->filtrarDuplicados($grupos);
 
-        // Detectar facturas que YA existen en BD para advertir antes de confirmar
-        $existentes = $this->buscarFacturasExistentes(array_values($grupos));
+        if (empty($gruposNuevos)) {
+            return back()->with('error', 'Todos los documentos del Excel ya existen en el sistema. No hay nada nuevo para importar.');
+        }
 
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
         return view('casadets.ventas.import_preview', [
-            'grupos' => $grupos,
-            'vendedores' => $vendedores,
+            'grupos'            => $gruposNuevos,
+            'vendedores'        => $vendedores,
             'vendedor_id_default' => 1,
             'metodo_pago_default' => 'efectivo',
-            'duplicadosExistentes' => $existentes,
+            'duplicadosExistentes' => [],
+            'omitidos'          => $omitidos,
         ]);
     }
 
@@ -229,50 +239,72 @@ class VentaImportController extends Controller
         );
     }
 
-    private function buscarFacturasExistentes(array $grupos): array
+    /**
+     * Separa grupos en [nuevos, omitidos].
+     * Omitidos = documentos con número que ya existen en la BD.
+     * Grupos sin número de documento siempre se consideran nuevos.
+     */
+    private function filtrarDuplicados(array $grupos): array
     {
-        $numeros = [];
+        $tipoMap = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma', 'PR' => 'proforma'];
+
+        // Construir lista de (tipo, numero) a buscar
+        $buscar = [];
         foreach ($grupos as $g) {
-            if (strtoupper($g['doc'] ?? '') === 'F') {
-                $num = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
-                if ($num !== '') $numeros[] = $num;
+            $docLetra = strtoupper(trim($g['doc'] ?? ''));
+            $tipo = $tipoMap[$docLetra] ?? null;
+            $num  = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            if ($tipo && $num !== '') {
+                $buscar[$tipo][] = $num;
             }
         }
-        if (empty($numeros)) return [];
 
-        return Venta::where('documento_tipo', 'factura')
-            ->whereIn('documento_numero', $numeros)
-            ->pluck('documento_numero')
-            ->toArray();
+        // Consultar BD agrupado por tipo
+        $existentes = [];
+        foreach ($buscar as $tipo => $numeros) {
+            $encontrados = Venta::where('documento_tipo', $tipo)
+                ->whereIn('documento_numero', array_unique($numeros))
+                ->pluck('documento_numero')
+                ->toArray();
+            foreach ($encontrados as $n) {
+                $existentes[$tipo . '|' . $n] = true;
+            }
+        }
+
+        $nuevos   = [];
+        $omitidos = [];
+        foreach ($grupos as $g) {
+            $docLetra = strtoupper(trim($g['doc'] ?? ''));
+            $tipo = $tipoMap[$docLetra] ?? null;
+            $num  = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+
+            if ($tipo && $num !== '' && isset($existentes[$tipo . '|' . $num])) {
+                $omitidos[] = $num ?: '(sin número)';
+            } else {
+                $nuevos[] = $g;
+            }
+        }
+
+        return [$nuevos, $omitidos];
     }
 
     private function validarFacturasUnicas(array $ventas): array
     {
         $errores = [];
-        $vistos = [];
-        $aBuscar = [];
+        $vistos  = [];
 
         foreach ($ventas as $g) {
-            if (strtoupper($g['doc'] ?? '') !== 'F') continue;
+            $docLetra = strtoupper(trim($g['doc'] ?? ''));
             $num = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             if ($num === '') continue;
 
-            if (isset($vistos[$num])) {
-                $errores[] = "La factura $num está duplicada en el archivo.";
+            $key = $docLetra . '|' . $num;
+            if (isset($vistos[$key])) {
+                $errores[] = "El documento $num está duplicado en el archivo.";
             }
-            $vistos[$num] = true;
-            $aBuscar[] = $num;
+            $vistos[$key] = true;
         }
 
-        if (!empty($aBuscar)) {
-            $existentes = Venta::where('documento_tipo', 'factura')
-                ->whereIn('documento_numero', $aBuscar)
-                ->pluck('documento_numero')
-                ->toArray();
-            foreach ($existentes as $e) {
-                $errores[] = "La factura $e ya existe en el sistema.";
-            }
-        }
         return $errores;
     }
 

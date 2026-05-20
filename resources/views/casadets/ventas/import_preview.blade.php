@@ -37,11 +37,18 @@
     </div>
 @endif
 
-@if(!empty($duplicadosExistentes))
-    <div class="alert alert-danger mb-3">
-        <i class="bi bi-exclamation-triangle-fill me-1"></i>
-        <strong>Facturas ya registradas:</strong> {{ implode(', ', $duplicadosExistentes) }}.
-        Si no las eliminas, la importación será rechazada.
+@if(!empty($omitidos))
+    <div class="alert alert-warning mb-3 d-flex gap-2 align-items-start">
+        <i class="bi bi-skip-forward-fill fs-5 mt-1 text-warning"></i>
+        <div>
+            <strong>{{ count($omitidos) }} documento(s) omitidos por ya existir en el sistema:</strong>
+            <div class="mt-1 d-flex flex-wrap gap-1">
+                @foreach($omitidos as $dup)
+                    <span class="badge bg-warning text-dark" style="font-size:.78rem;">{{ $dup }}</span>
+                @endforeach
+            </div>
+            <div class="mt-1 text-muted small">Solo se muestran abajo los documentos nuevos.</div>
+        </div>
     </div>
 @endif
 
