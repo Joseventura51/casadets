@@ -46,7 +46,7 @@ class VentaImportController extends Controller
             return back()->with('error', 'El archivo está vacío o no tiene datos.');
         }
 
-        $headers = array_map(fn($h) => strtolower(trim((string) $h)), $rows[0]);
+        $headers = array_map(fn($h) => $this->normalizarTexto((string) $h), $rows[0]);
         $mapa = $this->mapearColumnas($headers);
 
         $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total'];
@@ -278,25 +278,28 @@ class VentaImportController extends Controller
 
     private function mapearColumnas(array $headers): array
     {
+        // Todos los alias ya están normalizados (sin tildes, minúsculas, sin espacios extra)
         $alias = [
             'fecha'        => ['fecha_emisi', 'fecha_emision', 'fecha'],
-            'doc'          => ['doc', 'tipo', 'tipo_doc'],
+            'doc'          => ['doc', 'tipo_doc', 'tipo'],
             'serie'        => ['serie'],
-            'nro'          => ['nrodocumen', 'numero', 'nro_documento', 'nrodocumento'],
-            'producto'     => ['producto', 'descripcion', 'descripción'],
-            'precio'       => ['precio', 'precio_unitario', 'preciounit'],
-            'cantidad'     => ['cantidad', 'unidades'],
+            'nro'          => ['nrodocumen', 'nro_documento', 'nrodocumento', 'numero'],
+            'producto'     => ['producto', 'descripcion', 'detalle'],
+            'precio'       => ['precio_unitario', 'preciounit', 'precio'],
+            'cantidad'     => ['cantidad', 'unidades', 'cant'],
             'total'        => ['total', 'subtotal', 'importe'],
-            'razon_social' => ['razon_social', 'razón_social', 'razon social', 'razón social', 'denominacion', 'denominación', 'cliente', 'nombre_cliente', 'nombre cliente', 'razonsocial'],
-            'ruc'          => ['ruc', 'ruc_cliente', 'nro_ruc', 'nroruc', 'documento'],
+            'razon_social' => ['razon_social', 'razon social', 'denominacion', 'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
+            'ruc'          => ['ruc_cliente', 'nro_ruc', 'nroruc', 'ruc', 'documento'],
         ];
 
         $mapa = [];
         foreach ($alias as $campo => $posibles) {
             $mapa[$campo] = null;
             foreach ($headers as $idx => $h) {
+                $hNorm = $this->normalizarTexto($h);
                 foreach ($posibles as $p) {
-                    if (str_starts_with($h, $p)) {
+                    // Coincidencia exacta o por prefijo
+                    if ($hNorm === $p || str_starts_with($hNorm, $p)) {
                         $mapa[$campo] = $idx;
                         break 2;
                     }
@@ -304,6 +307,15 @@ class VentaImportController extends Controller
             }
         }
         return $mapa;
+    }
+
+    private function normalizarTexto(string $texto): string
+    {
+        $texto = mb_strtolower(trim($texto), 'UTF-8');
+        // Reemplazar vocales con tilde
+        $desde = ['á','é','í','ó','ú','ü','ñ','à','è','ì','ò','ù'];
+        $hacia  = ['a','e','i','o','u','u','n','a','e','i','o','u'];
+        return str_replace($desde, $hacia, $texto);
     }
 
     private function parseFecha($valor): string
