@@ -88,7 +88,6 @@
                     <th>Fecha</th>
                     <th>Vendedor</th>
                     <th>Cliente</th>
-                    <th>Productos</th>
                     <th>Pago</th>
                     <th>Documento</th>
                     <th class="text-end">Total</th>
@@ -103,10 +102,9 @@
                             <option value="anulado">Anulado</option>
                         </select>
                     </td>
-                    <td></td>
+                    <td><input type="date" id="fFecha" class="filter-input" style="font-size:.76rem;"></td>
                     <td><input type="text" id="fVendedor"  class="filter-input" placeholder="Buscar…"></td>
                     <td><input type="text" id="fCliente"   class="filter-input" placeholder="Nombre o RUC…"></td>
-                    <td></td>
                     <td>
                         <select id="fPago" class="filter-input">
                             <option value="">Todos</option>
@@ -130,15 +128,13 @@
                     $metodosArr = array_filter(explode(',', $v->metodo_pago ?? ''));
                     $estado = $v->estado ?? 'pendiente';
                     $filaClase = $estado === 'pagado' ? 'fila-pagado' : ($estado === 'anulado' ? 'fila-anulado' : '');
-                    $productosTexto = $v->detalles->pluck('producto')->implode(' ');
-                    $clienteTexto   = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
+                    $clienteTexto = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
                     data-cliente="{{ strtolower($clienteTexto) }}"
                     data-estado="{{ $estado }}"
-                    data-fecha="{{ $v->fecha->format('d/m/Y') }}"
-                    data-productos="{{ strtolower($productosTexto) }}"
+                    data-fecha="{{ $v->fecha->format('Y-m-d') }}"
                     data-pago="{{ strtolower($v->metodo_pago ?? '') }}"
                     data-documento="{{ strtolower(($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '')) }}"
                     data-total="{{ number_format($v->total_cobrado, 2) }}">
@@ -162,14 +158,6 @@
                             @if($v->cliente->documento)<br><small class="text-muted">{{ $v->cliente->documento }}</small>@endif
                         @else
                             <span class="text-muted">—</span>
-                        @endif
-                    </td>
-                    <td>
-                        @if($v->detalles->count() == 1)
-                            {{ $v->detalles->first()->producto }}
-                        @else
-                            <span class="badge bg-info text-dark">{{ $v->detalles->count() }} productos</span>
-                            <small class="text-muted d-block">{{ $v->detalles->pluck('producto')->take(2)->implode(', ') }}{{ $v->detalles->count() > 2 ? '…' : '' }}</small>
                         @endif
                     </td>
                     <td>
@@ -211,13 +199,13 @@
                     </td>
                 </tr>
                 @empty
-                <tr id="filaVacia"><td colspan="9" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
+                <tr id="filaVacia"><td colspan="8" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
                 @endforelse
             </tbody>
             @if($ventas->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="7" class="text-end">Total cobrado (visibles)</th>
+                    <th colspan="6" class="text-end">Total cobrado (visibles)</th>
                     <th class="text-end" id="totalVisible">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
                     <th></th>
                 </tr>
@@ -249,6 +237,7 @@ const filtros = {
 };
 const fDesde = document.getElementById('fDesde');
 const fHasta = document.getElementById('fHasta');
+const fFecha = document.getElementById('fFecha');
 
 const filas        = document.querySelectorAll('.fila-venta');
 const cntVisible   = document.getElementById('cntVisible');
@@ -266,21 +255,16 @@ function normalizar(str) {
         .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
 }
 
-// Convierte "dd/mm/yyyy" → "yyyy-mm-dd" para comparar con input[type=date]
-function fechaISO(ddmmyyyy) {
-    const [d, m, y] = ddmmyyyy.split('/');
-    return y && m && d ? `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : '';
-}
-
 function aplicarFiltros() {
     const vals = {};
     for (const [k, el] of Object.entries(filtros)) {
         vals[k] = normalizar(el.value.trim());
     }
     const desde = fDesde.value;
-    const hasta = fHasta.value;
+    const hasta  = fHasta.value;
+    const fecha  = fFecha.value;
 
-    const hayFiltro = Object.values(vals).some(v => v !== '') || desde || hasta;
+    const hayFiltro = Object.values(vals).some(v => v !== '') || desde || hasta || fecha;
     let visibles = 0;
     let totalCobrado = 0;
 
@@ -293,16 +277,17 @@ function aplicarFiltros() {
             documento: normalizar(tr.dataset.documento || ''),
             total:     normalizar(tr.dataset.total     || ''),
         };
-        const fechaFila = fechaISO(tr.dataset.fecha || '');
+        const fechaFila = tr.dataset.fecha || '';
 
         const visible =
-            (!vals.estado    || d.estado === vals.estado)              &&
+            (!vals.estado    || d.estado === vals.estado)             &&
             (!vals.vendedor  || d.vendedor.includes(vals.vendedor))   &&
             (!vals.cliente   || d.cliente.includes(vals.cliente))     &&
             (!vals.pago      || d.pago.includes(vals.pago))           &&
             (!vals.documento || d.documento.includes(vals.documento)) &&
             (!vals.total     || d.total.includes(vals.total))         &&
-            (!desde          || fechaFila >= desde)                    &&
+            (!fecha          || fechaFila === fecha)                   &&
+            (!desde          || fechaFila >= desde)                   &&
             (!hasta          || fechaFila <= hasta);
 
         tr.classList.toggle('fila-oculta', !visible);
@@ -322,9 +307,11 @@ function aplicarFiltros() {
 Object.values(filtros).forEach(el => el.addEventListener('input', aplicarFiltros));
 fDesde.addEventListener('input', aplicarFiltros);
 fHasta.addEventListener('input', aplicarFiltros);
+fFecha.addEventListener('input', aplicarFiltros);
 
 document.getElementById('btnLimpiar').addEventListener('click', () => {
     Object.values(filtros).forEach(el => el.value = '');
+    fFecha.value = '';
     aplicarFiltros();
 });
 
