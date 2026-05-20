@@ -10,39 +10,26 @@
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
 
 .filter-input {
-    font-size: .82rem;
-    border-radius: 7px;
-    border: 1.5px solid #e0e0e0;
-    padding: .3rem .55rem;
-    background: #fafafa;
-    transition: border-color .15s, box-shadow .15s;
+    font-size: .78rem;
+    border-radius: 5px;
+    border: 1px solid #ced4da;
+    padding: .2rem .4rem;
+    background: #fff;
     width: 100%;
+    min-width: 0;
+    transition: border-color .15s, box-shadow .15s;
 }
 .filter-input:focus {
     outline: none;
-    border-color: #0d6efd;
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(13,110,253,.1);
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 2px rgba(13,110,253,.15);
 }
-.filter-label {
-    font-size: .7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: #6c757d;
-    margin-bottom: .25rem;
-    display: block;
-}
-.filter-bar {
-    background: #fff;
-    border-radius: 10px;
-    padding: .85rem 1rem;
-    border: 1px solid #e9ecef;
-    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+.thead-filter td {
+    background: #e9f0fb;
+    padding: .3rem .5rem;
+    border-bottom: 2px solid #c8d8f5;
 }
 .fila-oculta { display: none !important; }
-#contadorFiltro { font-size: .8rem; color: #6c757d; }
-#contadorFiltro span { font-weight: 700; color: #212529; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -63,63 +50,15 @@
     </div>
 </div>
 
-{{-- FILTROS EN VIVO --}}
-<div class="filter-bar mb-3">
-    <div class="row g-2 align-items-end">
-        <div class="col-md col-6">
-            <label class="filter-label">Estado</label>
-            <select id="fEstado" class="filter-input">
-                <option value="">Todos</option>
-                <option value="pendiente">⏳ Pendiente</option>
-                <option value="pagado">✓ Pagado</option>
-                <option value="anulado">✕ Anulado</option>
-            </select>
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Fecha</label>
-            <input type="text" id="fFecha" class="filter-input" placeholder="ej. 19/05/2026">
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Vendedor</label>
-            <input type="text" id="fVendedor" class="filter-input" placeholder="Buscar…">
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Cliente</label>
-            <input type="text" id="fCliente" class="filter-input" placeholder="Nombre o RUC…">
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Pago</label>
-            <select id="fPago" class="filter-input">
-                <option value="">Todos</option>
-                @foreach(['efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'] as $k=>$lbl)
-                    <option value="{{ $k }}">{{ $lbl }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Documento</label>
-            <input type="text" id="fDocumento" class="filter-input" placeholder="ej. F001-001">
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Total</label>
-            <input type="text" id="fTotal" class="filter-input" placeholder="ej. 84.48">
-        </div>
-        <div class="col-auto">
-            <button id="btnLimpiar" class="btn btn-sm btn-outline-secondary" style="height:32px; padding:.2rem .75rem; font-size:.82rem;">
-                <i class="bi bi-x-lg me-1"></i>Limpiar
-            </button>
-        </div>
-    </div>
-    <div class="mt-2" id="contadorFiltro" style="display:none;">
-        Mostrando <span id="cntVisible">0</span> de <span id="cntTotal">0</span> ventas
-    </div>
+<div id="contadorFiltro" class="mb-2" style="display:none; font-size:.8rem; color:#6c757d;">
+    Mostrando <span id="cntVisible" class="fw-bold text-dark">0</span> de <span id="cntTotal" class="fw-bold text-dark">0</span> ventas
 </div>
 
 <div class="card">
     <div class="table-responsive">
         <table class="table mb-0 align-middle" id="tablaVentas">
-            <thead class="table-light">
-                <tr>
+            <thead>
+                <tr class="table-light">
                     <th style="width:125px;">Estado</th>
                     <th>Fecha</th>
                     <th>Vendedor</th>
@@ -129,6 +68,35 @@
                     <th>Documento</th>
                     <th class="text-end">Total</th>
                     <th class="text-end">Acciones</th>
+                </tr>
+                <tr class="thead-filter">
+                    <td>
+                        <select id="fEstado" class="filter-input">
+                            <option value="">Todos</option>
+                            <option value="pendiente">Pendiente</option>
+                            <option value="pagado">Pagado</option>
+                            <option value="anulado">Anulado</option>
+                        </select>
+                    </td>
+                    <td><input type="text" id="fFecha"     class="filter-input" placeholder="19/05/2026"></td>
+                    <td><input type="text" id="fVendedor"  class="filter-input" placeholder="Buscar…"></td>
+                    <td><input type="text" id="fCliente"   class="filter-input" placeholder="Nombre o RUC…"></td>
+                    <td></td>
+                    <td>
+                        <select id="fPago" class="filter-input">
+                            <option value="">Todos</option>
+                            @foreach(['efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'] as $k=>$lbl)
+                                <option value="{{ $k }}">{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </td>
+                    <td><input type="text" id="fDocumento" class="filter-input" placeholder="F001-001…"></td>
+                    <td><input type="text" id="fTotal"     class="filter-input text-end" placeholder="84.48"></td>
+                    <td class="text-end">
+                        <button id="btnLimpiar" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Limpiar filtros" style="font-size:.75rem;">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </td>
                 </tr>
             </thead>
             <tbody>
