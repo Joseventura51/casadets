@@ -12,7 +12,7 @@ class CompraController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Compra::with('detalles.venta.vendedor')->orderBy('fecha', 'desc')->orderBy('id', 'desc');
+        $query = Compra::with(['detalles.venta.vendedor', 'lineas'])->orderBy('fecha', 'desc')->orderBy('id', 'desc');
 
         if ($request->filled('empresa')) {
             $query->where('empresa', 'like', '%' . $request->empresa . '%');
@@ -40,7 +40,15 @@ class CompraController extends Controller
     {
         $data = $this->validar($request);
         DB::transaction(function () use ($data, $request) {
-            $compra = Compra::create($data);
+            $lineas  = $data['lineas'] ?? [];
+            $total   = collect($lineas)->sum('monto_total');
+            $compra  = Compra::create(array_merge(
+                collect($data)->except('lineas')->toArray(),
+                ['monto_total' => $total]
+            ));
+            foreach ($lineas as $l) {
+                $compra->lineas()->create($l);
+            }
             $compra->detalles()->sync($this->buildDetallesSync($request));
         });
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
@@ -48,13 +56,13 @@ class CompraController extends Controller
 
     public function show(Compra $compra)
     {
-        $compra->load(['detalles.venta.vendedor']);
+        $compra->load(['lineas', 'detalles.venta.vendedor']);
         return view('casadets.compras.show', compact('compra'));
     }
 
     public function edit(Compra $compra)
     {
-        $compra->load('detalles.venta');
+        $compra->load(['lineas', 'detalles.venta']);
         $facturas = $this->facturasDisponibles();
         $detallesSeleccionados = $compra->detalles->pluck('id')->toArray();
 
@@ -72,7 +80,16 @@ class CompraController extends Controller
     {
         $data = $this->validar($request);
         DB::transaction(function () use ($data, $request, $compra) {
-            $compra->update($data);
+            $lineas = $data['lineas'] ?? [];
+            $total  = collect($lineas)->sum('monto_total');
+            $compra->update(array_merge(
+                collect($data)->except('lineas')->toArray(),
+                ['monto_total' => $total]
+            ));
+            $compra->lineas()->delete();
+            foreach ($lineas as $l) {
+                $compra->lineas()->create($l);
+            }
             $compra->detalles()->sync($this->buildDetallesSync($request));
         });
         return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');
@@ -84,35 +101,42 @@ class CompraController extends Controller
         return redirect('/casadets/compras')->with('success', 'Compra eliminada.');
     }
 
-    /**
-     * Endpoint JSON: devuelve productos (detalles) de una venta para el AJAX del formulario.
-     */
+    public function consultaDocumento(Request $request)
+    {
+        $query     = trim($request->input('q', ''));
+        $resultados = collect();
+        if ($query) {
+            $resultados = Venta::with(['vendedor', 'detalles', 'cliente'])
+                ->where('documento_numero', 'like', '%' . $query . '%')
+                ->orderBy('fecha', 'desc')
+                ->limit(20)
+                ->get();
+        }
+        return view('casadets.compras.consulta', compact('resultados', 'query'));
+    }
+
     public function detallesVenta(Venta $venta)
     {
         $venta->load(['detalles', 'vendedor']);
         return response()->json([
             'venta' => [
-                'id'       => $venta->id,
-                'fecha'    => $venta->fecha->format('d/m/Y'),
-                'documento'=> trim(ucfirst((string) $venta->documento_tipo) . ' ' . (string) $venta->documento_numero),
-                'vendedor' => $venta->vendedor->nombre ?? '—',
+                'id'        => $venta->id,
+                'fecha'     => $venta->fecha->format('d/m/Y'),
+                'documento' => trim(ucfirst((string) $venta->documento_tipo) . ' ' . (string) $venta->documento_numero),
+                'vendedor'  => $venta->vendedor->nombre ?? '—',
             ],
             'detalles' => $venta->detalles->map(fn($d) => [
-                'id'             => $d->id,
-                'producto'       => $d->producto,
-                'cantidad'       => (float) $d->cantidad,
-                'precio_unitario'=> (float) $d->precio_unitario,
-                'subtotal'       => (float) $d->subtotal,
+                'id'              => $d->id,
+                'producto'        => $d->producto,
+                'cantidad'        => (float) $d->cantidad,
+                'precio_unitario' => (float) $d->precio_unitario,
+                'subtotal'        => (float) $d->subtotal,
             ]),
         ]);
     }
 
     /* ── Helpers ─────────────────────────────────────────────── */
 
-    /**
-     * Builds the sync array with pivot `cantidad` for each selected detalle.
-     * Input: detalles[] = [1,2,3], detalles_cantidad[1]=2, detalles_cantidad[2]=1
-     */
     private function buildDetallesSync(Request $request): array
     {
         $ids       = $request->input('detalles', []);
@@ -137,15 +161,16 @@ class CompraController extends Controller
     private function validar(Request $request): array
     {
         return $request->validate([
-            'empresa'          => 'required|string|max:255',
-            'documento_tipo'   => 'nullable|string|max:50',
-            'documento_numero' => 'nullable|string|max:100',
-            'fecha'            => 'required|date',
-            'producto'         => 'nullable|string|max:255',
-            'cantidad'         => 'required|numeric|min:0',
-            'monto_unitario'   => 'required|numeric|min:0',
-            'monto_total'      => 'required|numeric|min:0',
-            'observaciones'    => 'nullable|string',
+            'empresa'                    => 'required|string|max:255',
+            'documento_tipo'             => 'nullable|string|max:50',
+            'documento_numero'           => 'nullable|string|max:100',
+            'fecha'                      => 'required|date',
+            'observaciones'              => 'nullable|string',
+            'lineas'                     => 'required|array|min:1',
+            'lineas.*.producto'          => 'nullable|string|max:255',
+            'lineas.*.cantidad'          => 'required|numeric|min:0',
+            'lineas.*.monto_unitario'    => 'required|numeric|min:0',
+            'lineas.*.monto_total'       => 'required|numeric|min:0',
         ]);
     }
 }

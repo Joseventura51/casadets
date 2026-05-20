@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 
 class Compra extends Model
@@ -13,19 +14,19 @@ class Compra extends Model
         'documento_tipo',
         'documento_numero',
         'fecha',
-        'producto',
-        'cantidad',
-        'monto_unitario',
         'monto_total',
         'observaciones',
     ];
 
     protected $casts = [
-        'fecha' => 'date',
-        'cantidad' => 'decimal:2',
-        'monto_unitario' => 'decimal:2',
+        'fecha'       => 'date',
         'monto_total' => 'decimal:2',
     ];
+
+    public function lineas(): HasMany
+    {
+        return $this->hasMany(CompraLinea::class);
+    }
 
     public function detalles(): BelongsToMany
     {
@@ -34,9 +35,6 @@ class Compra extends Model
             ->withTimestamps();
     }
 
-    /**
-     * Ventas únicas vinculadas a esta compra (derivadas de los detalles).
-     */
     public function getVentasAttribute(): Collection
     {
         $this->loadMissing('detalles.venta.vendedor');
