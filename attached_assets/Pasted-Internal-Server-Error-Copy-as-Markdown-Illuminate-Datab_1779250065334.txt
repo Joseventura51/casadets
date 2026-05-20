@@ -1,0 +1,1326 @@
+Internal Server Error
+
+Copy as Markdown
+Illuminate\Database\UniqueConstraintViolationException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: ventas.documento_tipo, ventas.documento_numero (Connection: sqlite, Database: C:\Users\Usuario\Documents\GitHub\casadets\database\database.sqlite, SQL: insert into "ventas" ("vendedor_id", "cliente_id", "total", "ajuste", "metodo_pago", "documento_tipo", "documento_numero", "observaciones", "fecha", "updated_at", "created_at") values (1, 6, 2250.07, -2250.07, efectivo, proforma, PR0002-811, Importado desde Excel, 2026-05-02 00:00:00, 2026-05-20 04:07:35, 2026-05-20 04:07:35))
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 23000
+500
+POST
+http://127.0.0.1:8000/casadets/ventas/import/confirm
+
+Exception trace
+16 vendor frames
+
+Illuminate\Database\Eloquent\Model::__callStatic(string, array)
+app\Http\Controllers\VentaImportController.php:239
+
+234
+235                $metodosPago  = collect($g['pagos'])->pluck('metodo')->unique()->values()->implode(',');
+236                $totalCobrado = round(collect($g['pagos'])->sum(fn($p) => (float) $p['monto']), 2);
+237                $ajuste       = round($totalCobrado - $totalReal, 2);
+238
+239                $venta = Venta::create([
+240                    'vendedor_id'      => $g['vendedor_id'],
+241                    'cliente_id'       => $clienteId,
+242                    'total'            => $totalReal,
+243                    'ajuste'           => $ajuste,
+244                    'metodo_pago'      => $metodosPago,
+245                    'documento_tipo'   => $this->tiposDoc[$tipoLetra] ?? null,
+246                    'documento_numero' => $numero ?: null,
+247                    'observaciones'    => 'Importado desde Excel',
+248                    'fecha'            => $g['fecha'],
+249                ]);
+250
+251
+3 vendor frames
+
+Illuminate\Support\Facades\Facade::__callStatic(string, array)
+app\Http\Controllers\VentaImportController.php:200
+
+47 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 100
+sqlite
+select * from "sessions" where "id" = 'Ae1ObNzFpc6XPfnz3z2pvPIYBkEiwYBSHjw58JPW' limit 1
+1.79ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.2ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.08ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+sqlite
+select count(*) as aggregate from "vendedores" where "id" = '1'
+0.07ms
+
+
+1
+2
+3
+4
+5
+...
+10
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+content-length
+68726
+cache-control
+max-age=0
+sec-ch-ua
+"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+upgrade-insecure-requests
+1
+content-type
+application/x-www-form-urlencoded
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+origin
+http://127.0.0.1:8000
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/casadets/ventas/import
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-PE,en;q=0.9,es-PE;q=0.8,es;q=0.7,en-GB;q=0.6,en-US;q=0.5
+cookie
+XSRF-TOKEN=eyJpdiI6IjZQbndKNUI0b080WkFkUVRGRjBObUE9PSIsInZhbHVlIjoiQS9iZ09JdUxJd3hLZ0xnMCtKUjdoRVhDOUtLdlpURTcvSjNjUnd5Y0Z0NkpodWttSkR2RThxMzlpYm5oZXB3dHVZaUkwcVZQV0ZlRmpSQ2x0ekZwbFVibDVPOGZXWWdVaFkyREFabCtWMGZvNzZWcTlUcnduTC9vMlMxUFFFa0UiLCJtYWMiOiIwYjIzMjYyMjZjNjQ0NzA4MzA0OTNlODNhMGNhOGJjMDZhNzlmOTNmMzU5MmM2MTVjZGUyY2FmMzBiZGUzYjRjIiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6IjIxV01FblZoWCtGZG1Pd1F4ekNQV0E9PSIsInZhbHVlIjoibFZvdFpUdDI0N0ZEUkVxMlBtNDdQMXZqQ1pGaTV3ZzVydmFydHdvSmQ3RDE0R3ZKNVNPWW8zOW81UHpHa2NWNWtqeFlBNHg5K0lFRWZjY2QxRlFNdVRuUzc3b2piNkRHTUFid0sxN0dONk0rcVVBS2dVSVRVY2g3Y1o5RmExTGwiLCJtYWMiOiI5NjllOWU2MzQ1YmZkN2RjZDM2NmUzNmY3ZGEzYmMwYjNjODg2YWQ1Nzg5YjhlZjA3YzU3YWU2NTE3MmE4NzNiIiwidGFnIjoiIn0%3D
+Body
+{
+    "_token": "GQCYocnswAa60VN11iZlW7pCGz0ooGzXwSuLva98",
+    "ventas": [
+        {
+            "session_idx": "0",
+            "detalles_json": "[{"producto":"LAPIZ DE CERAMICO PLANO 1.5*60","cantidad":22,"precio_unitario":7},{"producto":"FRAGUA ARENA CHEMA","cantidad":4,"precio_unitario":9.9},{"producto":"FRAGUA  CASTAÑA CHEMA","cantidad":2,"precio_unitario":9.9},{"producto":"TABLON 20*1.2 CJKTMW 20202","cantidad":6.24,"precio_unitario":38},{"producto":"PORCELANATO 120*60 RUSZEN12006","cantidad":27.36,"precio_unitario":39},{"producto":"PORCELANATO 60*1.2 REVENA STRIP","cantidad":10.08,"precio_unitario":72.67}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "1",
+            "detalles_json": "[{"producto":"PEGAMENTO GRIS TREBOL","cantidad":3,"precio_unitario":12}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "2",
+            "detalles_json": "[{"producto":"VARILLA ALUMINIO DE 12MLM","cantidad":2,"precio_unitario":12}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "3",
+            "detalles_json": "[{"producto":"FRAGUA CHEMA","cantidad":6,"precio_unitario":8.9},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN","cantidad":20,"precio_unitario":28},{"producto":"PORCELANATO 60*60 PFG66030","cantidad":64.8,"precio_unitario":26.3}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "4",
+            "detalles_json": "[{"producto":"TUBO DE ABASTO 1/2","cantidad":4,"precio_unitario":25},{"producto":"VARILLAS 1 1/2 PESADO","cantidad":6,"precio_unitario":48},{"producto":"RUSTICO DALLAS GRIS 60 X 60 BETZEN 1.44XCJA (L)","cantidad":82.08,"precio_unitario":26},{"producto":"RUSWOOD MATE 60 X 60 1.44 X CJA","cantidad":52.2,"precio_unitario":26},{"producto":"PPY66035 60X60 1.44XCJA","cantidad":46.08,"precio_unitario":26},{"producto":"RUSTICO ROBLE 60 X 60 BETZEN CERAMICS 1.44 X CJA (S)","cantidad":90.36,"precio_unitario":26},{"producto":"INODORO  C/ FALDA","cantidad":2,"precio_unitario":250},{"producto":"ANILLO DE CERA C/ GUIA","cantidad":4,"precio_unitario":8},{"producto":"MUEBLE Y01 - 90","cantidad":1,"precio_unitario":730},{"producto":"0WPY12001E 1.20X60 2.16XCJA","cantidad":12.24,"precio_unitario":32},{"producto":"CERAMICO LSJ66000 60X60 1.80 X CJA","cantidad":12.24,"precio_unitario":19},{"producto":"INODORO BLANCO ECO","cantidad":1,"precio_unitario":180},{"producto":"NIVELADORES","cantidad":4,"precio_unitario":15},{"producto":"HUEVITO BLANCO","cantidad":1,"precio_unitario":500},{"producto":"CUÑA","cantidad":1,"precio_unitario":10},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN CERAMICS - 25 KG","cantidad":118,"precio_unitario":25},{"producto":"FRAGUA - COLORES","cantidad":42,"precio_unitario":7}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "5",
+            "detalles_json": "[{"producto":"porcelanato 60x60 vitzen013","cantidad":7.2,"precio_unitario":28}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "6",
+            "detalles_json": "[{"producto":"HUESO HOLZTEK  60 X 60 1.44XCJA (L)","cantidad":40.32,"precio_unitario":18}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "7",
+            "detalles_json": "[{"producto":"MAYOLICA VERONA MARRON 30 X 60","cantidad":4.86,"precio_unitario":19},{"producto":"VERONA PERLA 30 X 60  1.62 X CJA ZYPD001A","cantidad":22.68,"precio_unitario":19},{"producto":"MATE ATLAS  60X60  1.44 X CJA (L) LFG66018","cantidad":8.64,"precio_unitario":28},{"producto":"HUESO HOLZTEK  60 X 60 1.44XCJA (L)","cantidad":100.8,"precio_unitario":18},{"producto":"ONE PIECE BLANCO","cantidad":2,"precio_unitario":200}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "8",
+            "detalles_json": "[{"producto":"PEGAMENTO SIKA  BLANCO FLEXIBLE","cantidad":20,"precio_unitario":47},{"producto":"PISO CERZEN03 60*60","cantidad":27,"precio_unitario":38.5},{"producto":"TRANSPORTE","cantidad":1,"precio_unitario":120},{"producto":"RAVENA STRIP  120*60 TABSSRK011","cantidad":9.64,"precio_unitario":98},{"producto":"TABLON Z12020 - 1*20","cantidad":9,"precio_unitario":45},{"producto":"FRAGUA - COLORES","cantidad":5,"precio_unitario":12.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "9",
+            "detalles_json": "[{"producto":"FACHALETA","cantidad":1.08,"precio_unitario":54}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "10",
+            "detalles_json": "[{"producto":"PORCELANATO 60X60 BS6140","cantidad":2.88,"precio_unitario":28}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "11",
+            "detalles_json": "[{"producto":"PORCELANATO VITZEN092 60*60","cantidad":20.16,"precio_unitario":27},{"producto":"RUSTICO ROBLE 60 X 60 BETZEN CERAMICS 1.44 X CJA (S)","cantidad":5.04,"precio_unitario":27},{"producto":"RESINA","cantidad":1,"precio_unitario":130},{"producto":"PORCELANATO MATE LFG66060 60X60 1.44XCJA (S)","cantidad":38.88,"precio_unitario":27},{"producto":"PORCELANATO 1.20*60 PPY12032","cantidad":18,"precio_unitario":38},{"producto":"FRAGUA CUERO SANSON CHEMA","cantidad":1,"precio_unitario":7.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "12",
+            "detalles_json": "[{"producto":"DALLAS BEIGGE  MATE  LISO 60*60 1.44 X CAJA RUSZEN004P (S)","cantidad":16.56,"precio_unitario":28},{"producto":"LAPIZ  CERMICO  DORADO","cantidad":13,"precio_unitario":5},{"producto":"ESCARCHADO BEIGE 60 X 60","cantidad":15.12,"precio_unitario":39},{"producto":"FRAGUA","cantidad":4,"precio_unitario":8},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN CERAMICS - 25 KG","cantidad":14,"precio_unitario":28}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "13",
+            "detalles_json": "[{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN CERAMICS - 25 KG","cantidad":25,"precio_unitario":28}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "14",
+            "detalles_json": "[{"producto":"LAPIZ DE ACERO 5* 2.44 MTS","cantidad":1,"precio_unitario":53}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "15",
+            "detalles_json": "[{"producto":"PEGAMENTO MAESTRO BLANCO","cantidad":10,"precio_unitario":22},{"producto":"ANGULO ACERO DORADO 2CM X 2.4","cantidad":3,"precio_unitario":18}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "16",
+            "detalles_json": "[{"producto":"COLUMNA DE DUCHA DORADA FRATELLY","cantidad":1,"precio_unitario":400},{"producto":"HUEVITO BLANCO CON DORDAO MAXIME","cantidad":1,"precio_unitario":520}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "17",
+            "detalles_json": "[{"producto":"RUSZEN12006 120X60 2.16XCJA (S)","cantidad":16.56,"precio_unitario":38},{"producto":"MATE MARRON 60X60","cantidad":3.24,"precio_unitario":26.82},{"producto":"RUSWOOD MATE 60 X 60 1.44 X CJA","cantidad":8.28,"precio_unitario":28},{"producto":"LAPIZ  CERMICO DORADO 1MM BOLEADO","cantidad":19,"precio_unitario":8}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "18",
+            "detalles_json": "[{"producto":"prcelanato 60x60 LPY66102H","cantidad":23.04,"precio_unitario":27},{"producto":"CERAMICO ALABAMA 60X60","cantidad":27,"precio_unitario":21},{"producto":"CERAMICO lsj66004 60x60","cantidad":38.16,"precio_unitario":21},{"producto":"ceramico 30x60 style","cantidad":14.58,"precio_unitario":19},{"producto":"ceramico blanco brillo","cantidad":5.04,"precio_unitario":19},{"producto":"varilla aluminio tipo L","cantidad":3,"precio_unitario":11}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "19",
+            "detalles_json": "[{"producto":"BLANCO BRILLANTE 30 x 60","cantidad":2.5,"precio_unitario":19},{"producto":"LAPIZ CERAMICO DECORADO 0.60","cantidad":10,"precio_unitario":9.8},{"producto":"POECELANATO 60*60 MATE PFG66030","cantidad":5.04,"precio_unitario":26.5},{"producto":"TABLON 1*20  Z2104","cantidad":6,"precio_unitario":36},{"producto":"PEGAMENTO CELIMA  BLANCO EXTRAFUERTE","cantidad":5,"precio_unitario":36},{"producto":"PORCELANATO VITZEN092 60*60","cantidad":5.04,"precio_unitario":27.5},{"producto":"PORCELANATO GRANITO GRIS VITRIFICADO 60*60","cantidad":4.68,"precio_unitario":32},{"producto":"PEGAMENTO CELIMA GRIS","cantidad":1,"precio_unitario":21},{"producto":"FRAGUA - COLORES CHEMA","cantidad":5,"precio_unitario":9},{"producto":"PERFIL ALUMINIO 9.5 MATE","cantidad":10,"precio_unitario":12},{"producto":"CALACATA AITANA 30 X 60  1.62 X CJA","cantidad":5.04,"precio_unitario":20}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "20",
+            "detalles_json": "[{"producto":"mayolica lg36045 30x60","cantidad":0.54,"precio_unitario":19},{"producto":"lapiz dorado 60cm","cantidad":9,"precio_unitario":5},{"producto":"listelo alianza see","cantidad":4,"precio_unitario":9}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "21",
+            "detalles_json": "[{"producto":"ONE PIECE + LAVADERO Y PEDESTAL AMERICAN LIFE BLANCO","cantidad":2,"precio_unitario":290},{"producto":"HUESO 60 X 60","cantidad":73.44,"precio_unitario":16.5},{"producto":"FRAGUA CHEMA SANSON","cantidad":10,"precio_unitario":7},{"producto":"CERAMICO 46X46 GRIS OSCURO 1.90XCJA (9P) (S)","cantidad":6.5,"precio_unitario":17.58},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN CERAMICS - 25 KG","cantidad":32,"precio_unitario":27}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "22",
+            "detalles_json": "[{"producto":"PORCELANATO CALACATA MARRON 60*1.2 MODA DAYAN","cantidad":6.48,"precio_unitario":38.03}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "23",
+            "detalles_json": "[{"producto":"TABLON 20*1.2 CJKTMW 20202","cantidad":6.24,"precio_unitario":38},{"producto":"PORCELANATO 120*60 RUSZEN12006","cantidad":27.36,"precio_unitario":39},{"producto":"FRAGUA ARENA CHEMA","cantidad":4,"precio_unitario":9.9},{"producto":"PORCELANATO 60*1.2 REVENA STRIP","cantidad":10.08,"precio_unitario":72.67},{"producto":"LAPIZ DE CERAMICO PLANO 1.5*60","cantidad":22,"precio_unitario":7},{"producto":"FRAGUA  CASTAÑA CHEMA","cantidad":2,"precio_unitario":9.9}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "24",
+            "detalles_json": "[{"producto":"COLUMNA DE DUCHA CROMADA","cantidad":1,"precio_unitario":450},{"producto":"COLUMNA DE DUCHA NEGRA","cantidad":1,"precio_unitario":450}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "25",
+            "detalles_json": "[{"producto":"PEGAMENTOS BLANCO EXTRAFUERTE BETZEN","cantidad":8,"precio_unitario":25},{"producto":"FRAGUA ARENA CHEMA","cantidad":2,"precio_unitario":9.9},{"producto":"FRAGUA DUNA CHEMA","cantidad":1,"precio_unitario":9.9},{"producto":"TABLON 20*1.00 YW12002 MAD MOKA","cantidad":4.32,"precio_unitario":42},{"producto":"PORCELANATO 60*1.2 RUSZEN 12006 TRAV ARENA","cantidad":15.12,"precio_unitario":35.64}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "26",
+            "detalles_json": "[{"producto":"TRAMPA PVC - TREBOL","cantidad":2,"precio_unitario":18},{"producto":"CAÑO LIVIANO","cantidad":2,"precio_unitario":22},{"producto":"TUBO DE ABASTO 1/2","cantidad":4,"precio_unitario":8},{"producto":"LAPIZ  CERMICO DORADO DE 2 MM PLANO","cantidad":23,"precio_unitario":5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "27",
+            "detalles_json": "[{"producto":"MAYOLICA  30*60 JOVI PLATA","cantidad":3.24,"precio_unitario":21.61}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "28",
+            "detalles_json": "[{"producto":"ruczen 12006 60x1.20","cantidad":7.2,"precio_unitario":34}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "29",
+            "detalles_json": "[{"producto":"PORCELANATO 60*60 vitzen 052","cantidad":1.44,"precio_unitario":28.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "30",
+            "detalles_json": "[{"producto":"PEGAMENTO CELIMA EXTRAFUERTE","cantidad":3,"precio_unitario":33},{"producto":"PORCELANATO 60*60 wpy12012","cantidad":4.32,"precio_unitario":38}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "31",
+            "detalles_json": "[{"producto":"PORCELANATO 60*1.2 RUSZEN12006","cantidad":1.44,"precio_unitario":42}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "32",
+            "detalles_json": "[{"producto":"FRAGUA HUESO CHEMA","cantidad":4,"precio_unitario":12},{"producto":"VARILLA  PVC 9.5","cantidad":2,"precio_unitario":7.5},{"producto":"PEGAMENTO CELIMA BLANCO EXTRAFUERTE","cantidad":19,"precio_unitario":37},{"producto":"NILO 30 X 60 BETZEN CERAMICS 1.62 X CJA","cantidad":5,"precio_unitario":25},{"producto":"HUESO 60 X 60","cantidad":41,"precio_unitario":22.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "33",
+            "detalles_json": "[{"producto":"LAVADERO 50X40 BLANCO","cantidad":1,"precio_unitario":160},{"producto":"REJILLA DE DUCHA","cantidad":1,"precio_unitario":48},{"producto":"TRAMPA PVC - TREBOL","cantidad":1,"precio_unitario":25},{"producto":"CAÑO PESADO","cantidad":1,"precio_unitario":75},{"producto":"TUBO DE ABASTO 40CM","cantidad":1,"precio_unitario":18},{"producto":"LLAVE  DUCHA","cantidad":1,"precio_unitario":50},{"producto":"TUBO DE ABASTO 60 CM","cantidad":1,"precio_unitario":25},{"producto":"CABEZA Y BRAZO DE DUCHA","cantidad":1,"precio_unitario":60}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "34",
+            "detalles_json": "[{"producto":"ALPEN 60X60 1.44XCJA","cantidad":85,"precio_unitario":26.2},{"producto":"PEGAMENTO CELIMA  BLANCO EXTRAFUERTE","cantidad":85,"precio_unitario":33},{"producto":"PERFIL ALUMINIO 12 BRILLO","cantidad":64,"precio_unitario":10},{"producto":"PORCELANATO WPY12012 60X1.20 2.16XCJA ( 3PZ)","cantidad":129.6,"precio_unitario":34.5},{"producto":"PERFIL ALUMINIO MATE L","cantidad":51,"precio_unitario":13},{"producto":"INODORO  ONE PIECCE BLANCO","cantidad":5,"precio_unitario":180},{"producto":"PORCELANATO 1.20*60 NEGRO BETEADO","cantidad":19.44,"precio_unitario":55},{"producto":"BLANCO VITRIFICADO  60 x 60","cantidad":11.5,"precio_unitario":26},{"producto":"PORCELANATO 60*60 RUSZEN 007","cantidad":39,"precio_unitario":26},{"producto":"LAPIZ DE  VIDRIO NEGRO","cantidad":59,"precio_unitario":4},{"producto":"PEGAMENTO BLANCO EXTRA BETZEN","cantidad":85,"precio_unitario":26},{"producto":"PORCELANATO 1.20*60 BLANCO  CALACCATA C/N RELIEVE","cantidad":7.92,"precio_unitario":52},{"producto":"PORCELANATO 60*60 MARMOL","cantidad":72,"precio_unitario":26},{"producto":"NIVELADORES","cantidad":10,"precio_unitario":11},{"producto":"VITZEN036 60X60 1.44XCJA","cantidad":26,"precio_unitario":26.5},{"producto":"BOREAL GRIS 60X60 1.44XCJA","cantidad":30.24,"precio_unitario":26}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "35",
+            "detalles_json": "[{"producto":"PORCELANATO PPY66062","cantidad":43.2,"precio_unitario":28},{"producto":"PEGAMENTO BETZEN BLANCO EXTRAFUERTE","cantidad":15,"precio_unitario":25},{"producto":"FRAGUA GRIS SANSON","cantidad":4,"precio_unitario":8},{"producto":"PORCELANATO PPY66062 60X60","cantidad":2.52,"precio_unitario":28},{"producto":"PREPARACION DE XOCALO","cantidad":33.6,"precio_unitario":6.26}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "36",
+            "detalles_json": "[{"producto":"RUSTICO ROBLE 60 X 60 BETZEN CERAMICS 1.44 X CJA (S)","cantidad":7.2,"precio_unitario":28}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "37",
+            "detalles_json": "[{"producto":"ceramico lg36045 30x60","cantidad":9.72,"precio_unitario":19},{"producto":"piso 46x46 lyg4601","cantidad":5.7,"precio_unitario":20},{"producto":"lapiz dorado plano","cantidad":14,"precio_unitario":5},{"producto":"pegamento betzen blanco extrafuerte","cantidad":6,"precio_unitario":25},{"producto":"listelo alianza see","cantidad":7,"precio_unitario":9}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "38",
+            "detalles_json": "[{"producto":"PISO LYG4601","cantidad":5.7,"precio_unitario":19},{"producto":"LAPIZ DORADO 60CM","cantidad":14,"precio_unitario":5},{"producto":"LISTELO ALIANZA SEE","cantidad":7,"precio_unitario":9},{"producto":"PEGAMENTO TREBOL BLANCO EXTRAFUERTE","cantidad":18,"precio_unitario":6},{"producto":"CERAMICO LG36045 30X60","cantidad":9.72,"precio_unitario":19}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "39",
+            "detalles_json": "[{"producto":"fragua gris sanson","cantidad":2,"precio_unitario":7.5},{"producto":"fragua gris","cantidad":2,"precio_unitario":7.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "40",
+            "detalles_json": "[{"producto":"ceramico 60x60 lsj6604","cantidad":1.8,"precio_unitario":20}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "41",
+            "detalles_json": "[{"producto":"niveladores nm 1","cantidad":3,"precio_unitario":18}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "42",
+            "detalles_json": "[{"producto":"CALACATA 120*60","cantidad":6.48,"precio_unitario":73},{"producto":"DECORADO DESERT GRIS BAÑO 30 X 60 BETZEN CERAMICS","cantidad":13,"precio_unitario":28},{"producto":"LAVADERO TRAMONTINA 48-38","cantidad":1,"precio_unitario":485},{"producto":"DECORADO BAÑO ESPAÑOL 15*60","cantidad":13,"precio_unitario":38},{"producto":"FACHALETA ANDEX MIX BRILLO","cantidad":2.36,"precio_unitario":78},{"producto":"PORCELANATO GENESIS BLANCO 60*60","cantidad":81.5,"precio_unitario":82.5},{"producto":"GENESIS PLATA 1.20 X 60","cantidad":9,"precio_unitario":120},{"producto":"CUÑA NIVELADORES","cantidad":5,"precio_unitario":35},{"producto":"LAPIZ CERAMICO PLATEADO .060 DECORADO","cantidad":26,"precio_unitario":9.5},{"producto":"ALPEN 60X60 1.44XCJA","cantidad":21,"precio_unitario":47},{"producto":"FRAGUA - COLORES","cantidad":18,"precio_unitario":12},{"producto":"DIFUSOR DE DUCHA CROMADO","cantidad":1,"precio_unitario":150},{"producto":"ARCO NIVELADORES 1MM","cantidad":8,"precio_unitario":30},{"producto":"MEZCLADORA DE LAVATORIO - MO101AL XM","cantidad":1,"precio_unitario":480},{"producto":"PEGAMENTO MAESTRO BLANCO","cantidad":90,"precio_unitario":44.06},{"producto":"LFG66013 60X60 1.44XCJA (L)","cantidad":10.08,"precio_unitario":31},{"producto":"VARILLA ALUMINIO L","cantidad":8,"precio_unitario":24},{"producto":"LAPIZ DORADO","cantidad":26,"precio_unitario":9.5},{"producto":"DESERT BLANCO 30 X 60 BETZEN CERAMICS  1.62XCJA","cantidad":21,"precio_unitario":28.5},{"producto":"REGISTRO","cantidad":2,"precio_unitario":90}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "43",
+            "detalles_json": "[{"producto":"CERAMICO LYG46014","cantidad":1.9,"precio_unitario":20},{"producto":"PORCELANATO 20X1 Z21046","cantidad":7.2,"precio_unitario":36},{"producto":"RODOPASO NEGRO 3ML","cantidad":12,"precio_unitario":38}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "44",
+            "detalles_json": "[{"producto":"PORCELANATO VITZEN 092 60X60","cantidad":7.2,"precio_unitario":29},{"producto":"PEGAMENTO TREBOL BLANCO EXTRAFUERTE","cantidad":5,"precio_unitario":18},{"producto":"PORCELANATO RUSZE N 006","cantidad":1.44,"precio_unitario":29}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "45",
+            "detalles_json": "[{"producto":"MADERA NEVADA GRIS 60*60","cantidad":8,"precio_unitario":27},{"producto":"EQL LOUVER 002 60X1.20","cantidad":4.32,"precio_unitario":55},{"producto":"PORCELANATO 60*60 WOOD 002","cantidad":4.32,"precio_unitario":27},{"producto":"LAPIZ  CERAMICO DORADO 0.60","cantidad":14,"precio_unitario":8},{"producto":"MONTCLAIR GOLD 60 X 60 1.44 X CJA (S)","cantidad":23.04,"precio_unitario":27},{"producto":"VITZEN037 60X60 1.44XCJA (L)","cantidad":21,"precio_unitario":27},{"producto":"PEGAMENTO BLANCO EXTRA BETZEN","cantidad":23,"precio_unitario":27},{"producto":"PORCELANATO 60*60  RUSZEN026","cantidad":8,"precio_unitario":27}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "46",
+            "detalles_json": "[{"producto":"LAVATORIO BLANCO VAINZA MARCA LAZIO","cantidad":1,"precio_unitario":160}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "47",
+            "detalles_json": "[{"producto":"RESINA EPOXICA COLOR BLANCO VIT","cantidad":1,"precio_unitario":70},{"producto":"RESINA EPOXICA COLOR NEGRO GENE","cantidad":1,"precio_unitario":70}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "48",
+            "detalles_json": "[{"producto":"FRAGUA","cantidad":3,"precio_unitario":5.9},{"producto":"PORCI VITRI LPY66107S 60X60 1.44XCJA","cantidad":18.72,"precio_unitario":31},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN CERAMICS - 25 KG","cantidad":7,"precio_unitario":26}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "49",
+            "detalles_json": "[{"producto":"PEGAMENTO BLANCO EXTRAFUERTE SIKA","cantidad":14,"precio_unitario":37.9},{"producto":"FRAGUA GRS PLATA CHEMA","cantidad":5,"precio_unitario":9.9},{"producto":"PORCELANATO 60*60 PPY66062 EJS","cantidad":28.8,"precio_unitario":26.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "50",
+            "detalles_json": "[{"producto":"BOWL DORADO","cantidad":1,"precio_unitario":290},{"producto":"WPY12038 1.20X60","cantidad":21.6,"precio_unitario":36},{"producto":"DESAGUE DORADO","cantidad":1,"precio_unitario":65},{"producto":"JS612C460 ESCARCHADO 1.20X60 1.44XCJA","cantidad":18.72,"precio_unitario":48},{"producto":"TRAMPA CROMADO","cantidad":1,"precio_unitario":50}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "51",
+            "detalles_json": "[{"producto":"MUESTRA LAMINAS20X60","cantidad":2,"precio_unitario":1}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "52",
+            "detalles_json": "[{"producto":"TUBO DE ABASTO 7/8","cantidad":1,"precio_unitario":10},{"producto":"INODORO TREBOL RAPID JET","cantidad":1,"precio_unitario":185},{"producto":"PERNOS DE ANCLAJE","cantidad":1,"precio_unitario":3.5},{"producto":"ANILLO DE CERA C/ GUIA","cantidad":1,"precio_unitario":8.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "53",
+            "detalles_json": "[{"producto":"OVALIN REDONDO - BLANCO","cantidad":2,"precio_unitario":85},{"producto":"REGILLA NEGRA","cantidad":1,"precio_unitario":96},{"producto":"PEGAMENTO BETZEN BLANCO EXTRAFUERTE","cantidad":38,"precio_unitario":27},{"producto":"REGILLA DORADA","cantidad":1,"precio_unitario":48},{"producto":"ALUMINIO DORADO","cantidad":2,"precio_unitario":16},{"producto":"PORC VITRI LPY66102 H 60X60 1.44XCJA (S)","cantidad":72.5,"precio_unitario":30},{"producto":"RUSTICO TABLAS 60 X 60 BETZEN CERAMICS 1.44XCJA (S)","cantidad":46.5,"precio_unitario":27}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "54",
+            "detalles_json": "[{"producto":"porcelanato ruczen 12006 60x1.20","cantidad":36.72,"precio_unitario":35},{"producto":"porcelanato z2102c","cantidad":6.6,"precio_unitario":35},{"producto":"porcelanato z2102c 20x1","cantidad":62.4,"precio_unitario":35},{"producto":"chema fragua sipo marron","cantidad":8,"precio_unitario":8},{"producto":"chema fragua duna","cantidad":3,"precio_unitario":8},{"producto":"chema fragua marfil","cantidad":4,"precio_unitario":8}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "55",
+            "detalles_json": "[{"producto":"PORCELANATO 1.5X0.75 ORELLANA 02","cantidad":4.5,"precio_unitario":62}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "56",
+            "detalles_json": "[{"producto":"PEGAMENTO MAESTRO BLANCO","cantidad":2,"precio_unitario":23},{"producto":"RUSTICO AVELLANA 60X60","cantidad":5.76,"precio_unitario":27.5},{"producto":"FRAGUA","cantidad":1,"precio_unitario":7}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "57",
+            "detalles_json": "[{"producto":"WALL PANEL PARA INTERIOR MADERA 30*60 SAN LORENZO","cantidad":11.52,"precio_unitario":24.8},{"producto":"OVALIN BLANCO 31*31","cantidad":8,"precio_unitario":150},{"producto":"PORCELANATO ATHENS  GOLD MARMOLIZADO CARVING 60*60 SANI","cantidad":59.04,"precio_unitario":48.8},{"producto":"HUEVITO BLANCO CON DORADO","cantidad":4,"precio_unitario":520},{"producto":"INODORO IMPORTADO MINIMALISTA BLANCO CON DORADO","cantidad":4,"precio_unitario":450},{"producto":"RUSTICO AVELLANA 60X60","cantidad":11.52,"precio_unitario":28},{"producto":"LAPIZ DE ACERO DORADO  2*2.4 MTS","cantidad":20,"precio_unitario":24},{"producto":"MONTCLAIR GOLD 60 X 60 1.44 X CJA (S)","cantidad":59.04,"precio_unitario":33.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "58",
+            "detalles_json": "[{"producto":"PORCELANATO 60X60VITZEN2002","cantidad":4.32,"precio_unitario":28},{"producto":"PORELANATO LSJ66000","cantidad":5.4,"precio_unitario":21}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "59",
+            "detalles_json": "[{"producto":"RUSWOOD MATE 60 X 60 1.44 X CJA","cantidad":6.12,"precio_unitario":28.67},{"producto":"MATE ATLAS  60X60  1.44 X CJA (L) LFG66018","cantidad":20.16,"precio_unitario":28.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "60",
+            "detalles_json": "[{"producto":"MAYOLICA 30*60 ZPYD003B","cantidad":7,"precio_unitario":23.48},{"producto":"DECORADO 30*60 ZYPD003c","cantidad":12,"precio_unitario":15},{"producto":"LAVATORIO BLANCO MANCORA TRÉBOL","cantidad":3,"precio_unitario":85},{"producto":"PORCELANATO 60*60 RUSZEN 026","cantidad":50.4,"precio_unitario":26},{"producto":"PORCELANATO GENESIS NEGRO 60*60","cantidad":7.2,"precio_unitario":60},{"producto":"PEGAMENTO MAESTRO BLANCO","cantidad":75,"precio_unitario":22},{"producto":"RUSTICO ONTARIO GRIS 60 X 60 BETZEN 1.44 X CJA (L)","cantidad":8.64,"precio_unitario":27},{"producto":"INODORO  ONE PIECCE","cantidad":3,"precio_unitario":180},{"producto":"LAPIZ  CERMICO  PLATEADO LISO 0..6","cantidad":6.5,"precio_unitario":24},{"producto":"FRAGUA - COLORES","cantidad":15,"precio_unitario":7},{"producto":"PORCELANATO 60*60 AZUL ROS","cantidad":30.24,"precio_unitario":27},{"producto":"PORCELANATO 1.20*60 MAURITIUS BLACK","cantidad":45.36,"precio_unitario":48},{"producto":"MAYOLICA 30 X 60 ZYPD003A","cantidad":7,"precio_unitario":23.48},{"producto":"VITZEN036 60X60 1.44XCJA","cantidad":30.24,"precio_unitario":28},{"producto":"NIVELADORES (2 cuñas 4 arcos )","cantidad":5,"precio_unitario":14}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "61",
+            "detalles_json": "[{"producto":"LLAVE DE OVALIN BAJO - IMPORTADO NEGRO","cantidad":1,"precio_unitario":150},{"producto":"SUMIDERO NEGRO DE ACERO INOXIDABLE 40*10","cantidad":1,"precio_unitario":110},{"producto":"COLUMNA DUCHA","cantidad":1,"precio_unitario":450},{"producto":"INODORO ONE PICE IMPORTADO","cantidad":1,"precio_unitario":450}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "62",
+            "detalles_json": "[{"producto":"PARMA PPY  60X60 1.44XCJA (L)","cantidad":36,"precio_unitario":27.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "63",
+            "detalles_json": "[{"producto":"RUSZEN026 60X60","cantidad":4.32,"precio_unitario":27.5},{"producto":"ALPEN 60X60 1.44XCJA","cantidad":16,"precio_unitario":27.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "64",
+            "detalles_json": "[{"producto":"TABLON 1*20 M2011","cantidad":7.2,"precio_unitario":35}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "65",
+            "detalles_json": "[{"producto":"RUSZEN053 60X60","cantidad":4.32,"precio_unitario":29},{"producto":"VARILLA ALUMINIO TIPO l","cantidad":1,"precio_unitario":15}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "66",
+            "detalles_json": "[{"producto":"ruszen12006 60x1.20","cantidad":4.32,"precio_unitario":35},{"producto":"chema marfil fragua","cantidad":1,"precio_unitario":8}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "67",
+            "detalles_json": "[{"producto":"ruzsen12006 60x1.20","cantidad":0.72,"precio_unitario":34},{"producto":"varilla aluminio de 12mlm curvo","cantidad":4,"precio_unitario":15}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "68",
+            "detalles_json": "[{"producto":"PORCELANATO RUSZEN12006 60X1.20","cantidad":17.28,"precio_unitario":38},{"producto":"PORCELANATO 20X1 D21002","cantidad":3,"precio_unitario":38},{"producto":"VARILLA ALUMINIO 11MLM DORADA","cantidad":3,"precio_unitario":15}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "69",
+            "detalles_json": "[{"producto":"FRAGUA NEGRA CHEMA","cantidad":10,"precio_unitario":9.9},{"producto":"CANTONERA DE ALUMINIO 1 PULGADA Y MEDIA","cantidad":4,"precio_unitario":58},{"producto":"VARILLAS DE ALUMINIO BRILLO","cantidad":10,"precio_unitario":10},{"producto":"PORCELANATO 60*60 BLANCO BETAS","cantidad":54.72,"precio_unitario":27.5},{"producto":"PORCELANATO 60*60 MARMOL BEIGE TIP SALM","cantidad":10.08,"precio_unitario":27.5},{"producto":"PORCELANATO 60*1.2 NEGRO VITRIFICADO","cantidad":7,"precio_unitario":60},{"producto":"PORCELANATO 60*60 NEGRO MATE","cantidad":4.32,"precio_unitario":32},{"producto":"PORCELANATO 60*60 NEGRO ALICANTE","cantidad":128.16,"precio_unitario":32},{"producto":"FRAGUA MARFIL CHEMA","cantidad":2,"precio_unitario":9.9}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "70",
+            "detalles_json": "[{"producto":"CERAMICO CERZEN09 60X60","cantidad":14.4,"precio_unitario":20},{"producto":"PEGAMENTO MAESTRO BLANCO EXTRAFUERTE","cantidad":5,"precio_unitario":18},{"producto":"FRAGUA CHOCOLATE SANSON","cantidad":2,"precio_unitario":6}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "71",
+            "detalles_json": "[{"producto":"lavatorio mueble mas spejo rom","cantidad":1,"precio_unitario":320}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "72",
+            "detalles_json": "[{"producto":"LAVADERO DE LAVANDERIA AMAZONAS TREBOL +KIT DE ACCESORIOS DE REGALO","cantidad":1,"precio_unitario":350},{"producto":"LLAVE DOBLE SALIDA PARA LAVANDERIA","cantidad":1,"precio_unitario":45}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "73",
+            "detalles_json": "[{"producto":"VARILLA CHAMPAGNE 9.5","cantidad":5,"precio_unitario":6.5},{"producto":"PLANOS OSCURO 30 X 60","cantidad":3.24,"precio_unitario":20},{"producto":"BURBUJA MARRON 30 x 60","cantidad":8.1,"precio_unitario":20},{"producto":"LLAVE PARA URINARIO CLASSIC CROMADO XM","cantidad":1,"precio_unitario":45},{"producto":"PEGAMENTO MAESTRO GRIS","cantidad":4,"precio_unitario":12},{"producto":"URINARIOS BLANCOS","cantidad":1,"precio_unitario":70},{"producto":"PERFIL ALUMINIO 12 MATE","cantidad":2,"precio_unitario":12.5},{"producto":"LAPIZ DE ACERO 3*2.44 MTS","cantidad":5,"precio_unitario":24}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "74",
+            "detalles_json": "[{"producto":"DALAS GRIS 60X60 1.44XCJA","cantidad":20.16,"precio_unitario":27}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "75",
+            "detalles_json": "[{"producto":"PORCELANATO 60X1.20MAURITUS  BLACK","cantidad":5.76,"precio_unitario":46}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "76",
+            "detalles_json": "[{"producto":"CINTA TEFLON","cantidad":12,"precio_unitario":2.5},{"producto":"OVALIN REDONDO BLANCO","cantidad":3,"precio_unitario":100},{"producto":"SIKA FLEX  BLANCO","cantidad":2,"precio_unitario":35},{"producto":"TRAMPA Y DESAGUE","cantidad":3,"precio_unitario":18},{"producto":"LLAVE DE DUCHA - IMPORTADO","cantidad":4,"precio_unitario":38},{"producto":"LLAVE  PICO GANZO - IMPORTADO","cantidad":1,"precio_unitario":52},{"producto":"URINARIO BLANCO C/N ACCE","cantidad":1,"precio_unitario":145},{"producto":"GRIFERIA ALTA PARA OVALIN","cantidad":3,"precio_unitario":58},{"producto":"REGISTRO","cantidad":4,"precio_unitario":8.5},{"producto":"INODORO  ONE PIECCE  BLANCO","cantidad":8,"precio_unitario":180},{"producto":"TRAMPA DESAGUE","cantidad":1,"precio_unitario":18},{"producto":"PERNOS","cantidad":8,"precio_unitario":3.5},{"producto":"REGISTRO 4","cantidad":2,"precio_unitario":15},{"producto":"TRAMPA TEE C/N DESAGUE","cantidad":1,"precio_unitario":25},{"producto":"GENESIS NEGRO 60*60","cantidad":2.16,"precio_unitario":60},{"producto":"ANILLO DE CERA C/ GUIA","cantidad":8,"precio_unitario":8},{"producto":"SUMIDERO 2 PULGADAS","cantidad":5,"precio_unitario":8.5},{"producto":"BROCA DIAMANTE 3/8","cantidad":2,"precio_unitario":15},{"producto":"TUBO DE ABASTO 1/2","cantidad":12,"precio_unitario":7}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "77",
+            "detalles_json": "[{"producto":"PORCELANATO 60*60 PFG66030","cantidad":64.8,"precio_unitario":26.3},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN","cantidad":20,"precio_unitario":28},{"producto":"FRAGUA CHEMA","cantidad":6,"precio_unitario":8.9}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "78",
+            "detalles_json": "[{"producto":"PEGAMENTO MAESTRO GRIS","cantidad":15,"precio_unitario":12},{"producto":"ARCO  NIVELADORES","cantidad":2,"precio_unitario":15},{"producto":"LAPIZ DE ACERO 3*2.44 MTS","cantidad":6,"precio_unitario":24}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "79",
+            "detalles_json": "[{"producto":"MUEBLE PARA  BAÑO BLANCO","cantidad":1,"precio_unitario":450},{"producto":"LAVADERO DE ROPA C/N PATAS","cantidad":1,"precio_unitario":250},{"producto":"MEZCLADORA DE LAVATORIO -","cantidad":2,"precio_unitario":165}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "80",
+            "detalles_json": "[{"producto":"porcelanato bs6140 60x60 super","cantidad":43.2,"precio_unitario":28},{"producto":"pegamento betzen blanco extrafuete","cantidad":26,"precio_unitario":23},{"producto":"fragua chema gris plata","cantidad":5,"precio_unitario":6},{"producto":"zocalo preparado blanco 60cm","cantidad":40,"precio_unitario":6}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "81",
+            "detalles_json": "[{"producto":"PPY66035 60X60 1.44XCJA","cantidad":7.5,"precio_unitario":45}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "82",
+            "detalles_json": "[{"producto":"fachaleta 30x60 ex-e33-1644","cantidad":7.92,"precio_unitario":45}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "83",
+            "detalles_json": "[{"producto":"LAPIZ CERAMICO DORADO","cantidad":11,"precio_unitario":6},{"producto":"SUMIDERO DE ACERO","cantidad":2,"precio_unitario":60},{"producto":"RUSWOOD MATE 60 X 60 1.44 X CJA","cantidad":15.84,"precio_unitario":26},{"producto":"MATE ATLAS  60X60  1.44 X CJA (L) LFG66018","cantidad":5.04,"precio_unitario":26},{"producto":"FRAGUA COLORES CHEMA","cantidad":6,"precio_unitario":9.5},{"producto":"TABLON  Z2101- 1*20","cantidad":10.8,"precio_unitario":36},{"producto":"LFG66013 60X60 1.44XCJA (L)","cantidad":6.48,"precio_unitario":26},{"producto":"PEGAMENTO MAESTRO BLANCO","cantidad":14,"precio_unitario":24},{"producto":"NIVELADORES","cantidad":2,"precio_unitario":14}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "84",
+            "detalles_json": "[{"producto":"porcelanato hueso 60x60","cantidad":56.16,"precio_unitario":17.5},{"producto":"crucetanm 1","cantidad":2,"precio_unitario":4}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "85",
+            "detalles_json": "[{"producto":"porcelanato hueso 60x60","cantidad":15.84,"precio_unitario":17.8}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "86",
+            "detalles_json": "[{"producto":"nivelador repuesto arco","cantidad":5,"precio_unitario":12},{"producto":"one piece trebol balanze","cantidad":1,"precio_unitario":370},{"producto":"fragua sanson hueso","cantidad":3,"precio_unitario":7},{"producto":"porcelanato ruszen12006 60x1.20","cantidad":17.28,"precio_unitario":35},{"producto":"lapiz dorado 60cm","cantidad":11,"precio_unitario":5},{"producto":"lapiz plata 60cm","cantidad":6,"precio_unitario":5},{"producto":"porcelanato lfg660587","cantidad":9,"precio_unitario":28},{"producto":"chema nblanco flexible","cantidad":3,"precio_unitario":46},{"producto":"pegamento celima blanco extrafuerte","cantidad":32,"precio_unitario":30}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "87",
+            "detalles_json": "[{"producto":"MAYOLICA VERONA MARRON 30 X 60","cantidad":4.86,"precio_unitario":19},{"producto":"HUESO HOLZTEK  60 X 60 1.44XCJA (L)","cantidad":100.8,"precio_unitario":18},{"producto":"VERONA PERLA 30 X 60  1.62 X CJA ZYPD001A","cantidad":22.68,"precio_unitario":19},{"producto":"ONE PIECE BLANCO","cantidad":2,"precio_unitario":200},{"producto":"MATE ATLAS  60X60  1.44 X CJA (L) LFG66018","cantidad":8.64,"precio_unitario":28}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "88",
+            "detalles_json": "[{"producto":"TRAMPA Y DESAGUE","cantidad":1,"precio_unitario":105},{"producto":"TABLON D21002 2 X 1M 1.20XCJA 6PZ BETZEN CERAMICS","cantidad":8.5,"precio_unitario":39.7},{"producto":"VARILLAS ALUMINIO","cantidad":16,"precio_unitario":12},{"producto":"FRAGUA GRIS SANSON","cantidad":5,"precio_unitario":8},{"producto":"LADRILLO CALACATA 30X60 1.62 X CJA  (S)","cantidad":20,"precio_unitario":20},{"producto":"FRAGUA CREPUSCULO SANSON","cantidad":6,"precio_unitario":8},{"producto":"DECORADO MOAL TURQUESA","cantidad":8,"precio_unitario":20},{"producto":"INODORO CON FALDA","cantidad":1,"precio_unitario":350},{"producto":"CAÑO VAINSA","cantidad":1,"precio_unitario":145},{"producto":"PORCELANATO WPY12018 60X1.20 2.16XCJA (3PZ)","cantidad":19.5,"precio_unitario":41.4},{"producto":"LAPIZ PLATA","cantidad":12,"precio_unitario":13.33},{"producto":"VITZEN035 POR 60 X 60 BETZEN CERAMICS 1.44XCJA","cantidad":35,"precio_unitario":27},{"producto":"MUEBLE PARA  BAÑO 7001-60","cantidad":1,"precio_unitario":550},{"producto":"LLAVE  DUCHA C/ BRAZO","cantidad":1,"precio_unitario":150},{"producto":"LSJ66009T 60X60 1.8 5P(S)","cantidad":35,"precio_unitario":20},{"producto":"TUBO VAINSA","cantidad":2,"precio_unitario":20},{"producto":"GENESIS NEGRO 60*60","cantidad":4,"precio_unitario":55},{"producto":"PEGAMENTO BLANCO EXTRAFUERTE BETZEN CERAMICS - 25 KG","cantidad":48,"precio_unitario":28.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "89",
+            "detalles_json": "[{"producto":"PEGAMENTO","cantidad":6,"precio_unitario":36.5},{"producto":"MAYOLICA 30X60","cantidad":11,"precio_unitario":25},{"producto":"FRAGUA","cantidad":2,"precio_unitario":15},{"producto":"PERFIL ALUMINIO","cantidad":1,"precio_unitario":26}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "90",
+            "detalles_json": "[{"producto":"BURBUJA BEIGE 30 X 60 BETZEN CERAMICS 1.62XCJA","cantidad":5,"precio_unitario":22},{"producto":"PEGAMENTO MAESTRO GRIS","cantidad":4,"precio_unitario":12},{"producto":"LAPIZ DE ACERO 3*2.44 MTS","cantidad":4,"precio_unitario":24}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "91",
+            "detalles_json": "[{"producto":"PEGAMENTO MAESTRO BLANCO FLEXIBLE","cantidad":6,"precio_unitario":24.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "92",
+            "detalles_json": "[{"producto":"CERAMICO PSJ46018 46X46 1.9XCJA (9PZ)","cantidad":30,"precio_unitario":20},{"producto":"FRAGUA GRIS MAESTRO","cantidad":4,"precio_unitario":7.5},{"producto":"PEGAMENTO GRIS INTERIOR MAESTRO","cantidad":11,"precio_unitario":16}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "93",
+            "detalles_json": "[{"producto":"DALAS GRIS 60X60 1.44XCJA","cantidad":20.16,"precio_unitario":26.8}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "94",
+            "detalles_json": "[{"producto":"MAURITOS BLAK 60X1.20","cantidad":1.44,"precio_unitario":58}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "95",
+            "detalles_json": "[{"producto":"RUSTICO AVELLANA 60X60","cantidad":33.12,"precio_unitario":26}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "96",
+            "detalles_json": "[{"producto":"LAPIZ CERAMICO PLATEADO .060 DECORADO","cantidad":29,"precio_unitario":12.5},{"producto":"TABLON 120*60 XYJ612F05M  RUST. CARVING","cantidad":15.84,"precio_unitario":58},{"producto":"PISO DIAMANTE BEIGGE 60*60 SUPERCER","cantidad":56.16,"precio_unitario":46},{"producto":"POECELANATO 60*60 PUNTA SAL GALA","cantidad":38.88,"precio_unitario":31},{"producto":"ARCO NIVELADORES","cantidad":10,"precio_unitario":20},{"producto":"PEGAMENTO MAESTRO BLANCO EXTRAFUERTE","cantidad":35,"precio_unitario":24.5},{"producto":"CUÑA NIVELADORES","cantidad":2,"precio_unitario":25},{"producto":"PFG 6012  60X60 1SUPERCER","cantidad":8.64,"precio_unitario":28},{"producto":"FRAGUA","cantidad":10,"precio_unitario":9.5}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        },
+        {
+            "session_idx": "97",
+            "detalles_json": "[{"producto":"VARILLA ALUMINIO L","cantidad":5,"precio_unitario":24},{"producto":"LADRILLO BLANCO 30X60","cantidad":8,"precio_unitario":26.5},{"producto":"PEGAMENTO BLANCO EXTRA BETZEN","cantidad":5,"precio_unitario":38.5},{"producto":"PORCELANATO  NEGRO VITRIFICADO 60*60","cantidad":5.76,"precio_unitario":45}]",
+            "vendedor_id": "1",
+            "pagos": [
+                {
+                    "metodo": "efectivo",
+                    "monto": "0"
+                }
+            ],
+            "total_cobrado": "0.00"
+        }
+    ]
+}
+Routing
+controller
+App\Http\Controllers\VentaImportController@confirm
+middleware
+web
+Routing parameters
+// No routing parameters

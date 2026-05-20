@@ -277,7 +277,7 @@ class VentaImportController extends Controller
         foreach ($grupos as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
             $tipo = $tipoMap[$docLetra] ?? null;
-            $num  = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $num  = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             if ($tipo && $num !== '') {
                 $buscar[$tipo][] = $num;
             }
@@ -300,7 +300,7 @@ class VentaImportController extends Controller
         foreach ($grupos as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
             $tipo = $tipoMap[$docLetra] ?? null;
-            $num  = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $num  = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
             if ($tipo && $num !== '' && isset($existentes[$tipo . '|' . $num])) {
                 $omitidos[] = $num ?: '(sin número)';
@@ -319,7 +319,7 @@ class VentaImportController extends Controller
 
         foreach ($ventas as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
-            $num = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $num = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             if ($num === '') continue;
 
             $key = $docLetra . '|' . $num;
