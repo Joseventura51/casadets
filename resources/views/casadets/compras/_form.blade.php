@@ -75,24 +75,29 @@
     </div>
     <div class="card-body">
         <p class="text-muted small mb-3">
-            Elige una venta (factura, boleta o proforma) para ver sus productos. Marca los que correspondan a esta compra e indica la cantidad comprada de cada uno.
+            Filtra por fecha y busca el documento. Marca los productos que correspondan a esta compra.
         </p>
 
         <div class="row g-2 align-items-end mb-3">
-            <div class="col-md-9">
-                <label class="form-label small mb-1">Documento de venta</label>
-                <select id="facturaSelector" class="form-select">
-                    <option value="">— Elige un documento —</option>
-                    @foreach($facturas as $f)
-                        <option value="{{ $f->id }}">
-                            {{ ucfirst($f->documento_tipo) }} {{ $f->documento_numero }} · {{ $f->fecha->format('d/m/Y') }} · {{ $f->vendedor->nombre ?? 'Sin vendedor' }} · S/ {{ number_format($f->total_cobrado, 2) }}
-                        </option>
-                    @endforeach
-                </select>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Fecha</label>
+                <input type="date" id="fechaFiltro" class="form-control" value="{{ date('Y-m-d') }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small mb-1">Buscar documento</label>
+                <div class="position-relative">
+                    <input type="text" id="ventaBuscador" class="form-control"
+                        placeholder="Escribe número, vendedor…" autocomplete="off">
+                    <div id="ventaDropdown"
+                        style="display:none; position:absolute; top:100%; left:0; right:0; z-index:1050;
+                               max-height:260px; overflow-y:auto; border:1px solid #dee2e6;
+                               border-radius:0 0 .375rem .375rem; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.1);">
+                    </div>
+                </div>
             </div>
             <div class="col-md-3">
                 <button type="button" id="btnCargarFactura" class="btn btn-outline-primary w-100">
-                    <i class="bi bi-plus-lg"></i> Cargar productos
+                    <i class="bi bi-search me-1"></i> Buscar
                 </button>
             </div>
         </div>
@@ -112,20 +117,33 @@
 
 <script>
 const facturasCargadas = new Set();
-const container = document.getElementById('facturasContainer');
-const sinSel = document.getElementById('sinSeleccion');
-const selector = document.getElementById('facturaSelector');
+const container   = document.getElementById('facturasContainer');
+const sinSel      = document.getElementById('sinSeleccion');
 const seleccionadosIniciales = @json(array_map('intval', $detallesSeleccionados ?? []));
-const cantidadesIniciales = @json($cantidadesYa->toArray());
-const facturasIniciales = @json(
+const cantidadesIniciales    = @json($cantidadesYa->toArray());
+const facturasIniciales      = @json(
     ($detallesYa->pluck('venta')->filter()->unique('id')->values()->map(fn($v)=>$v->id))->toArray()
 );
 
-// Montos/sugerido en datos de compra
-const cant = document.getElementById('cantidad');
-const unit = document.getElementById('monto_unitario');
+// ── Datos de ventas disponibles ───────────────────────────────
+@php
+$ventasJson = $facturas->map(fn($f) => [
+    'id'            => $f->id,
+    'tipo'          => ucfirst($f->documento_tipo ?? ''),
+    'numero'        => $f->documento_numero ?? '',
+    'fecha'         => $f->fecha->format('Y-m-d'),
+    'fecha_display' => $f->fecha->format('d/m/Y'),
+    'vendedor'      => $f->vendedor->nombre ?? 'Sin vendedor',
+    'total'         => number_format($f->total_cobrado, 2),
+]);
+@endphp
+const todasLasVentas = @json($ventasJson);
+
+// ── Montos/sugerido ────────────────────────────────────────────
+const cant  = document.getElementById('cantidad');
+const unit  = document.getElementById('monto_unitario');
 const total = document.getElementById('monto_total');
-const sug = document.getElementById('sugerido');
+const sug   = document.getElementById('sugerido');
 function calcSugerido() {
     const c = parseFloat(cant.value)||0, u = parseFloat(unit.value)||0;
     sug.textContent = 'S/ ' + (c*u).toFixed(2);
@@ -137,7 +155,59 @@ document.getElementById('recalcularTotal').addEventListener('click', () => {
 });
 calcSugerido();
 
-// ── Vinculación ──────────────────────────────────────────────
+// ── Buscador con dropdown ──────────────────────────────────────
+const fechaFiltro = document.getElementById('fechaFiltro');
+const buscador    = document.getElementById('ventaBuscador');
+const dropdown    = document.getElementById('ventaDropdown');
+
+function etiqueta(v) {
+    return `${v.tipo} ${v.numero} · ${v.fecha_display} · ${v.vendedor} · S/ ${v.total}`;
+}
+
+function filtrarVentas() {
+    const fecha = fechaFiltro.value;
+    const texto = buscador.value.toLowerCase().trim();
+    return todasLasVentas.filter(v =>
+        (!fecha || v.fecha === fecha) &&
+        (!texto || etiqueta(v).toLowerCase().includes(texto)) &&
+        !facturasCargadas.has(v.id)
+    );
+}
+
+function mostrarDropdown() {
+    const res = filtrarVentas();
+    dropdown.innerHTML = '';
+    if (res.length === 0) {
+        dropdown.innerHTML = '<div style="padding:.5rem .9rem; color:#6c757d; font-size:.85rem;">Sin resultados para esta fecha</div>';
+    } else {
+        res.forEach(v => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:.45rem .9rem; cursor:pointer; font-size:.85rem; border-bottom:1px solid #f1f3f5;';
+            item.innerHTML = `<span class="badge bg-secondary me-1" style="font-size:.7rem;">${v.tipo}</span>${escHtml(v.numero)} <span class="text-muted">· ${v.fecha_display} · ${v.vendedor} · S/ ${v.total}</span>`;
+            item.addEventListener('mouseover', () => item.style.background = '#f0f4ff');
+            item.addEventListener('mouseout',  () => item.style.background = '');
+            item.addEventListener('mousedown', e => {
+                e.preventDefault();
+                buscador.value = '';
+                dropdown.style.display = 'none';
+                cargarFactura(v.id);
+            });
+            dropdown.appendChild(item);
+        });
+    }
+    dropdown.style.display = '';
+}
+
+buscador.addEventListener('focus', mostrarDropdown);
+buscador.addEventListener('input', mostrarDropdown);
+buscador.addEventListener('blur',  () => setTimeout(() => { dropdown.style.display = 'none'; buscador.value = ''; }, 200));
+fechaFiltro.addEventListener('change', () => { if (dropdown.style.display !== 'none') mostrarDropdown(); });
+document.getElementById('btnCargarFactura').addEventListener('click', () => {
+    buscador.focus();
+    mostrarDropdown();
+});
+
+// ── Vinculación ────────────────────────────────────────────────
 function actualizarSinSel() {
     sinSel.style.display = container.querySelectorAll('input.detalle-check:checked').length ? 'none' : '';
 }
@@ -149,11 +219,8 @@ async function cargarFactura(ventaId) {
         if (!res.ok) throw new Error('Error al cargar');
         renderFactura(await res.json());
         facturasCargadas.add(parseInt(ventaId));
-        const opt = selector.querySelector(`option[value="${ventaId}"]`);
-        if (opt) opt.remove();
-        selector.value = '';
         actualizarSinSel();
-    } catch(e) { alert('No se pudo cargar la factura: '+e.message); }
+    } catch(e) { alert('No se pudo cargar: ' + e.message); }
 }
 
 function renderFactura(data) {
@@ -163,8 +230,8 @@ function renderFactura(data) {
     card.innerHTML = `
         <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
             <div>
-                <strong>${data.venta.documento}</strong>
-                <span class="text-muted small ms-2">${data.venta.fecha} · ${data.venta.vendedor}</span>
+                <strong>${escHtml(data.venta.documento)}</strong>
+                <span class="text-muted small ms-2">${data.venta.fecha} · ${escHtml(data.venta.vendedor)}</span>
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-sm btn-link p-0 btn-marcar-todos">Marcar todos</button>
@@ -188,7 +255,7 @@ function renderFactura(data) {
         </div>`;
     const tbody = card.querySelector('tbody');
     data.detalles.forEach(d => {
-        const checked = seleccionadosIniciales.includes(d.id) ? 'checked' : '';
+        const checked   = seleccionadosIniciales.includes(d.id) ? 'checked' : '';
         const cantPivot = cantidadesIniciales[d.id] ?? 1;
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -207,8 +274,7 @@ function renderFactura(data) {
                     ${!checked ? 'disabled' : ''}>
             </td>`;
         tbody.appendChild(tr);
-        // habilitar/deshabilitar input de cantidad según checkbox
-        const cb = tr.querySelector('.detalle-check');
+        const cb       = tr.querySelector('.detalle-check');
         const cantInput = tr.querySelector('.cantidad-comprada');
         cb.addEventListener('change', () => {
             cantInput.disabled = !cb.checked;
@@ -219,15 +285,13 @@ function renderFactura(data) {
     card.querySelector('.btn-quitar-factura').addEventListener('click', () => {
         card.querySelectorAll('.detalle-check').forEach(c => { c.checked = false; });
         facturasCargadas.delete(parseInt(card.dataset.ventaId));
-        card.remove(); actualizarSinSel();
+        card.remove();
+        actualizarSinSel();
     });
     card.querySelector('.btn-marcar-todos').addEventListener('click', () => {
         const all = card.querySelectorAll('.detalle-check');
         const algunoSinMarcar = Array.from(all).some(c => !c.checked);
-        all.forEach(c => {
-            c.checked = algunoSinMarcar;
-            c.dispatchEvent(new Event('change'));
-        });
+        all.forEach(c => { c.checked = algunoSinMarcar; c.dispatchEvent(new Event('change')); });
     });
     container.appendChild(card);
 }
@@ -236,7 +300,5 @@ function escHtml(s) {
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
-document.getElementById('btnCargarFactura').addEventListener('click', () => cargarFactura(selector.value));
-selector.addEventListener('change', () => { if (selector.value) cargarFactura(selector.value); });
 facturasIniciales.forEach(id => cargarFactura(id));
 </script>
