@@ -67,14 +67,6 @@
 <div class="filter-bar mb-3">
     <div class="row g-2 align-items-end">
         <div class="col-md col-6">
-            <label class="filter-label">Vendedor</label>
-            <input type="text" id="fVendedor" class="filter-input" placeholder="Buscar…">
-        </div>
-        <div class="col-md col-6">
-            <label class="filter-label">Cliente</label>
-            <input type="text" id="fCliente" class="filter-input" placeholder="Nombre o RUC…">
-        </div>
-        <div class="col-md col-6">
             <label class="filter-label">Estado</label>
             <select id="fEstado" class="filter-input">
                 <option value="">Todos</option>
@@ -88,8 +80,12 @@
             <input type="text" id="fFecha" class="filter-input" placeholder="ej. 19/05/2026">
         </div>
         <div class="col-md col-6">
-            <label class="filter-label">Producto</label>
-            <input type="text" id="fProducto" class="filter-input" placeholder="Buscar…">
+            <label class="filter-label">Vendedor</label>
+            <input type="text" id="fVendedor" class="filter-input" placeholder="Buscar…">
+        </div>
+        <div class="col-md col-6">
+            <label class="filter-label">Cliente</label>
+            <input type="text" id="fCliente" class="filter-input" placeholder="Nombre o RUC…">
         </div>
         <div class="col-md col-6">
             <label class="filter-label">Pago</label>
@@ -251,11 +247,10 @@ document.querySelectorAll('.select-estado').forEach(sel => {
 
 // ── Filtrado en vivo ──────────────────────────────────────────
 const filtros = {
-    vendedor:  document.getElementById('fVendedor'),
-    cliente:   document.getElementById('fCliente'),
     estado:    document.getElementById('fEstado'),
     fecha:     document.getElementById('fFecha'),
-    productos: document.getElementById('fProducto'),
+    vendedor:  document.getElementById('fVendedor'),
+    cliente:   document.getElementById('fCliente'),
     pago:      document.getElementById('fPago'),
     documento: document.getElementById('fDocumento'),
     total:     document.getElementById('fTotal'),
@@ -289,22 +284,20 @@ function aplicarFiltros() {
 
     filas.forEach(tr => {
         const d = {
-            vendedor:  normalizar(tr.dataset.vendedor  || ''),
-            cliente:   normalizar(tr.dataset.cliente   || ''),
             estado:    normalizar(tr.dataset.estado    || ''),
             fecha:     normalizar(tr.dataset.fecha     || ''),
-            productos: normalizar(tr.dataset.productos || ''),
+            vendedor:  normalizar(tr.dataset.vendedor  || ''),
+            cliente:   normalizar(tr.dataset.cliente   || ''),
             pago:      normalizar(tr.dataset.pago      || ''),
             documento: normalizar(tr.dataset.documento || ''),
             total:     normalizar(tr.dataset.total     || ''),
         };
 
         const visible =
-            (!vals.vendedor  || d.vendedor.includes(vals.vendedor))  &&
-            (!vals.cliente   || d.cliente.includes(vals.cliente))    &&
             (!vals.estado    || d.estado === vals.estado)             &&
             (!vals.fecha     || d.fecha.includes(vals.fecha))        &&
-            (!vals.productos || d.productos.includes(vals.productos)) &&
+            (!vals.vendedor  || d.vendedor.includes(vals.vendedor))  &&
+            (!vals.cliente   || d.cliente.includes(vals.cliente))    &&
             (!vals.pago      || d.pago.includes(vals.pago))          &&
             (!vals.documento || d.documento.includes(vals.documento)) &&
             (!vals.total     || d.total.includes(vals.total));
