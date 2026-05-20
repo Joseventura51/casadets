@@ -44,7 +44,7 @@
                     <th>Documento</th>
                     <th>Productos</th>
                     <th class="text-end">Total</th>
-                    <th class="text-center">Ventas</th>
+                    <th>Ventas vinculadas</th>
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
@@ -69,10 +69,16 @@
                         @endif
                     </td>
                     <td class="text-end fw-semibold">S/ {{ number_format($c->monto_total, 2) }}</td>
-                    <td class="text-center">
-                        @php $nv = $c->detalles->pluck('venta_id')->unique()->count(); $nd = $c->detalles->count(); @endphp
-                        @if($nd)
-                            <span class="badge bg-info text-dark" title="{{ $nd }} producto(s) en {{ $nv }} venta(s)">{{ $nv }}v / {{ $nd }}p</span>
+                    <td>
+                        @php
+                            $ventasVinculadas = $c->detalles->pluck('venta')->filter()->unique('id')->values();
+                        @endphp
+                        @if($ventasVinculadas->count())
+                            @foreach($ventasVinculadas as $vv)
+                                <a href="/casadets/ventas/{{ $vv->id }}" class="badge bg-light text-dark border text-decoration-none me-1" style="font-size:.75rem;">
+                                    {{ ucfirst($vv->documento_tipo ?? '') }} {{ $vv->documento_numero }}
+                                </a>
+                            @endforeach
                         @else
                             <span class="text-muted">—</span>
                         @endif
