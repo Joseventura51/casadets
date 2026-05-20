@@ -37,7 +37,7 @@
     </div>
 @endif
 
-@if(!empty($omitidos))
+@if(!empty($omitidos ?? []))
     <div class="alert alert-warning mb-3 d-flex gap-2 align-items-start">
         <i class="bi bi-skip-forward-fill fs-5 mt-1 text-warning"></i>
         <div>
@@ -70,7 +70,7 @@
         @foreach($grupos as $i => $g)
         @php
             $numFmt = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
-            $esDup = in_array($numFmt, $duplicadosExistentes);
+            $esDup = in_array($numFmt, $duplicadosExistentes ?? []);
             $docLetra = strtoupper($g['doc'] ?? '');
             $badgeCls = $docLetra === 'B' ? 'bg-secondary' : ($docLetra === 'F' ? 'bg-primary' : 'bg-warning text-dark');
         @endphp
