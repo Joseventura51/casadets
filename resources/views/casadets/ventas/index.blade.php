@@ -19,6 +19,10 @@
         <a href="/casadets/ventas/import" class="btn btn-outline-success">
             <i class="bi bi-file-earmark-spreadsheet"></i> Importar Excel
         </a>
+        <a href="/casadets/ventas/export?{{ http_build_query(request()->only(['vendedor_id','tipo','estado','desde','hasta','cliente_id'])) }}"
+           class="btn btn-outline-secondary">
+            <i class="bi bi-download"></i> Exportar Excel
+        </a>
         <a href="/casadets/ventas/create" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> Nueva venta
         </a>

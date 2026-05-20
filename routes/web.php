@@ -32,6 +32,7 @@ Route::put('/casadets/vendedores/{vendedor}', [VendedorController::class, 'updat
 Route::delete('/casadets/vendedores/{vendedor}', [VendedorController::class, 'destroy']);
 
 // CASADETS — Ventas
+Route::get('/casadets/ventas/export', [VentaController::class, 'export']);
 Route::get('/casadets/ventas', [VentaController::class, 'index']);
 Route::get('/casadets/ventas/create', [VentaController::class, 'create']);
 Route::post('/casadets/ventas', [VentaController::class, 'store']);

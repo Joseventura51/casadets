@@ -7,6 +7,11 @@ use App\Models\Vendedor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 
 class VentaController extends Controller
 {
@@ -213,5 +218,84 @@ class VentaController extends Controller
     {
         $venta->delete();
         return redirect('/casadets/ventas')->with('success', 'Venta eliminada.');
+    }
+
+    /* ─── Exportar Excel ───────────────────────────────────── */
+
+    public function export(Request $request)
+    {
+        $query = Venta::with(['vendedor', 'cliente', 'detalles']);
+
+        if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
+        if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
+        if ($request->filled('estado'))      $query->where('estado', $request->estado);
+        if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
+        if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
+        if ($request->filled('cliente_id'))  $query->where('cliente_id', $request->cliente_id);
+
+        $query->orderByRaw("CASE WHEN documento_tipo='factura' THEN 0
+                                 WHEN documento_tipo='boleta'  THEN 1
+                                 WHEN documento_tipo='proforma' THEN 2
+                                 ELSE 3 END")
+              ->orderByRaw('LENGTH(COALESCE(documento_numero,""))')
+              ->orderBy('documento_numero')
+              ->orderBy('fecha', 'desc');
+
+        $ventas = $query->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Ventas');
+
+        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Productos', 'Método Pago', 'Total', 'Ajuste', 'Total Cobrado', 'Estado'];
+        $sheet->fromArray($headers, null, 'A1');
+
+        $headerStyle = [
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2563EB']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            'borders' => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1D4ED8']]],
+        ];
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+
+        $row = 2;
+        foreach ($ventas as $v) {
+            $productos = $v->detalles->map(fn($d) => $d->producto . ' x' . rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.'))->implode(', ');
+            $sheet->setCellValue("A{$row}", $v->fecha->format('d/m/Y'));
+            $sheet->setCellValue("B{$row}", ucfirst($v->documento_tipo ?? ''));
+            $sheet->setCellValue("C{$row}", $v->documento_numero ?? '');
+            $sheet->setCellValue("D{$row}", $v->cliente->nombre ?? '');
+            $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '');
+            $sheet->setCellValue("F{$row}", $productos);
+            $sheet->setCellValue("G{$row}", $v->metodo_pago ?? '');
+            $sheet->setCellValue("H{$row}", (float) $v->total);
+            $sheet->setCellValue("I{$row}", (float) $v->ajuste);
+            $sheet->setCellValue("J{$row}", (float) $v->total_cobrado);
+            $sheet->setCellValue("K{$row}", ucfirst($v->estado ?? 'pendiente'));
+
+            if (($v->estado ?? '') === 'pagado') {
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
+            } elseif (($v->estado ?? '') === 'anulado') {
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
+            }
+
+            $row++;
+        }
+
+        foreach (range('A', 'K') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $sheet->getStyle('H2:J' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+
+        $filename = 'ventas_' . now()->format('Y-m-d') . '.xlsx';
+
+        $writer = new Xlsx($spreadsheet);
+        $tempFile = tempnam(sys_get_temp_dir(), 'ventas_');
+        $writer->save($tempFile);
+
+        return response()->download($tempFile, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 }
