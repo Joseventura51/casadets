@@ -126,7 +126,7 @@ class CompraController extends Controller
 
     private function facturasDisponibles()
     {
-        return Venta::with('vendedor')
+        return Venta::with(['vendedor', 'detalles'])
             ->whereIn('documento_tipo', ['factura', 'boleta', 'proforma'])
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc')

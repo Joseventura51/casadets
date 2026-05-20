@@ -75,30 +75,22 @@
     </div>
     <div class="card-body">
         <p class="text-muted small mb-3">
-            Filtra por fecha y busca el documento. Marca los productos que correspondan a esta compra.
+            Busca por número de documento, vendedor o nombre de producto. Marca los ítems que correspondan a esta compra.
         </p>
 
-        <div class="row g-2 align-items-end mb-3">
-            <div class="col-md-3">
-                <label class="form-label small mb-1">Fecha</label>
-                <input type="date" id="fechaFiltro" class="form-control" value="{{ date('Y-m-d') }}">
-            </div>
-            <div class="col-md-6">
-                <label class="form-label small mb-1">Buscar documento</label>
-                <div class="position-relative">
-                    <input type="text" id="ventaBuscador" class="form-control"
-                        placeholder="Escribe número, vendedor…" autocomplete="off">
-                    <div id="ventaDropdown"
-                        style="display:none; position:absolute; top:100%; left:0; right:0; z-index:1050;
-                               max-height:260px; overflow-y:auto; border:1px solid #dee2e6;
-                               border-radius:0 0 .375rem .375rem; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.1);">
-                    </div>
+        <div class="mb-3">
+            <label class="form-label small mb-1">Buscar por documento, vendedor o producto</label>
+            <div class="position-relative">
+                <span class="position-absolute top-50 translate-middle-y ms-2 text-muted" style="left:4px;pointer-events:none;">
+                    <i class="bi bi-search"></i>
+                </span>
+                <input type="text" id="ventaBuscador" class="form-control ps-4"
+                    placeholder="Ej: F001-123, Juan, ceramico…" autocomplete="off">
+                <div id="ventaDropdown"
+                    style="display:none; position:absolute; top:100%; left:0; right:0; z-index:1050;
+                           max-height:300px; overflow-y:auto; border:1px solid #dee2e6;
+                           border-radius:0 0 .375rem .375rem; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.1);">
                 </div>
-            </div>
-            <div class="col-md-3">
-                <button type="button" id="btnCargarFactura" class="btn btn-outline-primary w-100">
-                    <i class="bi bi-search me-1"></i> Buscar
-                </button>
             </div>
         </div>
 
@@ -135,6 +127,7 @@ $ventasJson = $facturas->map(fn($f) => [
     'fecha_display' => $f->fecha->format('d/m/Y'),
     'vendedor'      => $f->vendedor->nombre ?? 'Sin vendedor',
     'total'         => number_format($f->total_cobrado, 2),
+    'productos'     => $f->detalles->pluck('producto')->filter()->implode(' '),
 ]);
 @endphp
 const todasLasVentas = @json($ventasJson);
@@ -156,20 +149,13 @@ document.getElementById('recalcularTotal').addEventListener('click', () => {
 calcSugerido();
 
 // ── Buscador con dropdown ──────────────────────────────────────
-const fechaFiltro = document.getElementById('fechaFiltro');
-const buscador    = document.getElementById('ventaBuscador');
-const dropdown    = document.getElementById('ventaDropdown');
-
-function etiqueta(v) {
-    return `${v.tipo} ${v.numero} · ${v.fecha_display} · ${v.vendedor} · S/ ${v.total}`;
-}
+const buscador = document.getElementById('ventaBuscador');
+const dropdown = document.getElementById('ventaDropdown');
 
 function filtrarVentas() {
-    const fecha = fechaFiltro.value;
     const texto = buscador.value.toLowerCase().trim();
     return todasLasVentas.filter(v =>
-        (!fecha || v.fecha === fecha) &&
-        (!texto || etiqueta(v).toLowerCase().includes(texto)) &&
+        (!texto || (v.tipo + ' ' + v.numero + ' ' + v.vendedor + ' ' + v.productos).toLowerCase().includes(texto)) &&
         !facturasCargadas.has(v.id)
     );
 }
@@ -178,12 +164,17 @@ function mostrarDropdown() {
     const res = filtrarVentas();
     dropdown.innerHTML = '';
     if (res.length === 0) {
-        dropdown.innerHTML = '<div style="padding:.5rem .9rem; color:#6c757d; font-size:.85rem;">Sin resultados para esta fecha</div>';
+        dropdown.innerHTML = '<div style="padding:.5rem .9rem; color:#6c757d; font-size:.85rem;">Sin resultados</div>';
     } else {
         res.forEach(v => {
             const item = document.createElement('div');
             item.style.cssText = 'padding:.45rem .9rem; cursor:pointer; font-size:.85rem; border-bottom:1px solid #f1f3f5;';
-            item.innerHTML = `<span class="badge bg-secondary me-1" style="font-size:.7rem;">${v.tipo}</span>${escHtml(v.numero)} <span class="text-muted">· ${v.fecha_display} · ${v.vendedor} · S/ ${v.total}</span>`;
+            item.innerHTML = `<span class="badge bg-secondary me-1" style="font-size:.7rem;">${escHtml(v.tipo)}</span>`
+                + `<strong>${escHtml(v.numero)}</strong>`
+                + ` <span class="text-muted small">· ${v.fecha_display} · ${escHtml(v.vendedor)} · S/ ${v.total}</span>`;
+            if (v.productos) {
+                item.innerHTML += `<div style="font-size:.78rem;color:#888;margin-top:1px;">${escHtml(v.productos.slice(0,80))}</div>`;
+            }
             item.addEventListener('mouseover', () => item.style.background = '#f0f4ff');
             item.addEventListener('mouseout',  () => item.style.background = '');
             item.addEventListener('mousedown', e => {
@@ -201,11 +192,6 @@ function mostrarDropdown() {
 buscador.addEventListener('focus', mostrarDropdown);
 buscador.addEventListener('input', mostrarDropdown);
 buscador.addEventListener('blur',  () => setTimeout(() => { dropdown.style.display = 'none'; buscador.value = ''; }, 200));
-fechaFiltro.addEventListener('change', () => { if (dropdown.style.display !== 'none') mostrarDropdown(); });
-document.getElementById('btnCargarFactura').addEventListener('click', () => {
-    buscador.focus();
-    mostrarDropdown();
-});
 
 // ── Vinculación ────────────────────────────────────────────────
 function actualizarSinSel() {
