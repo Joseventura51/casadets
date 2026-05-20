@@ -142,6 +142,129 @@
     @endif
 </div>
 
+{{-- Análisis de utilidad --}}
+@php
+    $filaUtilidad    = [];
+    $totalCostoGlobal = 0;
+
+    foreach ($venta->detalles as $d) {
+        $subtotalVenta = $d->subtotal ?? ($d->precio_unitario * $d->cantidad);
+        $costoTotal    = 0;
+        $empresas      = collect();
+
+        foreach ($d->compras as $c) {
+            // Buscar la linea de compra que coincide con el producto
+            $linea = $c->lineas->first(fn($l) => strtolower(trim($l->producto)) === strtolower(trim($d->producto)));
+            $cantidadPivot = $c->pivot->cantidad ?? $d->cantidad;
+            $costoUnit     = $linea ? $linea->monto_unitario : null;
+            $costoFila     = $costoUnit !== null ? ($costoUnit * $cantidadPivot) : null;
+            if ($costoFila !== null) $costoTotal += $costoFila;
+            $empresas->push(['empresa' => $c->empresa, 'costo_unit' => $costoUnit, 'cantidad' => $cantidadPivot]);
+        }
+
+        $utilidad  = $d->compras->count() ? ($subtotalVenta - $costoTotal) : null;
+        $margen    = ($utilidad !== null && $subtotalVenta > 0) ? ($utilidad / $subtotalVenta * 100) : null;
+
+        $totalCostoGlobal += $costoTotal;
+        $filaUtilidad[] = [
+            'producto'       => $d->producto,
+            'cantidad'       => $d->cantidad,
+            'precio_unit'    => $d->precio_unitario,
+            'subtotal_venta' => $subtotalVenta,
+            'costo_total'    => $d->compras->count() ? $costoTotal : null,
+            'utilidad'       => $utilidad,
+            'margen'         => $margen,
+            'empresas'       => $empresas,
+        ];
+    }
+
+    $totalVenta     = $venta->total_cobrado;
+    $utilidadTotal  = $totalVenta - $totalCostoGlobal;
+    $margenTotal    = $totalVenta > 0 ? ($utilidadTotal / $totalVenta * 100) : null;
+@endphp
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-graph-up-arrow me-1 text-success"></i> Análisis de utilidad
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Producto</th>
+                    <th class="text-center">Empresa</th>
+                    <th class="text-end">Costo compra</th>
+                    <th class="text-end">Venta</th>
+                    <th class="text-end">Utilidad</th>
+                    <th class="text-end">Margen</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($filaUtilidad as $f)
+                <tr>
+                    <td>
+                        <span class="small">{{ $f['producto'] }}</span>
+                        <span class="text-muted small"> × {{ rtrim(rtrim(number_format($f['cantidad'],2),'0'),'.') }}</span>
+                    </td>
+                    <td class="text-center">
+                        @if($f['empresas']->count())
+                            @foreach($f['empresas']->unique('empresa') as $e)
+                                <span class="badge bg-warning text-dark">{{ $e['empresa'] }}</span>
+                            @endforeach
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
+                    <td class="text-end">
+                        @if($f['costo_total'] !== null)
+                            <span class="text-danger">S/ {{ number_format($f['costo_total'], 2) }}</span>
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
+                    <td class="text-end">S/ {{ number_format($f['subtotal_venta'], 2) }}</td>
+                    <td class="text-end fw-semibold">
+                        @if($f['utilidad'] !== null)
+                            <span class="{{ $f['utilidad'] >= 0 ? 'text-success' : 'text-danger' }}">
+                                {{ $f['utilidad'] >= 0 ? '+' : '' }}S/ {{ number_format($f['utilidad'], 2) }}
+                            </span>
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
+                    <td class="text-end">
+                        @if($f['margen'] !== null)
+                            <span class="badge {{ $f['margen'] >= 20 ? 'bg-success' : ($f['margen'] >= 0 ? 'bg-warning text-dark' : 'bg-danger') }}">
+                                {{ number_format($f['margen'], 1) }}%
+                            </span>
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <th colspan="2" class="text-end">Totales</th>
+                    <th class="text-end text-danger">S/ {{ number_format($totalCostoGlobal, 2) }}</th>
+                    <th class="text-end">S/ {{ number_format($totalVenta, 2) }}</th>
+                    <th class="text-end fw-bold {{ $utilidadTotal >= 0 ? 'text-success' : 'text-danger' }}">
+                        {{ $utilidadTotal >= 0 ? '+' : '' }}S/ {{ number_format($utilidadTotal, 2) }}
+                    </th>
+                    <th class="text-end">
+                        @if($margenTotal !== null)
+                            <span class="badge {{ $margenTotal >= 20 ? 'bg-success' : ($margenTotal >= 0 ? 'bg-warning text-dark' : 'bg-danger') }}">
+                                {{ number_format($margenTotal, 1) }}%
+                            </span>
+                        @endif
+                    </th>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
 {{-- Compras vinculadas agrupadas por empresa --}}
 @if($comprasVinculadas->count())
 <div class="card border-0 shadow-sm">
