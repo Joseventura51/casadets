@@ -130,71 +130,94 @@ class VentaImportController extends Controller
             return back()->with('error', 'Todos los documentos del Excel ya existen en el sistema. No hay nada nuevo para importar.');
         }
 
+        // Guardar grupos en sesión para no reenviarlos como inputs
+        session(['import_grupos' => $gruposNuevos]);
+
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
         return view('casadets.ventas.import_preview', [
-            'grupos'            => $gruposNuevos,
-            'vendedores'        => $vendedores,
-            'vendedor_id_default' => 1,
-            'metodo_pago_default' => 'efectivo',
+            'grupos'             => $gruposNuevos,
+            'vendedores'         => $vendedores,
+            'vendedor_id_default'=> $vendedores->first(fn($v) => stripos($v->nombre,'jovi') !== false)?->id ?? $vendedores->first()->id,
+            'metodo_pago_default'=> 'efectivo',
             'duplicadosExistentes' => [],
-            'omitidos'          => $omitidos,
+            'omitidos'           => $omitidos,
         ]);
     }
 
     public function confirm(Request $request)
     {
+        // Los datos fijos (fecha, doc, serie, numero, razon_social, ruc, detalles)
+        // vienen de la sesión para no exceder max_input_vars con formularios grandes.
+        $sessionGrupos = session('import_grupos', []);
+        if (empty($sessionGrupos)) {
+            return redirect('/casadets/ventas/import')
+                ->with('error', 'La sesión expiró. Vuelve a subir el archivo.');
+        }
+
         $data = $request->validate([
-            'ventas' => 'required|array|min:1',
-            'ventas.*.fecha' => 'required|date',
-            'ventas.*.doc' => 'nullable|string|max:10',
-            'ventas.*.serie' => 'nullable|string|max:50',
-            'ventas.*.numero' => 'nullable|string|max:50',
-            'ventas.*.razon_social' => 'nullable|string|max:255',
-            'ventas.*.ruc' => 'nullable|string|max:20',
-            'ventas.*.vendedor_id' => 'required|exists:vendedores,id',
-            'ventas.*.total_cobrado' => 'required|numeric|min:0',
-            'ventas.*.pagos' => 'required|array|min:1',
-            'ventas.*.pagos.*.metodo' => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
-            'ventas.*.pagos.*.monto' => 'required|numeric|min:0',
-            'ventas.*.detalles' => 'required|array|min:1',
-            'ventas.*.detalles.*.producto' => 'required|string|max:255',
-            'ventas.*.detalles.*.cantidad' => 'required|numeric|min:0',
-            'ventas.*.detalles.*.precio_unitario' => 'required|numeric|min:0',
+            'ventas'                      => 'required|array|min:1',
+            'ventas.*.session_idx'        => 'required|integer',
+            'ventas.*.vendedor_id'        => 'required|exists:vendedores,id',
+            'ventas.*.total_cobrado'      => 'required|numeric|min:0',
+            'ventas.*.pagos'              => 'required|array|min:1',
+            'ventas.*.pagos.*.metodo'     => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
+            'ventas.*.pagos.*.monto'      => 'required|numeric|min:0',
+            'ventas.*.detalles_json'      => 'required|string',
         ]);
 
-        // Validar unicidad de facturas (entre sí y vs BD)
-        $errores = $this->validarFacturasUnicas($data['ventas']);
+        // Reconstruir grupos completos mezclando sesión + inputs del form
+        $grupos = [];
+        foreach ($data['ventas'] as $submitted) {
+            $idx = (int) $submitted['session_idx'];
+            $base = $sessionGrupos[$idx] ?? null;
+            if (!$base) continue;
+
+            $detalles = json_decode($submitted['detalles_json'], true) ?? [];
+            if (empty($detalles)) continue;
+
+            $grupos[] = array_merge($base, [
+                'vendedor_id'   => $submitted['vendedor_id'],
+                'total_cobrado' => $submitted['total_cobrado'],
+                'pagos'         => $submitted['pagos'],
+                'detalles'      => $detalles,
+            ]);
+        }
+
+        if (empty($grupos)) {
+            return back()->with('error', 'No hay ventas válidas para importar.');
+        }
+
+        // Validar unicidad de documentos
+        $errores = $this->validarFacturasUnicas($grupos);
         if (!empty($errores)) {
-            return back()->withInput()->with('error', 'No se importó nada. ' . implode(' ', $errores));
+            return back()->with('error', 'No se importó nada. ' . implode(' ', $errores));
         }
 
         $totalCreadas = 0;
         $totalDetalles = 0;
 
-        DB::transaction(function () use ($data, &$totalCreadas, &$totalDetalles) {
-            foreach ($data['ventas'] as $g) {
+        DB::transaction(function () use ($grupos, &$totalCreadas, &$totalDetalles) {
+            foreach ($grupos as $g) {
                 $detallesCalc = array_map(function ($d) {
                     $sub = round((float) $d['cantidad'] * (float) $d['precio_unitario'], 2);
                     return [
-                        'producto' => $d['producto'],
-                        'cantidad' => $d['cantidad'],
+                        'producto'        => $d['producto'],
+                        'cantidad'        => $d['cantidad'],
                         'precio_unitario' => $d['precio_unitario'],
-                        'subtotal' => $sub,
+                        'subtotal'        => $sub,
                     ];
                 }, $g['detalles']);
 
-                $totalReal = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
-                $tipoLetra = strtoupper(trim($g['doc']??''));
-                if ($tipoLetra === 'PROFORMA'){
-                    $tipoLetra = 'P';
-                }
-                $numero = trim(($g['doc'] ?? '').($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+                $totalReal  = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
+                $tipoLetra  = strtoupper(trim($g['doc'] ?? ''));
+                if ($tipoLetra === 'PROFORMA') $tipoLetra = 'P';
+                $numero = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
-                // Buscar o crear cliente por razón social
-                $clienteId = null;
+                // Buscar o crear cliente
+                $clienteId   = null;
                 $razonSocial = trim($g['razon_social'] ?? '');
-                $ruc = trim($g['ruc'] ?? '');
+                $ruc         = trim($g['ruc'] ?? '');
                 if ($razonSocial !== '') {
                     $cliente = \App\Models\Cliente::whereRaw('LOWER(nombre) = ?', [strtolower($razonSocial)])->first();
                     if (!$cliente) {
@@ -209,10 +232,9 @@ class VentaImportController extends Controller
                     $clienteId = $cliente->id;
                 }
 
-                // Construir string de métodos (únicos, en orden de aparición)
-                $metodosPago = collect($g['pagos'])->pluck('metodo')->unique()->values()->implode(',');
+                $metodosPago  = collect($g['pagos'])->pluck('metodo')->unique()->values()->implode(',');
                 $totalCobrado = round(collect($g['pagos'])->sum(fn($p) => (float) $p['monto']), 2);
-                $ajuste = round($totalCobrado - $totalReal, 2);
+                $ajuste       = round($totalCobrado - $totalReal, 2);
 
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
@@ -233,6 +255,8 @@ class VentaImportController extends Controller
                 $totalCreadas++;
             }
         });
+
+        session()->forget('import_grupos');
 
         return redirect('/casadets/ventas')->with('success',
             "Importación completada: $totalCreadas venta(s) con $totalDetalles producto(s)."

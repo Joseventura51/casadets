@@ -102,12 +102,11 @@
             </div>
 
             <div class="card-body pt-3">
-                <input type="hidden" name="ventas[{{ $i }}][fecha]"        value="{{ $g['fecha'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][doc]"          value="{{ $g['doc'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][serie]"        value="{{ $g['serie'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][numero]"       value="{{ $g['numero'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][razon_social]" value="{{ $g['razon_social'] ?? '' }}">
-                <input type="hidden" name="ventas[{{ $i }}][ruc]"          value="{{ $g['ruc'] ?? '' }}">
+                {{-- Solo campos editables + índice de sesión; datos fijos vienen de session() en el servidor --}}
+                <input type="hidden" name="ventas[{{ $i }}][session_idx]" value="{{ $i }}">
+                <input type="hidden" name="ventas[{{ $i }}][detalles_json]"
+                    class="detalles-json-hidden"
+                    value="{{ json_encode($g['detalles']) }}">
 
                 <div class="row g-3 mb-3">
 
@@ -190,18 +189,19 @@
                             @foreach($g['detalles'] as $j => $d)
                             <tr class="producto-row">
                                 <td>
-                                    <input type="text" name="ventas[{{ $i }}][detalles][{{ $j }}][producto]"
-                                        value="{{ $d['producto'] }}" class="form-control form-control-sm" required>
+                                    <input type="text"
+                                        value="{{ $d['producto'] }}"
+                                        class="form-control form-control-sm producto-input" required>
                                 </td>
                                 <td>
-                                    <input type="number" name="ventas[{{ $i }}][detalles][{{ $j }}][cantidad]"
+                                    <input type="number"
                                         value="{{ rtrim(rtrim(number_format($d['cantidad'], 2, '.', ''), '0'), '.') }}"
-                                        step="0.01" min="0" class="form-control form-control-sm text-end cantidad-input" required>
+                                        step="0.01" min="0" class="form-control form-control-sm text-end cantidad-input">
                                 </td>
                                 <td>
-                                    <input type="number" name="ventas[{{ $i }}][detalles][{{ $j }}][precio_unitario]"
+                                    <input type="number"
                                         value="{{ number_format($d['precio_unitario'], 2, '.', '') }}"
-                                        step="0.01" min="0" class="form-control form-control-sm text-end precio-input" required>
+                                        step="0.01" min="0" class="form-control form-control-sm text-end precio-input">
                                 </td>
                                 <td class="text-end text-muted subtotal-display" style="font-size:.87rem;">
                                     S/ {{ number_format($d['subtotal'], 2) }}
@@ -237,6 +237,19 @@
 <script>
 const METODOS = @json($metodos);
 
+/* ── Serializa detalles de productos al hidden JSON ── */
+function serializarDetalles(card) {
+    const detalles = [];
+    card.querySelectorAll('.producto-row').forEach(row => {
+        detalles.push({
+            producto:         row.querySelector('.producto-input').value,
+            cantidad:         parseFloat(row.querySelector('.cantidad-input').value) || 0,
+            precio_unitario:  parseFloat(row.querySelector('.precio-input').value) || 0,
+        });
+    });
+    card.querySelector('.detalles-json-hidden').value = JSON.stringify(detalles);
+}
+
 /* ── Recalcula subtotales de productos y actualiza total real ── */
 function recalcProductos(card) {
     let totalReal = 0;
@@ -249,6 +262,7 @@ function recalcProductos(card) {
     });
     card.querySelector('.total-real-display').textContent = 'S/ ' + totalReal.toFixed(2);
     card.dataset.totalReal = totalReal;
+    serializarDetalles(card);
     recalcDiferencia(card);
 }
 
@@ -368,10 +382,14 @@ function actualizarContador() {
 }
 
 document.getElementById('formImport').addEventListener('submit', e => {
-    if (document.querySelectorAll('.venta-card').length === 0) {
+    const cards = document.querySelectorAll('.venta-card');
+    if (cards.length === 0) {
         e.preventDefault();
         alert('No hay ventas para importar.');
+        return;
     }
+    // Serializar detalles de cada tarjeta al JSON hidden antes de enviar
+    cards.forEach(card => serializarDetalles(card));
 });
 </script>
 @endsection
