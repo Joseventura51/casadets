@@ -50,8 +50,33 @@
     </div>
 </div>
 
-<div id="contadorFiltro" class="mb-2" style="display:none; font-size:.8rem; color:#6c757d;">
-    Mostrando <span id="cntVisible" class="fw-bold text-dark">0</span> de <span id="cntTotal" class="fw-bold text-dark">0</span> ventas
+{{-- RANGO DE FECHAS --}}
+<div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+    <div class="d-flex align-items-center gap-2">
+        <div>
+            <label class="d-block" style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#6c757d; margin-bottom:.2rem;">Fecha Inicio</label>
+            <div class="input-group input-group-sm" style="width:155px;">
+                <input type="date" id="fDesde" class="form-control form-control-sm" style="font-size:.82rem;">
+                <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
+            </div>
+        </div>
+        <div style="padding-top:1.2rem; color:#adb5bd; font-size:.9rem;">—</div>
+        <div>
+            <label class="d-block" style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#6c757d; margin-bottom:.2rem;">Fecha Fin</label>
+            <div class="input-group input-group-sm" style="width:155px;">
+                <input type="date" id="fHasta" class="form-control form-control-sm" style="font-size:.82rem;">
+                <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
+            </div>
+        </div>
+        <div style="padding-top:1.2rem;">
+            <button id="btnLimpiarFechas" class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;" title="Limpiar fechas">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    </div>
+    <div id="contadorFiltro" style="display:none; font-size:.8rem; color:#6c757d; margin-top:0 !important;">
+        Mostrando <span id="cntVisible" class="fw-bold text-dark">0</span> de <span id="cntTotal" class="fw-bold text-dark">0</span> ventas
+    </div>
 </div>
 
 <div class="card">
@@ -78,7 +103,7 @@
                             <option value="anulado">Anulado</option>
                         </select>
                     </td>
-                    <td><input type="text" id="fFecha"     class="filter-input" placeholder="19/05/2026"></td>
+                    <td></td>
                     <td><input type="text" id="fVendedor"  class="filter-input" placeholder="Buscar…"></td>
                     <td><input type="text" id="fCliente"   class="filter-input" placeholder="Nombre o RUC…"></td>
                     <td></td>
@@ -216,18 +241,19 @@ document.querySelectorAll('.select-estado').forEach(sel => {
 // ── Filtrado en vivo ──────────────────────────────────────────
 const filtros = {
     estado:    document.getElementById('fEstado'),
-    fecha:     document.getElementById('fFecha'),
     vendedor:  document.getElementById('fVendedor'),
     cliente:   document.getElementById('fCliente'),
     pago:      document.getElementById('fPago'),
     documento: document.getElementById('fDocumento'),
     total:     document.getElementById('fTotal'),
 };
+const fDesde = document.getElementById('fDesde');
+const fHasta = document.getElementById('fHasta');
 
-const filas       = document.querySelectorAll('.fila-venta');
-const cntVisible  = document.getElementById('cntVisible');
-const cntTotal    = document.getElementById('cntTotal');
-const contador    = document.getElementById('contadorFiltro');
+const filas        = document.querySelectorAll('.fila-venta');
+const cntVisible   = document.getElementById('cntVisible');
+const cntTotal     = document.getElementById('cntTotal');
+const contador     = document.getElementById('contadorFiltro');
 const noResultados = document.getElementById('filaNoResultados');
 const totalVisible = document.getElementById('totalVisible');
 
@@ -240,35 +266,44 @@ function normalizar(str) {
         .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
 }
 
+// Convierte "dd/mm/yyyy" → "yyyy-mm-dd" para comparar con input[type=date]
+function fechaISO(ddmmyyyy) {
+    const [d, m, y] = ddmmyyyy.split('/');
+    return y && m && d ? `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : '';
+}
+
 function aplicarFiltros() {
     const vals = {};
     for (const [k, el] of Object.entries(filtros)) {
         vals[k] = normalizar(el.value.trim());
     }
+    const desde = fDesde.value;
+    const hasta = fHasta.value;
 
-    const hayFiltro = Object.values(vals).some(v => v !== '');
+    const hayFiltro = Object.values(vals).some(v => v !== '') || desde || hasta;
     let visibles = 0;
     let totalCobrado = 0;
 
     filas.forEach(tr => {
         const d = {
             estado:    normalizar(tr.dataset.estado    || ''),
-            fecha:     normalizar(tr.dataset.fecha     || ''),
             vendedor:  normalizar(tr.dataset.vendedor  || ''),
             cliente:   normalizar(tr.dataset.cliente   || ''),
             pago:      normalizar(tr.dataset.pago      || ''),
             documento: normalizar(tr.dataset.documento || ''),
             total:     normalizar(tr.dataset.total     || ''),
         };
+        const fechaFila = fechaISO(tr.dataset.fecha || '');
 
         const visible =
-            (!vals.estado    || d.estado === vals.estado)             &&
-            (!vals.fecha     || d.fecha.includes(vals.fecha))        &&
-            (!vals.vendedor  || d.vendedor.includes(vals.vendedor))  &&
-            (!vals.cliente   || d.cliente.includes(vals.cliente))    &&
-            (!vals.pago      || d.pago.includes(vals.pago))          &&
+            (!vals.estado    || d.estado === vals.estado)              &&
+            (!vals.vendedor  || d.vendedor.includes(vals.vendedor))   &&
+            (!vals.cliente   || d.cliente.includes(vals.cliente))     &&
+            (!vals.pago      || d.pago.includes(vals.pago))           &&
             (!vals.documento || d.documento.includes(vals.documento)) &&
-            (!vals.total     || d.total.includes(vals.total));
+            (!vals.total     || d.total.includes(vals.total))         &&
+            (!desde          || fechaFila >= desde)                    &&
+            (!hasta          || fechaFila <= hasta);
 
         tr.classList.toggle('fila-oculta', !visible);
 
@@ -279,15 +314,23 @@ function aplicarFiltros() {
     });
 
     if (cntVisible) cntVisible.textContent = visibles;
-    if (contador) contador.style.display = hayFiltro ? '' : 'none';
+    if (contador)   contador.style.display = hayFiltro ? '' : 'none';
     if (noResultados) noResultados.style.display = (hayFiltro && visibles === 0) ? '' : 'none';
     if (totalVisible) totalVisible.textContent = 'S/ ' + totalCobrado.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 Object.values(filtros).forEach(el => el.addEventListener('input', aplicarFiltros));
+fDesde.addEventListener('input', aplicarFiltros);
+fHasta.addEventListener('input', aplicarFiltros);
 
 document.getElementById('btnLimpiar').addEventListener('click', () => {
     Object.values(filtros).forEach(el => el.value = '');
+    aplicarFiltros();
+});
+
+document.getElementById('btnLimpiarFechas').addEventListener('click', () => {
+    fDesde.value = '';
+    fHasta.value = '';
     aplicarFiltros();
 });
 </script>
