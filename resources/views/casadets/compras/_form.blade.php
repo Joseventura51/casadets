@@ -70,22 +70,22 @@
 
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-white fw-semibold">
-        <i class="bi bi-link-45deg me-1"></i> Vincular a productos de facturas
+        <i class="bi bi-link-45deg me-1"></i> Vincular a productos de una venta
         <small class="text-muted fw-normal ms-1">— opcional, para productos no propios</small>
     </div>
     <div class="card-body">
         <p class="text-muted small mb-3">
-            Elige una factura para ver sus productos. Marca los que correspondan a esta compra e indica la cantidad comprada de cada uno.
+            Elige una venta (factura, boleta o proforma) para ver sus productos. Marca los que correspondan a esta compra e indica la cantidad comprada de cada uno.
         </p>
 
         <div class="row g-2 align-items-end mb-3">
             <div class="col-md-9">
-                <label class="form-label small mb-1">Factura</label>
+                <label class="form-label small mb-1">Documento de venta</label>
                 <select id="facturaSelector" class="form-select">
-                    <option value="">— Elige una factura —</option>
+                    <option value="">— Elige un documento —</option>
                     @foreach($facturas as $f)
                         <option value="{{ $f->id }}">
-                            {{ $f->documento_numero }} · {{ $f->fecha->format('d/m/Y') }} · {{ $f->vendedor->nombre ?? 'Sin vendedor' }} · S/ {{ number_format($f->total_cobrado, 2) }}
+                            {{ ucfirst($f->documento_tipo) }} {{ $f->documento_numero }} · {{ $f->fecha->format('d/m/Y') }} · {{ $f->vendedor->nombre ?? 'Sin vendedor' }} · S/ {{ number_format($f->total_cobrado, 2) }}
                         </option>
                     @endforeach
                 </select>
