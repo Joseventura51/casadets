@@ -49,7 +49,11 @@ class VentaImportController extends Controller
         $headers = array_map(fn($h) => strtolower(trim((string) $h)), $rows[0]);
         $mapa = $this->mapearColumnas($headers);
 
-        $faltantes = array_keys(array_filter($mapa, fn($v) => $v === null));
+        $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total'];
+        $faltantes = array_keys(array_filter(
+            array_intersect_key($mapa, array_flip($camposObligatorios)),
+            fn($v) => $v === null
+        ));
         if (!empty($faltantes)) {
             return back()->with('error', 'Faltan columnas en el Excel: ' . implode(', ', $faltantes));
         }
@@ -69,13 +73,17 @@ class VentaImportController extends Controller
             $key = $doc . '|' . $serie . '|' . $numero;
 
             if (!isset($grupos[$key])) {
+                $razonSocial = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
+                $ruc = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
                 $grupos[$key] = [
-                    'fecha' => $this->parseFecha($r[$mapa['fecha']] ?? null),
-                    'doc' => $doc,
-                    'serie' => $serie,
-                    'numero' => $numero,
-                    'detalles' => [],
-                    'total' => 0,
+                    'fecha'        => $this->parseFecha($r[$mapa['fecha']] ?? null),
+                    'doc'          => $doc,
+                    'serie'        => $serie,
+                    'numero'       => $numero,
+                    'razon_social' => $razonSocial,
+                    'ruc'          => $ruc,
+                    'detalles'     => [],
+                    'total'        => 0,
                 ];
             }
 
@@ -132,6 +140,8 @@ class VentaImportController extends Controller
             'ventas.*.doc' => 'nullable|string|max:10',
             'ventas.*.serie' => 'nullable|string|max:50',
             'ventas.*.numero' => 'nullable|string|max:50',
+            'ventas.*.razon_social' => 'nullable|string|max:255',
+            'ventas.*.ruc' => 'nullable|string|max:20',
             'ventas.*.vendedor_id' => 'required|exists:vendedores,id',
             'ventas.*.total_cobrado' => 'required|numeric|min:0',
             'ventas.*.pagos' => 'required|array|min:1',
@@ -171,20 +181,39 @@ class VentaImportController extends Controller
                 }
                 $numero = trim(($g['doc'] ?? '').($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
+                // Buscar o crear cliente por razón social
+                $clienteId = null;
+                $razonSocial = trim($g['razon_social'] ?? '');
+                $ruc = trim($g['ruc'] ?? '');
+                if ($razonSocial !== '') {
+                    $cliente = \App\Models\Cliente::whereRaw('LOWER(nombre) = ?', [strtolower($razonSocial)])->first();
+                    if (!$cliente) {
+                        $cliente = \App\Models\Cliente::create([
+                            'nombre'    => $razonSocial,
+                            'documento' => $ruc ?: null,
+                            'activo'    => true,
+                        ]);
+                    } elseif ($ruc !== '' && empty($cliente->documento)) {
+                        $cliente->update(['documento' => $ruc]);
+                    }
+                    $clienteId = $cliente->id;
+                }
+
                 // Construir string de métodos (únicos, en orden de aparición)
                 $metodosPago = collect($g['pagos'])->pluck('metodo')->unique()->values()->implode(',');
                 $totalCobrado = round(collect($g['pagos'])->sum(fn($p) => (float) $p['monto']), 2);
                 $ajuste = round($totalCobrado - $totalReal, 2);
 
                 $venta = Venta::create([
-                    'vendedor_id' => $g['vendedor_id'],
-                    'total' => $totalReal,
-                    'ajuste' => $ajuste,
-                    'metodo_pago' => $metodosPago,
-                    'documento_tipo' => $this->tiposDoc[$tipoLetra] ?? null,
+                    'vendedor_id'      => $g['vendedor_id'],
+                    'cliente_id'       => $clienteId,
+                    'total'            => $totalReal,
+                    'ajuste'           => $ajuste,
+                    'metodo_pago'      => $metodosPago,
+                    'documento_tipo'   => $this->tiposDoc[$tipoLetra] ?? null,
                     'documento_numero' => $numero ?: null,
-                    'observaciones' => 'Importado desde Excel',
-                    'fecha' => $g['fecha'],
+                    'observaciones'    => 'Importado desde Excel',
+                    'fecha'            => $g['fecha'],
                 ]);
 
                 foreach ($detallesCalc as $d) {
@@ -250,14 +279,16 @@ class VentaImportController extends Controller
     private function mapearColumnas(array $headers): array
     {
         $alias = [
-            'fecha' => ['fecha_emisi', 'fecha_emision', 'fecha'],
-            'doc' => ['doc', 'tipo', 'tipo_doc'],
-            'serie' => ['serie'],
-            'nro' => ['nrodocumen', 'numero', 'nro_documento', 'nrodocumento'],
-            'producto' => ['producto', 'descripcion', 'descripción'],
-            'precio' => ['precio', 'precio_unitario', 'preciounit'],
-            'cantidad' => ['cantidad', 'unidades'],
-            'total' => ['total', 'subtotal', 'importe'],
+            'fecha'        => ['fecha_emisi', 'fecha_emision', 'fecha'],
+            'doc'          => ['doc', 'tipo', 'tipo_doc'],
+            'serie'        => ['serie'],
+            'nro'          => ['nrodocumen', 'numero', 'nro_documento', 'nrodocumento'],
+            'producto'     => ['producto', 'descripcion', 'descripción'],
+            'precio'       => ['precio', 'precio_unitario', 'preciounit'],
+            'cantidad'     => ['cantidad', 'unidades'],
+            'total'        => ['total', 'subtotal', 'importe'],
+            'razon_social' => ['razon_social', 'razón_social', 'razon social', 'razón social', 'denominacion', 'denominación', 'cliente', 'nombre_cliente', 'nombre cliente', 'razonsocial'],
+            'ruc'          => ['ruc', 'ruc_cliente', 'nro_ruc', 'nroruc', 'documento'],
         ];
 
         $mapa = [];

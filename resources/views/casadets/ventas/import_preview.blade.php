@@ -77,6 +77,14 @@
                     @if($numFmt)
                         <span class="badge {{ $badgeCls }} doc-badge">{{ $numFmt }}</span>
                     @endif
+                    @if(!empty($g['razon_social']))
+                        <span class="text-dark fw-semibold" style="font-size:.9rem;">
+                            <i class="bi bi-building me-1 text-secondary"></i>{{ $g['razon_social'] }}
+                        </span>
+                        @if(!empty($g['ruc']))
+                            <span class="text-muted" style="font-size:.78rem;">RUC: {{ $g['ruc'] }}</span>
+                        @endif
+                    @endif
                     @if($esDup)
                         <span class="badge bg-danger"><i class="bi bi-exclamation-triangle me-1"></i>Duplicada</span>
                     @endif
@@ -87,10 +95,12 @@
             </div>
 
             <div class="card-body pt-3">
-                <input type="hidden" name="ventas[{{ $i }}][fecha]" value="{{ $g['fecha'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][doc]"   value="{{ $g['doc'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][serie]" value="{{ $g['serie'] }}">
-                <input type="hidden" name="ventas[{{ $i }}][numero]" value="{{ $g['numero'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][fecha]"        value="{{ $g['fecha'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][doc]"          value="{{ $g['doc'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][serie]"        value="{{ $g['serie'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][numero]"       value="{{ $g['numero'] }}">
+                <input type="hidden" name="ventas[{{ $i }}][razon_social]" value="{{ $g['razon_social'] ?? '' }}">
+                <input type="hidden" name="ventas[{{ $i }}][ruc]"          value="{{ $g['ruc'] ?? '' }}">
 
                 <div class="row g-3 mb-3">
 
