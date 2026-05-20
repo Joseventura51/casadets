@@ -52,23 +52,27 @@
         <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-body py-3">
-                    <p class="fw-semibold mb-2 small"><i class="bi bi-info-circle text-info me-1"></i> Columnas reconocidas del Excel</p>
-                    <div class="d-flex flex-wrap gap-2 mb-2">
+                    <p class="fw-semibold mb-3 small text-secondary">
+                        <i class="bi bi-info-circle text-info me-1"></i> Columnas reconocidas del Excel
+                    </p>
+
+                    <div class="mb-1 small text-muted" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600;">Obligatorias</div>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
                         @foreach(['fecha_emisi','Doc','Serie','NroDocumen','Producto','Precio','Cantidad','Total'] as $col)
-                            <code class="badge bg-light text-dark border" style="font-size:.8rem;">{{ $col }}</code>
+                            <span class="col-badge">{{ $col }}</span>
                         @endforeach
-                        <code class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.8rem;">
-                            <i class="bi bi-building me-1"></i>NombreRazonSocial
-                        </code>
-                        <code class="badge bg-success bg-opacity-10 text-success border border-success" style="font-size:.8rem;">
-                            <i class="bi bi-hash me-1"></i>Ruc
-                        </code>
                     </div>
-                    <ul class="mb-0 small text-muted">
+
+                    <div class="mb-1 small text-muted" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600;">Opcionales — cliente</div>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="col-badge col-badge-green"><i class="bi bi-building" style="font-size:.7rem;"></i> NombreRazonSocial</span>
+                        <span class="col-badge col-badge-green"><i class="bi bi-card-text" style="font-size:.7rem;"></i> Ruc</span>
+                    </div>
+
+                    <ul class="mb-0 small text-muted" style="padding-left:1.1rem;">
                         <li>Filas con mismo <strong>Doc + Serie + Número</strong> se agrupan en <strong>una sola venta</strong>.</li>
                         <li><strong>B</strong> = Boleta · <strong>F</strong> = Factura · <strong>P</strong> = Proforma.</li>
-                        <li><strong>NombreRazonSocial</strong> y <strong>Ruc</strong> se usan para crear o vincular el cliente automáticamente.</li>
-                        <li>Las demás columnas del archivo se ignoran.</li>
+                        <li><strong>NombreRazonSocial</strong> y <strong>Ruc</strong> crean o vinculan el cliente automáticamente.</li>
                     </ul>
                 </div>
             </div>
@@ -86,6 +90,25 @@
 </form>
 
 <style>
+.col-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-family: ui-monospace, 'SFMono-Regular', monospace;
+    font-size: .78rem;
+    font-weight: 500;
+    padding: .25rem .6rem;
+    border-radius: 6px;
+    background: #f1f3f5;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    line-height: 1.4;
+}
+.col-badge-green {
+    background: #f0fdf4;
+    color: #166534;
+    border-color: #bbf7d0;
+}
 .upload-zone {
     border: 2px dashed #ced4da;
     border-radius: 12px;
