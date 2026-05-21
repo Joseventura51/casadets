@@ -6,7 +6,6 @@
         <h3 class="mb-0">Caja</h3>
         <p class="text-muted mb-0">
             {{ $esRango ? 'Período: '.$desde.' al '.$hasta : 'Día: '.$desde }}
-            — solo ventas <span class="badge bg-success">pagadas</span>
         </p>
     </div>
     <form method="GET" class="d-flex gap-2 align-items-center flex-wrap">
@@ -25,6 +24,7 @@
     </form>
 </div>
 
+{{-- KPI Cards --}}
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card kpi-card">
@@ -33,6 +33,12 @@
             @if($totalAjustes != 0)
                 <small class="{{ $totalAjustes > 0 ? 'text-success' : 'text-danger' }}">
                     Ajustes: {{ $totalAjustes > 0 ? '+' : '' }}S/ {{ number_format($totalAjustes, 2) }}
+                </small>
+            @endif
+            @if($ventasPendientes->count())
+                <small class="text-warning d-block">
+                    <i class="bi bi-clock me-1"></i>{{ $ventasPendientes->count() }} pendiente(s)
+                    — S/ {{ number_format($ventasPendientes->sum('total'), 2) }}
                 </small>
             @endif
         </div>
@@ -59,6 +65,7 @@
     </div>
 </div>
 
+{{-- Resúmenes --}}
 <div class="row g-3 mb-4">
     <div class="col-md-6">
         <div class="card">
@@ -72,7 +79,7 @@
                             <td class="text-end fw-semibold">S/ {{ number_format($monto, 2) }}</td>
                         </tr>
                         @empty
-                        <tr><td colspan="2" class="text-center text-muted py-3">Sin ventas</td></tr>
+                        <tr><td colspan="2" class="text-center text-muted py-3">Sin ventas cobradas</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -91,7 +98,7 @@
                             <td class="text-end fw-semibold">S/ {{ number_format($monto, 2) }}</td>
                         </tr>
                         @empty
-                        <tr><td colspan="2" class="text-center text-muted py-3">Sin ventas</td></tr>
+                        <tr><td colspan="2" class="text-center text-muted py-3">Sin ventas cobradas</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -100,9 +107,16 @@
     </div>
 </div>
 
+{{-- Tabla de ventas --}}
 <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Ventas pagadas ({{ $ventas->count() }})</span>
+        <span>
+            Ventas del período
+            <span class="badge bg-primary ms-1">{{ $ventas->count() }}</span>
+            @if($ventasPendientes->count())
+                <span class="badge bg-warning text-dark ms-1">{{ $ventasPendientes->count() }} pendiente(s)</span>
+            @endif
+        </span>
         <a href="/casadets/ventas/create" class="btn btn-sm btn-primary">+ Nueva venta</a>
     </div>
     <div class="table-responsive">
@@ -113,13 +127,17 @@
                     <th>Doc.</th>
                     <th>Vendedor</th>
                     <th>Productos</th>
+                    <th>Estado</th>
                     <th>Pago</th>
                     <th class="text-end">Total</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($ventas as $v)
-                <tr>
+                @php
+                    $cobrada = $v->estado === 'pagado' || !empty($v->metodo_pago);
+                @endphp
+                <tr class="{{ !$cobrada ? 'table-warning' : '' }}">
                     <td class="text-muted small">{{ $v->fecha->format('d/m/Y') }}</td>
                     <td class="small text-muted">{{ $v->documento_numero ?? '—' }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
@@ -131,13 +149,28 @@
                         @endif
                     </td>
                     <td>
-                        @foreach(array_filter(explode(',', $v->metodo_pago ?? '')) as $m)
-                            <span class="badge bg-success" style="font-size:.7rem;">{{ ucfirst(trim($m)) }}</span>
-                        @endforeach
+                        @if($v->estado === 'pagado')
+                            <span class="badge bg-success">Pagado</span>
+                        @elseif($v->estado === 'anulado')
+                            <span class="badge bg-danger">Anulado</span>
+                        @else
+                            <span class="badge bg-warning text-dark">Pendiente</span>
+                        @endif
+                    </td>
+                    <td>
+                        @if(!empty($v->metodo_pago))
+                            @foreach(array_filter(array_map('trim', explode(',', $v->metodo_pago))) as $m)
+                                <span class="badge bg-success" style="font-size:.7rem;">{{ ucfirst($m) }}</span>
+                            @endforeach
+                        @else
+                            <a href="/casadets/ventas/{{ $v->id }}/pago" class="btn btn-xs btn-outline-warning py-0 px-1" style="font-size:.75rem;">
+                                <i class="bi bi-cash me-1"></i>Cobrar
+                            </a>
+                        @endif
                     </td>
                     <td class="text-end fw-semibold">
-                        S/ {{ number_format($v->total_cobrado, 2) }}
-                        @if($v->ajuste != 0)
+                        S/ {{ number_format($cobrada ? $v->total_cobrado : $v->total, 2) }}
+                        @if($cobrada && $v->ajuste != 0)
                             <br><small class="{{ $v->ajuste > 0 ? 'text-success' : 'text-danger' }}">
                                 ({{ $v->ajuste > 0 ? '+' : '' }}{{ number_format($v->ajuste, 2) }})
                             </small>
@@ -145,14 +178,14 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="6" class="text-center text-muted py-3">Sin ventas pagadas en este período</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-3">Sin ventas en este período</td></tr>
                 @endforelse
             </tbody>
-            @if($ventas->count())
+            @if($ventasCobradas->count())
             <tfoot class="table-light">
                 <tr>
-                    <th colspan="5" class="text-end">Total cobrado</th>
-                    <th class="text-end">S/ {{ number_format($totalVentas, 2) }}</th>
+                    <th colspan="6" class="text-end small text-muted">Total cobrado</th>
+                    <th class="text-end text-primary">S/ {{ number_format($totalVentas, 2) }}</th>
                 </tr>
             </tfoot>
             @endif
@@ -160,9 +193,10 @@
     </div>
 </div>
 
+{{-- Movimientos --}}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Movimientos ({{ $movimientos->count() }})</span>
+        <span>Movimientos <span class="badge bg-secondary ms-1">{{ $movimientos->count() }}</span></span>
         <div>
             <a href="/movimientos/create/ingreso" class="btn btn-sm btn-success">+ Ingreso</a>
             <a href="/movimientos/create/salida" class="btn btn-sm btn-danger">+ Salida</a>
