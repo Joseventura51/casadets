@@ -163,6 +163,24 @@ class VentaController extends Controller
         return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Venta actualizada.');
     }
 
+    /* ─── Pendientes de días anteriores ───────────────────── */
+
+    public function pendientes(Request $request)
+    {
+        $query = Venta::with(['vendedor', 'cliente', 'detalles'])
+            ->where('estado', 'pendiente')
+            ->whereDate('fecha', '<', today());
+
+        if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
+        if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
+        if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
+
+        $ventas    = $query->orderBy('fecha', 'asc')->get();
+        $vendedores = \App\Models\Vendedor::orderBy('nombre')->get();
+
+        return view('casadets.ventas.pendientes', compact('ventas', 'vendedores'));
+    }
+
     /* ─── Verificar pago ───────────────────────────────────── */
 
     public function pago(Venta $venta)

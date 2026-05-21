@@ -25,6 +25,15 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/casadets/pendientes" class="nav-link {{ request()->is('casadets/pendientes*') ? 'active' : '' }}">
+                        <i class="bi bi-clock-history me-2"></i>Pendientes
+                        @php $nPend = \App\Models\Venta::where('estado','pendiente')->whereDate('fecha','<',today())->count(); @endphp
+                        @if($nPend > 0)
+                            <span class="badge bg-danger ms-auto">{{ $nPend }}</span>
+                        @endif
+                    </a>
+                </li>
+                <li>
                     <a href="/casadets/compras" class="nav-link {{ request()->is('casadets/compras*') ? 'active' : '' }}">
                         <i class="bi bi-bag me-2"></i>Compras
                     </a>
