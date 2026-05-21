@@ -141,8 +141,14 @@ class VentaImportController extends Controller
             return back()->with('error', 'Todos los documentos del Excel ya existen en el sistema. No hay nada nuevo para importar.');
         }
 
-        // Guardar grupos en sesión para no reenviarlos como inputs
-        session(['import_grupos' => $gruposNuevos]);
+        // Guardar grupos en archivo temporal para evitar payloads de sesión grandes (MySQL max_allowed_packet)
+        $importId = uniqid('import_', true);
+        $rutaTemp = storage_path("app/imports/{$importId}.json");
+        if (!is_dir(storage_path('app/imports'))) {
+            mkdir(storage_path('app/imports'), 0755, true);
+        }
+        file_put_contents($rutaTemp, json_encode($gruposNuevos));
+        session(['import_id' => $importId]);
 
         // Construir info de columnas detectadas para mostrar en preview
         $nombresLegibles = [
@@ -190,13 +196,14 @@ class VentaImportController extends Controller
 
     public function confirm(Request $request)
     {
-        // Los datos fijos (fecha, doc, serie, numero, razon_social, ruc, detalles)
-        // vienen de la sesión para no exceder max_input_vars con formularios grandes.
-        $sessionGrupos = session('import_grupos', []);
-        if (empty($sessionGrupos)) {
+        // Los datos fijos vienen de un archivo temporal para evitar payloads de sesión grandes.
+        $importId   = session('import_id');
+        $rutaTemp   = $importId ? storage_path("app/imports/{$importId}.json") : null;
+        if (!$rutaTemp || !file_exists($rutaTemp)) {
             return redirect('/casadets/ventas/import')
-                ->with('error', 'La sesión expiró. Vuelve a subir el archivo.');
+                ->with('error', 'La sesión expiró o el archivo temporal fue eliminado. Vuelve a subir el archivo.');
         }
+        $sessionGrupos = json_decode(file_get_contents($rutaTemp), true) ?? [];
 
         $data = $request->validate([
             'ventas'                      => 'required|array|min:1',
@@ -304,7 +311,11 @@ class VentaImportController extends Controller
             }
         });
 
-        session()->forget('import_grupos');
+        // Limpiar archivo temporal e id de sesión
+        if ($rutaTemp && file_exists($rutaTemp)) {
+            unlink($rutaTemp);
+        }
+        session()->forget('import_id');
 
         return redirect('/casadets/ventas')->with('success',
             "Importación completada: $totalCreadas venta(s) con $totalDetalles producto(s)."
