@@ -175,18 +175,20 @@ class VentaController extends Controller
     {
         $data = $request->validate([
             'pagos'           => 'required|array|min:1',
-            'pagos.*.metodo'  => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
+            'pagos.*.metodo'  => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
             'pagos.*.monto'   => 'required|numeric|min:0',
         ]);
 
-        $metodosPago  = collect($data['pagos'])->pluck('metodo')->unique()->implode(',');
-        $totalCobrado = round(collect($data['pagos'])->sum(fn($p) => (float) $p['monto']), 2);
-        $ajuste       = round($totalCobrado - (float) $venta->total, 2);
+        $pagosReales  = collect($data['pagos'])->filter(fn($p) => $p['metodo'] !== 'ninguno');
+        $metodosPago  = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
+        $totalCobrado = round($pagosReales->sum(fn($p) => (float) $p['monto']), 2);
+        $ajuste       = $metodosPago ? round($totalCobrado - (float) $venta->total, 2) : 0;
+        $estado       = $metodosPago ? 'pagado' : 'pendiente';
 
         $venta->update([
             'metodo_pago' => $metodosPago,
             'ajuste'      => $ajuste,
-            'estado'      => 'pagado',
+            'estado'      => $estado,
         ]);
 
         if ($request->expectsJson()) {

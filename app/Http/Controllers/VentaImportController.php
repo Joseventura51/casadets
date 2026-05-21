@@ -139,7 +139,7 @@ class VentaImportController extends Controller
             'grupos'             => $gruposNuevos,
             'vendedores'         => $vendedores,
             'vendedor_id_default'=> $vendedores->first(fn($v) => stripos($v->nombre,'jovi') !== false)?->id ?? $vendedores->first()->id,
-            'metodo_pago_default'=> 'efectivo',
+            'metodo_pago_default'=> 'ninguno',
             'duplicadosExistentes' => [],
             'omitidos'           => $omitidos,
         ]);
@@ -161,7 +161,7 @@ class VentaImportController extends Controller
             'ventas.*.vendedor_id'        => 'required|exists:vendedores,id',
             'ventas.*.total_cobrado'      => 'required|numeric|min:0',
             'ventas.*.pagos'              => 'required|array|min:1',
-            'ventas.*.pagos.*.metodo'     => 'required|in:efectivo,tarjeta,yape,plin,transferencia',
+            'ventas.*.pagos.*.metodo'     => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
             'ventas.*.pagos.*.monto'      => 'required|numeric|min:0',
             'ventas.*.detalles_json'      => 'required|string',
         ]);
@@ -232,9 +232,11 @@ class VentaImportController extends Controller
                     $clienteId = $cliente->id;
                 }
 
-                $metodosPago  = collect($g['pagos'])->pluck('metodo')->unique()->values()->implode(',');
-                $totalCobrado = round(collect($g['pagos'])->sum(fn($p) => (float) $p['monto']), 2);
-                $ajuste       = round($totalCobrado - $totalReal, 2);
+                $pagosReales  = collect($g['pagos'])->filter(fn($p) => $p['metodo'] !== 'ninguno');
+                $metodosPago  = $pagosReales->pluck('metodo')->unique()->values()->implode(',') ?: null;
+                $totalCobrado = round($pagosReales->sum(fn($p) => (float) $p['monto']), 2);
+                $ajuste       = $metodosPago ? round($totalCobrado - $totalReal, 2) : 0;
+                $estado       = $metodosPago ? 'pagado' : 'pendiente';
 
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
@@ -242,6 +244,7 @@ class VentaImportController extends Controller
                     'total'            => $totalReal,
                     'ajuste'           => $ajuste,
                     'metodo_pago'      => $metodosPago,
+                    'estado'           => $estado,
                     'documento_tipo'   => $this->tiposDoc[$tipoLetra] ?? null,
                     'documento_numero' => $numero ?: null,
                     'observaciones'    => 'Importado desde Excel',

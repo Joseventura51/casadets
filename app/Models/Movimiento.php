@@ -15,4 +15,9 @@ class Movimiento extends Model
         'fecha',
         'observaciones',
     ];
+
+    protected $casts = [
+        'fecha' => 'date',
+        'monto' => 'float',
+    ];
 }

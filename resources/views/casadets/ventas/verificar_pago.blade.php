@@ -1,7 +1,10 @@
 @extends('layouts.app')
 
 @section('content')
-@php $metodos = ['efectivo','tarjeta','yape','plin','transferencia']; @endphp
+@php
+    $metodos = ['ninguno','efectivo','tarjeta','yape','plin','transferencia'];
+    $metodoLabels = ['ninguno'=>'Ninguno (dejar pendiente)','efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'];
+@endphp
 
 <style>
 .pago-row { background:#f8f9fa; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; display:flex; gap:.5rem; align-items:center; }
@@ -92,13 +95,15 @@
                             $montoBase = count($metodosActuales) > 0
                                 ? round($totalCobradoActual / count($metodosActuales), 2)
                                 : round($totalCobradoActual, 2);
-                            $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['efectivo'];
+                            $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['ninguno'];
                         @endphp
                         @foreach($primerosMetodos as $pi => $met)
                         <div class="pago-row">
                             <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1;">
                                 @foreach($metodos as $m)
-                                    <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>{{ ucfirst($m) }}</option>
+                                    <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
+                                        {{ $metodoLabels[$m] ?? ucfirst($m) }}
+                                    </option>
                                 @endforeach
                             </select>
                             <div class="input-group input-group-sm" style="width:130px;">
@@ -148,14 +153,20 @@
 </div>
 
 <script>
-const METODOS    = @json($metodos);
-const TOTAL_REAL = {{ (float) $venta->total }};
-const VENTA_ID   = {{ $venta->id }};
+const METODOS       = @json($metodos);
+const METODO_LABELS = @json($metodoLabels);
+const TOTAL_REAL    = {{ (float) $venta->total }};
+const VENTA_ID      = {{ $venta->id }};
 let pagoIdx = {{ count($primerosMetodos) }};
 
 function recalc() {
     let total = 0;
-    document.querySelectorAll('.monto-pago').forEach(i => total += parseFloat(i.value) || 0);
+    // Solo suma métodos distintos a "ninguno"
+    document.querySelectorAll('.monto-pago').forEach(i => {
+        const row = i.closest('.pago-row');
+        const metodo = row ? row.querySelector('select')?.value : '';
+        if (metodo !== 'ninguno') total += parseFloat(i.value) || 0;
+    });
     const d = total - TOTAL_REAL;
     document.getElementById('totalCobradoDisplay').textContent = 'S/ ' + total.toFixed(2);
     document.getElementById('totalResumen').textContent = 'S/ ' + total.toFixed(2);
@@ -181,12 +192,12 @@ function reindex() {
     pagoIdx = document.querySelectorAll('#pagosContainer .pago-row').length;
 }
 
-function crearFila(met = 'efectivo', monto = '') {
+function crearFila(met = 'ninguno', monto = '') {
     const div = document.createElement('div');
     div.className = 'pago-row';
     div.innerHTML = `
         <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1;">
-            ${METODOS.map(m=>`<option value="${m}" ${m===met?'selected':''}>${m.charAt(0).toUpperCase()+m.slice(1)}</option>`).join('')}
+            ${METODOS.map(m=>`<option value="${m}" ${m===met?'selected':''}>${METODO_LABELS[m]||m}</option>`).join('')}
         </select>
         <div class="input-group input-group-sm" style="width:130px;">
             <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
