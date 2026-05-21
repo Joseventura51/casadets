@@ -52,6 +52,12 @@ class VentaImportController extends Controller
         $headers = array_map(fn($h) => $this->normalizarTexto($h), $headersOriginales);
         $mapa = $this->mapearColumnas($headers);
 
+        \Log::info('IMPORT: headers originales del Excel', $headersOriginales);
+        \Log::info('IMPORT: mapa de columnas detectado', array_map(
+            fn($idx) => $idx !== null ? ($headersOriginales[$idx] ?? "idx=$idx") : 'NO DETECTADO',
+            $mapa
+        ));
+
         $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total', 'razon_social', 'ruc'];
         $faltantes = array_keys(array_filter(
             array_intersect_key($mapa, array_flip($camposObligatorios)),
