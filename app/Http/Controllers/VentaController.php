@@ -39,7 +39,7 @@ class VentaController extends Controller
 
     public function show(Venta $venta)
     {
-        $venta->load(['vendedor', 'cliente', 'detalles.compras.lineas']);
+        $venta->load(['vendedor', 'cliente', 'detalles.compras']);
         return view('casadets.ventas.show', compact('venta'));
     }
 
