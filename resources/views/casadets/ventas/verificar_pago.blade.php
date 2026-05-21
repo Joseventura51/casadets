@@ -140,11 +140,23 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-white d-flex justify-content-between align-items-center">
-                    <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary">Cancelar</a>
-                    <button id="btnGuardar" class="btn btn-success px-4">
-                        <i class="bi bi-check-lg me-1"></i> Guardar pago
-                    </button>
+                <div class="card-footer bg-white">
+                    <div class="d-flex justify-content-between align-items-center gap-3">
+                        <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary">Cancelar</a>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label mb-0 text-muted small text-nowrap">Estado al guardar:</label>
+                            <select name="estado_manual" id="estadoManual" class="form-select form-select-sm" style="width:auto;">
+                                <option value="" selected>Automático</option>
+                                <option value="pendiente">⏳ Pendiente</option>
+                                <option value="pagado">✔ Pagado</option>
+                                <option value="anulado">✕ Anulado</option>
+                            </select>
+                            <span id="estadoAutoLabel" class="badge bg-secondary small text-nowrap">se calculará al guardar</span>
+                        </div>
+                        <button id="btnGuardar" class="btn btn-success px-4">
+                            <i class="bi bi-check-lg me-1"></i> Guardar pago
+                        </button>
+                    </div>
                 </div>
             </div>
         </form>
@@ -161,7 +173,6 @@ let pagoIdx = {{ count($primerosMetodos) }};
 
 function recalc() {
     let total = 0;
-    // Solo suma métodos distintos a "ninguno"
     document.querySelectorAll('.monto-pago').forEach(i => {
         const row = i.closest('.pago-row');
         const metodo = row ? row.querySelector('select')?.value : '';
@@ -182,7 +193,35 @@ function recalc() {
         pill.className = 'diferencia-pill bg-danger text-white'; pill.textContent = 'Faltan S/ '+Math.abs(d).toFixed(2);
         dRes.className = 'fw-semibold text-danger'; dRes.textContent = '-S/ '+Math.abs(d).toFixed(2);
     }
+    updateAutoLabel(total);
 }
+
+function updateAutoLabel(totalCobrado) {
+    const sel = document.getElementById('estadoManual');
+    const lbl = document.getElementById('estadoAutoLabel');
+    if (sel.value !== '') { lbl.style.display = 'none'; return; }
+    lbl.style.display = '';
+    if (totalCobrado >= TOTAL_REAL - 0.005 && totalCobrado > 0) {
+        lbl.className = 'badge bg-success small text-nowrap';
+        lbl.textContent = '→ se marcará Pagado';
+    } else if (totalCobrado > 0) {
+        lbl.className = 'badge bg-warning text-dark small text-nowrap';
+        lbl.textContent = '→ quedará Pendiente (falta S/ ' + Math.abs(TOTAL_REAL - totalCobrado).toFixed(2) + ')';
+    } else {
+        lbl.className = 'badge bg-secondary small text-nowrap';
+        lbl.textContent = '→ quedará Pendiente';
+    }
+}
+
+document.getElementById('estadoManual').addEventListener('change', () => {
+    let total = 0;
+    document.querySelectorAll('.monto-pago').forEach(i => {
+        const row = i.closest('.pago-row');
+        const metodo = row ? row.querySelector('select')?.value : '';
+        if (metodo !== 'ninguno') total += parseFloat(i.value) || 0;
+    });
+    updateAutoLabel(total);
+});
 
 function reindex() {
     document.querySelectorAll('#pagosContainer .pago-row').forEach((row, i) => {
@@ -261,7 +300,8 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
             throw new Error(msgs);
         }
 
-        showToast('Pago guardado. Venta marcada como <strong>pagada</strong>.');
+        const estadoStr = data.estado === 'pagado' ? '<strong>Pagado</strong>' : (data.estado === 'anulado' ? '<strong>Anulado</strong>' : '<strong>Pendiente</strong>');
+        showToast('Pago guardado. Estado: ' + estadoStr);
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardado';
         btn.className = 'btn btn-outline-success px-4';
 

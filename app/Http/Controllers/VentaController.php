@@ -177,13 +177,25 @@ class VentaController extends Controller
             'pagos'           => 'required|array|min:1',
             'pagos.*.metodo'  => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
             'pagos.*.monto'   => 'required|numeric|min:0',
+            'estado_manual'   => 'nullable|in:pendiente,pagado,anulado',
         ]);
 
         $pagosReales  = collect($data['pagos'])->filter(fn($p) => $p['metodo'] !== 'ninguno');
         $metodosPago  = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
         $totalCobrado = round($pagosReales->sum(fn($p) => (float) $p['monto']), 2);
         $ajuste       = $metodosPago ? round($totalCobrado - (float) $venta->total, 2) : 0;
-        $estado       = $metodosPago ? 'pagado' : 'pendiente';
+
+        // Estado: si el usuario lo eligió manualmente lo respetamos;
+        // si no, se calcula automáticamente según si el monto cubre el total.
+        if (!empty($data['estado_manual'])) {
+            $estado = $data['estado_manual'];
+        } elseif (!$metodosPago) {
+            $estado = 'pendiente';
+        } elseif ($totalCobrado >= (float) $venta->total - 0.005) {
+            $estado = 'pagado';
+        } else {
+            $estado = 'pendiente';
+        }
 
         $venta->update([
             'metodo_pago' => $metodosPago,
@@ -192,7 +204,7 @@ class VentaController extends Controller
         ]);
 
         if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'venta_id' => $venta->id]);
+            return response()->json(['success' => true, 'venta_id' => $venta->id, 'estado' => $estado]);
         }
 
         return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Pago verificado correctamente.');
