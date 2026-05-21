@@ -46,10 +46,12 @@ class CompraController extends Controller
                 collect($data)->except('lineas')->toArray(),
                 ['monto_total' => $total]
             ));
-            foreach ($lineas as $l) {
-                $compra->lineas()->create($l);
+            $lineasCreadas = [];
+            foreach ($lineas as $idx => $l) {
+                $linea = $compra->lineas()->create($l);
+                $lineasCreadas[(int) $idx] = $linea->id;
             }
-            $compra->detalles()->sync($this->buildDetallesSync($request));
+            $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
         });
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
     }
@@ -87,10 +89,12 @@ class CompraController extends Controller
                 ['monto_total' => $total]
             ));
             $compra->lineas()->delete();
-            foreach ($lineas as $l) {
-                $compra->lineas()->create($l);
+            $lineasCreadas = [];
+            foreach ($lineas as $idx => $l) {
+                $linea = $compra->lineas()->create($l);
+                $lineasCreadas[(int) $idx] = $linea->id;
             }
-            $compra->detalles()->sync($this->buildDetallesSync($request));
+            $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
         });
         return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');
     }
@@ -123,13 +127,21 @@ class CompraController extends Controller
 
     /* ── Helpers ─────────────────────────────────────────────── */
 
-    private function buildDetallesSync(Request $request): array
+    private function buildDetallesSync(Request $request, array $lineasCreadas = []): array
     {
-        $ids       = $request->input('detalles', []);
-        $cantidades = $request->input('detalles_cantidad', []);
+        $ids           = $request->input('detalles', []);
+        $cantidades    = $request->input('detalles_cantidad', []);
+        $detallesLinea = $request->input('detalles_linea', []);
         $sync = [];
         foreach ($ids as $id) {
-            $sync[(int) $id] = ['cantidad' => (float) ($cantidades[$id] ?? 1)];
+            $lineaIdx = $detallesLinea[$id] ?? null;
+            $lineaId  = ($lineaIdx !== null && $lineaIdx !== '' && isset($lineasCreadas[(int) $lineaIdx]))
+                ? $lineasCreadas[(int) $lineaIdx]
+                : null;
+            $sync[(int) $id] = [
+                'cantidad'        => (float) ($cantidades[$id] ?? 1),
+                'compra_linea_id' => $lineaId,
+            ];
         }
         return $sync;
     }

@@ -1,13 +1,20 @@
 @php
-    $tipos = ['boleta','factura','guia','recibo','otro'];
-    $detallesYa    = $compra->detalles ?? collect();
+    $tipos         = ['boleta','factura','guia','recibo','otro'];
+    $detallesYa    = $compra->exists ? ($compra->detalles ?? collect()) : collect();
     $cantidadesYa  = $detallesYa->keyBy('id')->map(fn($d) => $d->pivot->cantidad ?? 1);
     $lineasYa      = $compra->exists ? ($compra->lineas ?? collect()) : collect();
-    $lineasJsonData = $lineasYa->map(fn($l) => [
+    $lineasJsonData = $lineasYa->values()->map(fn($l) => [
         'producto'       => $l->producto ?? '',
         'cantidad'       => (float) $l->cantidad,
         'monto_unitario' => (float) $l->monto_unitario,
         'monto_total'    => (float) $l->monto_total,
+    ]);
+    // Mapa linea_id → índice (para preseleccionar la linea en modo edición)
+    $lineasYaIndexMap    = $lineasYa->values()->mapWithKeys(fn($l, $idx) => [$l->id => $idx]);
+    $lineaSeleccionadaYa = $detallesYa->mapWithKeys(fn($d) => [
+        (string) $d->id => $lineasYaIndexMap->has($d->pivot->compra_linea_id ?? -1)
+            ? $lineasYaIndexMap->get($d->pivot->compra_linea_id)
+            : null,
     ]);
 @endphp
 @if($errors->any())
@@ -128,13 +135,28 @@ const lineasIniciales = @json($lineasJsonData);
 const lineasBody      = document.getElementById('lineasBody');
 const totalGeneralEl  = document.getElementById('totalGeneral');
 const montoTotalInput = document.getElementById('monto_total');
-let lineaIdx = 0;
+let lineaIdx     = 0;
+let lineasActuales = []; // {idx, producto, cantidad} — para poblar selects de vinculación
 
 function actualizarTotalGeneral() {
     let sum = 0;
     lineasBody.querySelectorAll('.linea-total').forEach(i => sum += parseFloat(i.value) || 0);
     totalGeneralEl.textContent = 'S/ ' + sum.toFixed(2);
     montoTotalInput.value = sum.toFixed(2);
+}
+
+function actualizarSelectsLinea() {
+    document.querySelectorAll('.select-linea').forEach(sel => {
+        const valActual = sel.value !== '' ? sel.value : (sel.dataset.initial ?? '');
+        sel.innerHTML = '<option value="">— Sin especificar —</option>'
+            + lineasActuales.map(l => {
+                const cant = parseFloat(l.cantidad || 0).toFixed(2).replace(/\.?0+$/, '');
+                return `<option value="${l.idx}">${escHtml(l.producto || '(sin nombre)')} × ${cant}</option>`;
+            }).join('');
+        if (valActual !== '' && [...sel.options].some(o => o.value === String(valActual))) {
+            sel.value = String(valActual);
+        }
+    });
 }
 
 function agregarLinea(prod = '', cant = 1, unit = 0, tot = null) {
@@ -144,7 +166,7 @@ function agregarLinea(prod = '', cant = 1, unit = 0, tot = null) {
     tr.innerHTML = `
         <td>
             <input type="text" name="lineas[${idx}][producto]" value="${escHtml(prod)}"
-                class="form-control form-control-sm" placeholder="Producto o descripción">
+                class="form-control form-control-sm linea-prod" placeholder="Producto o descripción">
         </td>
         <td>
             <input type="number" name="lineas[${idx}][cantidad]" value="${cant}"
@@ -163,19 +185,34 @@ function agregarLinea(prod = '', cant = 1, unit = 0, tot = null) {
                 <i class="bi bi-x"></i>
             </button>
         </td>`;
+    const prodI = tr.querySelector('.linea-prod');
     const cantI = tr.querySelector('.linea-cant');
     const unitI = tr.querySelector('.linea-unit');
     const totI  = tr.querySelector('.linea-total');
+
+    lineasActuales.push({ idx, producto: prod, cantidad: cant });
+    actualizarSelectsLinea();
+
     const recalc = () => {
         totI.value = ((parseFloat(cantI.value) || 0) * (parseFloat(unitI.value) || 0)).toFixed(2);
         actualizarTotalGeneral();
     };
-    cantI.addEventListener('input', recalc);
+    cantI.addEventListener('input', () => {
+        recalc();
+        const e = lineasActuales.find(l => l.idx === idx);
+        if (e) { e.cantidad = cantI.value; actualizarSelectsLinea(); }
+    });
     unitI.addEventListener('input', recalc);
     totI.addEventListener('input', actualizarTotalGeneral);
+    prodI.addEventListener('input', () => {
+        const e = lineasActuales.find(l => l.idx === idx);
+        if (e) { e.producto = prodI.value; actualizarSelectsLinea(); }
+    });
     tr.querySelector('.btn-q-linea').addEventListener('click', () => {
         tr.remove();
+        lineasActuales = lineasActuales.filter(l => l.idx !== idx);
         actualizarTotalGeneral();
+        actualizarSelectsLinea();
     });
     lineasBody.appendChild(tr);
     actualizarTotalGeneral();
@@ -190,13 +227,14 @@ if (lineasIniciales.length > 0) {
 }
 
 // ── Vinculación con ventas ─────────────────────────────────────
-const facturasCargadas = new Set();
-const container   = document.getElementById('facturasContainer');
-const sinSel      = document.getElementById('sinSeleccion');
+const facturasCargadas       = new Set();
+const container              = document.getElementById('facturasContainer');
+const sinSel                 = document.getElementById('sinSeleccion');
 const seleccionadosIniciales = @json(array_map('intval', $detallesSeleccionados ?? []));
 const cantidadesIniciales    = @json($cantidadesYa->toArray());
+const lineaSeleccionadaYa    = @json($lineaSeleccionadaYa);
 const facturasIniciales      = @json(
-    ($detallesYa->pluck('venta')->filter()->unique('id')->values()->map(fn($v)=>$v->id))->toArray()
+    ($detallesYa->pluck('venta')->filter()->unique('id')->values()->map(fn($v) => $v->id))->toArray()
 );
 
 @php
@@ -290,26 +328,34 @@ function renderFactura(data) {
         <div class="table-responsive">
             <table class="table table-sm mb-0 align-middle">
                 <thead class="table-light"><tr>
-                    <th style="width:40px;"></th>
-                    <th>Producto</th>
-                    <th class="text-end" style="width:80px;">Cant. venta</th>
-                    <th class="text-end" style="width:90px;">Precio</th>
-                    <th class="text-end" style="width:100px;">Cant. comprada *</th>
+                    <th style="width:36px;"></th>
+                    <th>Producto de la venta</th>
+                    <th class="text-end" style="width:75px;">Cant.</th>
+                    <th class="text-end" style="width:85px;">Precio</th>
+                    <th class="text-end" style="width:95px;">Cant. comprada</th>
+                    <th style="min-width:190px;">Línea de compra que lo cubre</th>
                 </tr></thead>
                 <tbody></tbody>
             </table>
         </div>
         <div class="card-footer bg-transparent border-0 py-1">
-            <small class="text-muted">* Cantidad de este producto que cubre esta compra (puede ser menor a la vendida).</small>
+            <small class="text-muted">
+                <strong>Cant. comprada</strong>: unidades de esta compra que cubren este producto.
+                <strong>Línea de compra</strong>: cuál producto de la compra corresponde.
+            </small>
         </div>`;
     const tbody = card.querySelector('tbody');
     data.detalles.forEach(d => {
-        const checked   = seleccionadosIniciales.includes(d.id) ? 'checked' : '';
-        const cantPivot = cantidadesIniciales[d.id] ?? 1;
+        const checked      = seleccionadosIniciales.includes(d.id) ? 'checked' : '';
+        const cantPivot    = cantidadesIniciales[d.id] ?? 1;
+        const lineaInicial = (lineaSeleccionadaYa[String(d.id)] !== null &&
+                              lineaSeleccionadaYa[String(d.id)] !== undefined)
+                           ? String(lineaSeleccionadaYa[String(d.id)]) : '';
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="text-center">
-                <input type="checkbox" name="detalles[]" value="${d.id}" class="form-check-input detalle-check" ${checked}>
+                <input type="checkbox" name="detalles[]" value="${d.id}"
+                    class="form-check-input detalle-check" ${checked}>
             </td>
             <td>${escHtml(d.producto)}</td>
             <td class="text-end text-muted small">${d.cantidad}</td>
@@ -319,14 +365,25 @@ function renderFactura(data) {
                     value="${checked ? cantPivot : 1}"
                     step="0.01" min="0.01" max="${d.cantidad}"
                     class="form-control form-control-sm text-end cantidad-comprada"
-                    style="width:80px;display:inline-block;"
+                    style="width:78px;display:inline-block;"
                     ${!checked ? 'disabled' : ''}>
+            </td>
+            <td>
+                <select name="detalles_linea[${d.id}]"
+                        class="form-select form-select-sm select-linea"
+                        data-initial="${lineaInicial}"
+                        ${!checked ? 'disabled' : ''}>
+                </select>
             </td>`;
         tbody.appendChild(tr);
-        const cb        = tr.querySelector('.detalle-check');
-        const cantInput = tr.querySelector('.cantidad-comprada');
+        actualizarSelectsLinea();
+
+        const cb          = tr.querySelector('.detalle-check');
+        const cantInput   = tr.querySelector('.cantidad-comprada');
+        const lineaSelect = tr.querySelector('.select-linea');
         cb.addEventListener('change', () => {
-            cantInput.disabled = !cb.checked;
+            cantInput.disabled   = !cb.checked;
+            lineaSelect.disabled = !cb.checked;
             if (!cb.checked) cantInput.value = 1;
             actualizarSinSel();
         });

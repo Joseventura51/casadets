@@ -153,8 +153,13 @@
         $empresas      = collect();
 
         foreach ($d->compras as $c) {
-            // Buscar la linea de compra que coincide con el producto
-            $linea = $c->lineas->first(fn($l) => strtolower(trim($l->producto)) === strtolower(trim($d->producto)));
+            $lineaId       = $c->pivot->compra_linea_id ?? null;
+            if ($lineaId) {
+                $linea = $c->lineas->firstWhere('id', $lineaId);
+            } else {
+                // Fallback para registros anteriores: coincidencia por nombre
+                $linea = $c->lineas->first(fn($l) => strtolower(trim($l->producto ?? '')) === strtolower(trim($d->producto)));
+            }
             $cantidadPivot = $c->pivot->cantidad ?? $d->cantidad;
             $costoUnit     = $linea ? $linea->monto_unitario : null;
             $costoFila     = $costoUnit !== null ? ($costoUnit * $cantidadPivot) : null;

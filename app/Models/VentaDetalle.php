@@ -32,7 +32,7 @@ class VentaDetalle extends Model
     public function compras(): BelongsToMany
     {
         return $this->belongsToMany(Compra::class, 'compra_venta_detalle', 'venta_detalle_id', 'compra_id')
-            ->withPivot('cantidad')
+            ->withPivot('cantidad', 'compra_linea_id')
             ->withTimestamps();
     }
 }
