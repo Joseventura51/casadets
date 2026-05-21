@@ -62,23 +62,6 @@
             <small class="text-muted">por cobrar</small>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card kpi-card">
-            <small class="text-muted">Más antigua</small>
-            <h4 class="mb-0">{{ $ventas->isNotEmpty() ? $ventas->first()->fecha->format('d/m/Y') : '—' }}</h4>
-            @if($ventas->isNotEmpty())
-                <small class="text-danger">hace {{ $ventas->first()->fecha->diffInDays(today()) }} días</small>
-            @endif
-        </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card kpi-card">
-            <small class="text-muted">Vendedor con más pendientes</small>
-            @php $topVendedor = $ventas->groupBy('vendedor_id')->sortByDesc(fn($g) => $g->count())->first(); @endphp
-            <h4 class="mb-0">{{ $topVendedor ? $topVendedor->first()->vendedor->nombre ?? '—' : '—' }}</h4>
-            @if($topVendedor)<small class="text-muted">{{ $topVendedor->count() }} venta(s)</small>@endif
-        </div>
-    </div>
 </div>
 
 {{-- Tabla --}}
