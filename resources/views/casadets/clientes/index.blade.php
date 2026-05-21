@@ -11,6 +11,22 @@
     </a>
 </div>
 
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-5">
+                <label class="form-label small mb-1">Buscar por nombre o documento</label>
+                <input type="text" name="buscar" value="{{ request('buscar') }}"
+                       class="form-control form-control-sm" placeholder="Nombre, DNI o RUC…">
+            </div>
+            <div class="col-auto d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary">Buscar</button>
+                <a href="/casadets/clientes" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+            </div>
+        </form>
+    </div>
+</div>
+
 @if(session('success'))
 <div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
 @endif
@@ -67,4 +83,10 @@
         </table>
     </div>
 </div>
+
+@if($clientes->hasPages())
+<div class="d-flex justify-content-center mt-3">
+    {{ $clientes->links() }}
+</div>
+@endif
 @endsection

@@ -12,11 +12,21 @@ class CompraController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Compra::with(['detalles.venta.vendedor', 'lineas'])->orderBy('fecha', 'desc')->orderBy('id', 'desc');
+        $query = Compra::with([
+                'lineas:id,compra_id,producto,cantidad,monto_total',
+                'detalles:id,venta_id',
+                'detalles.venta:id,documento_tipo,documento_numero',
+            ])
+            ->select('id', 'empresa', 'documento_tipo', 'documento_numero', 'fecha', 'monto_total', 'observaciones')
+            ->orderBy('fecha', 'desc')
+            ->orderBy('id', 'desc');
 
+        // Búsqueda de empresa: si es búsqueda exacta, el índice ayuda; LIKE '%x%' no lo usa
+        // pero se mantiene para compatibilidad con búsquedas parciales
         if ($request->filled('empresa')) {
             $query->where('empresa', 'like', '%' . $request->empresa . '%');
         }
+        // whereBetween aprovecha el índice en `fecha`
         if ($request->filled('desde')) {
             $query->whereDate('fecha', '>=', $request->desde);
         }
@@ -24,7 +34,8 @@ class CompraController extends Controller
             $query->whereDate('fecha', '<=', $request->hasta);
         }
 
-        $compras = $query->get();
+        $compras = $query->paginate(50)->withQueryString();
+
         return view('casadets.compras.index', compact('compras'));
     }
 
@@ -107,7 +118,7 @@ class CompraController extends Controller
 
     public function detallesVenta(Venta $venta)
     {
-        $venta->load(['detalles', 'vendedor']);
+        $venta->load(['detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal', 'vendedor:id,nombre']);
         return response()->json([
             'venta' => [
                 'id'        => $venta->id,
@@ -148,7 +159,8 @@ class CompraController extends Controller
 
     private function facturasDisponibles()
     {
-        return Venta::with(['vendedor', 'detalles'])
+        return Venta::with(['vendedor:id,nombre', 'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal'])
+            ->select('id', 'vendedor_id', 'fecha', 'documento_tipo', 'documento_numero', 'total')
             ->whereIn('documento_tipo', ['factura', 'boleta', 'proforma'])
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc')
@@ -159,16 +171,16 @@ class CompraController extends Controller
     private function validar(Request $request): array
     {
         return $request->validate([
-            'empresa'                    => 'required|string|max:255',
-            'documento_tipo'             => 'nullable|string|max:50',
-            'documento_numero'           => 'nullable|string|max:100',
-            'fecha'                      => 'required|date',
-            'observaciones'              => 'nullable|string',
-            'lineas'                     => 'required|array|min:1',
-            'lineas.*.producto'          => 'nullable|string|max:255',
-            'lineas.*.cantidad'          => 'required|numeric|min:0',
-            'lineas.*.monto_unitario'    => 'required|numeric|min:0',
-            'lineas.*.monto_total'       => 'required|numeric|min:0',
+            'empresa'                 => 'required|string|max:255',
+            'documento_tipo'          => 'nullable|string|max:50',
+            'documento_numero'        => 'nullable|string|max:100',
+            'fecha'                   => 'required|date',
+            'observaciones'           => 'nullable|string',
+            'lineas'                  => 'required|array|min:1',
+            'lineas.*.producto'       => 'nullable|string|max:255',
+            'lineas.*.cantidad'       => 'required|numeric|min:0',
+            'lineas.*.monto_unitario' => 'required|numeric|min:0',
+            'lineas.*.monto_total'    => 'required|numeric|min:0',
         ]);
     }
 }

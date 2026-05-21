@@ -112,8 +112,8 @@
             @if($compras->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="4" class="text-end">Total comprado</th>
-                    <th class="text-end">S/ {{ number_format($compras->sum('monto_total'), 2) }}</th>
+                    <th colspan="4" class="text-end">Total (esta página)</th>
+                    <th class="text-end">S/ {{ number_format($compras->getCollection()->sum('monto_total'), 2) }}</th>
                     <th colspan="2"></th>
                 </tr>
             </tfoot>
@@ -121,4 +121,10 @@
         </table>
     </div>
 </div>
+
+@if($compras->hasPages())
+<div class="d-flex justify-content-center mt-3">
+    {{ $compras->links() }}
+</div>
+@endif
 @endsection

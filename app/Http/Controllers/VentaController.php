@@ -19,9 +19,17 @@ class VentaController extends Controller
 
     public function index()
     {
-        $ventas = Venta::with(['vendedor', 'cliente', 'detalles'])
-            ->orderByRaw("CASE WHEN documento_tipo='factura' THEN 0
-                               WHEN documento_tipo='boleta'  THEN 1
+        // Eager loading con columnas explícitas para evitar SELECT * en relaciones
+        $ventas = Venta::with([
+                'vendedor:id,nombre',
+                'cliente:id,nombre,documento',
+                'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
+            ])
+            ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
+                     'total', 'ajuste', 'metodo_pago',
+                     'documento_tipo', 'documento_numero', 'observaciones')
+            ->orderByRaw("CASE WHEN documento_tipo='factura'  THEN 0
+                               WHEN documento_tipo='boleta'   THEN 1
                                WHEN documento_tipo='proforma' THEN 2
                                ELSE 3 END")
             ->orderByRaw('LENGTH(COALESCE(documento_numero,""))')
@@ -30,7 +38,10 @@ class VentaController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
-        $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
+        $vendedores = Vendedor::select('id', 'nombre')
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get();
 
         return view('casadets.ventas.index', compact('ventas', 'vendedores'));
     }
@@ -176,7 +187,7 @@ class VentaController extends Controller
         if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
 
         $ventas    = $query->orderBy('fecha', 'asc')->get();
-        $vendedores = \App\Models\Vendedor::orderBy('nombre')->get();
+        $vendedores = \App\Models\Vendedor::select('id', 'nombre')->orderBy('nombre')->get();
 
         return view('casadets.ventas.pendientes', compact('ventas', 'vendedores'));
     }

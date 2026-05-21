@@ -7,9 +7,21 @@ use Illuminate\Http\Request;
 
 class ClienteController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $clientes = Cliente::withCount('ventas')->orderBy('nombre')->get();
+        $query = Cliente::withCount('ventas')
+            ->orderBy('nombre');
+
+        if ($request->filled('buscar')) {
+            $term = '%' . $request->buscar . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('nombre', 'like', $term)
+                  ->orWhere('documento', 'like', $term);
+            });
+        }
+
+        $clientes = $query->paginate(50)->withQueryString();
+
         return view('casadets.clientes.index', compact('clientes'));
     }
 
