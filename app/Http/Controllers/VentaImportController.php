@@ -397,13 +397,27 @@ class VentaImportController extends Controller
             'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code', 'clave', 'referencia', 'ref', 'item', 'part', 'codbarr', 'codbien', 'codprod', 'id_producto', 'idproducto', 'numero_parte', 'nroparte'],
         ];
 
+        // Palabras que deben excluirse en ciertos campos para evitar falsos positivos
+        $excluir = [
+            'codigo' => ['sunat', 'aduanero', 'arancelario', 'catalogo'],
+        ];
+
         $mapa = [];
         foreach ($alias as $campo => $posibles) {
             $mapa[$campo] = null;
+            $palabrasExcluidas = $excluir[$campo] ?? [];
+
             foreach ($headers as $idx => $h) {
                 $hNorm = $this->normalizarTexto($h);
+
+                // Saltar si el header contiene palabras excluidas para este campo
+                $excluido = false;
+                foreach ($palabrasExcluidas as $ex) {
+                    if (str_contains($hNorm, $ex)) { $excluido = true; break; }
+                }
+                if ($excluido) continue;
+
                 foreach ($posibles as $p) {
-                    // Coincidencia exacta o por prefijo
                     if ($hNorm === $p || str_starts_with($hNorm, $p)) {
                         $mapa[$campo] = $idx;
                         break 2;
