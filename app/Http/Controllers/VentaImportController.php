@@ -31,8 +31,10 @@ class VentaImportController extends Controller
 
     public function preview(Request $request)
     {
+        ini_set('memory_limit', '256M');
+
         $request->validate([
-            'archivo' => 'required|file|mimes:xlsx,xls,csv|max:10240',      
+            'archivo' => 'required|file|mimes:xlsx,xls,csv|max:20480',
         ]);
 
         try {
@@ -135,10 +137,18 @@ class VentaImportController extends Controller
 
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
+        if ($vendedores->isEmpty()) {
+            return redirect('/casadets/vendedores/create')
+                ->with('error', 'No hay vendedores activos. Registra uno antes de importar.');
+        }
+
+        $vendedorDefault = $vendedores->first(fn($v) => stripos($v->nombre, 'jovi') !== false)
+            ?? $vendedores->first();
+
         return view('casadets.ventas.import_preview', [
             'grupos'             => $gruposNuevos,
             'vendedores'         => $vendedores,
-            'vendedor_id_default'=> $vendedores->first(fn($v) => stripos($v->nombre,'jovi') !== false)?->id ?? $vendedores->first()->id,
+            'vendedor_id_default'=> $vendedorDefault->id,
             'metodo_pago_default'=> 'ninguno',
             'duplicadosExistentes' => [],
             'omitidos'           => $omitidos,
@@ -212,7 +222,8 @@ class VentaImportController extends Controller
                 $totalReal  = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
                 $tipoLetra  = strtoupper(trim($g['doc'] ?? ''));
                 if ($tipoLetra === 'PROFORMA') $tipoLetra = 'P';
-                $numero = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+                // Número de documento: solo serie-número (ej: "B001-00001234")
+                $numero = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
                 // Buscar o crear cliente
                 $clienteId   = null;
@@ -280,7 +291,7 @@ class VentaImportController extends Controller
         foreach ($grupos as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
             $tipo = $tipoMap[$docLetra] ?? null;
-            $num  = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $num  = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             if ($tipo && $num !== '') {
                 $buscar[$tipo][] = $num;
             }
@@ -303,7 +314,7 @@ class VentaImportController extends Controller
         foreach ($grupos as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
             $tipo = $tipoMap[$docLetra] ?? null;
-            $num  = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $num  = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
             if ($tipo && $num !== '' && isset($existentes[$tipo . '|' . $num])) {
                 $omitidos[] = $num ?: '(sin número)';
@@ -322,7 +333,7 @@ class VentaImportController extends Controller
 
         foreach ($ventas as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
-            $num = trim(($g['doc'] ?? '') . ($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $num = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             if ($num === '') continue;
 
             $key = $docLetra . '|' . $num;
