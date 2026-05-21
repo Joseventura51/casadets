@@ -61,18 +61,20 @@
                         @foreach(['fecha_emisi','Doc','Serie','NroDocumen','Producto','Precio','Cantidad','Total'] as $col)
                             <span class="col-badge">{{ $col }}</span>
                         @endforeach
+                        <span class="col-badge col-badge-orange"><i class="bi bi-building" style="font-size:.7rem;"></i> NombreRazonSocial</span>
+                        <span class="col-badge col-badge-orange"><i class="bi bi-card-text" style="font-size:.7rem;"></i> Ruc</span>
                     </div>
 
-                    <div class="mb-1 small text-muted" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600;">Opcionales — cliente</div>
+                    <div class="mb-1 small text-muted" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600;">Opcional — producto</div>
                     <div class="d-flex flex-wrap gap-2 mb-3">
-                        <span class="col-badge col-badge-green"><i class="bi bi-building" style="font-size:.7rem;"></i> NombreRazonSocial</span>
-                        <span class="col-badge col-badge-green"><i class="bi bi-card-text" style="font-size:.7rem;"></i> Ruc</span>
+                        <span class="col-badge col-badge-green"><i class="bi bi-upc" style="font-size:.7rem;"></i> Codigo</span>
                     </div>
 
                     <ul class="mb-0 small text-muted" style="padding-left:1.1rem;">
                         <li>Filas con mismo <strong>Doc + Serie + Número</strong> se agrupan en <strong>una sola venta</strong>.</li>
                         <li><strong>B</strong> = Boleta · <strong>F</strong> = Factura · <strong>P</strong> = Proforma.</li>
                         <li><strong>NombreRazonSocial</strong> y <strong>Ruc</strong> crean o vinculan el cliente automáticamente.</li>
+                        <li><strong>Codigo</strong> se importa por producto y se puede editar en la vista previa.</li>
                     </ul>
                 </div>
             </div>
@@ -108,6 +110,11 @@
     background: #f0fdf4;
     color: #166534;
     border-color: #bbf7d0;
+}
+.col-badge-orange {
+    background: #fff7ed;
+    color: #9a3412;
+    border-color: #fed7aa;
 }
 .upload-zone {
     border: 2px dashed #ced4da;

@@ -51,7 +51,7 @@ class VentaImportController extends Controller
         $headers = array_map(fn($h) => $this->normalizarTexto((string) $h), $rows[0]);
         $mapa = $this->mapearColumnas($headers);
 
-        $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total'];
+        $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total', 'razon_social', 'ruc'];
         $faltantes = array_keys(array_filter(
             array_intersect_key($mapa, array_flip($camposObligatorios)),
             fn($v) => $v === null
@@ -98,12 +98,14 @@ class VentaImportController extends Controller
             $cantidad = $this->parseNumero($r[$mapa['cantidad']] ?? 0);
             $precio = $this->parseNumero($r[$mapa['precio']] ?? 0);
             $total = $this->parseNumero($r[$mapa['total']] ?? ($cantidad * $precio));
+            $codigo = trim((string) ($mapa['codigo'] !== null ? ($r[$mapa['codigo']] ?? '') : ''));
 
             $grupos[$key]['detalles'][] = [
-                'producto' => $producto,
-                'cantidad' => $cantidad,
+                'producto'        => $producto,
+                'codigo'          => $codigo,
+                'cantidad'        => $cantidad,
                 'precio_unitario' => $precio,
-                'subtotal' => $total,
+                'subtotal'        => $total,
             ];
             $grupos[$key]['total'] += $total;
         }
@@ -213,6 +215,7 @@ class VentaImportController extends Controller
                     $sub = round((float) $d['cantidad'] * (float) $d['precio_unitario'], 2);
                     return [
                         'producto'        => $d['producto'],
+                        'codigo'          => $d['codigo'] ?? null,
                         'cantidad'        => $d['cantidad'],
                         'precio_unitario' => $d['precio_unitario'],
                         'subtotal'        => $sub,
@@ -360,6 +363,7 @@ class VentaImportController extends Controller
             'total'        => ['total', 'subtotal', 'importe'],
             'razon_social' => ['nombrerazonsocial', 'razon_social', 'razon social', 'denominacion', 'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
             'ruc'          => ['ruc', 'ruc_cliente', 'nro_ruc', 'nroruc', 'documento'],
+            'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code', 'clave'],
         ];
 
         $mapa = [];

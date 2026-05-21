@@ -102,10 +102,51 @@
 
             <div class="card-body py-3">
                 <input type="hidden" name="ventas[{{ $i }}][session_idx]" value="{{ $i }}">
-                {{-- vendedor oculto con valor por defecto --}}
                 <input type="hidden" name="ventas[{{ $i }}][vendedor_id]" value="{{ $vendedor_id_default }}">
-                {{-- detalles en JSON (fijo desde sesión, no editable) --}}
-                <input type="hidden" name="ventas[{{ $i }}][detalles_json]" value="{{ json_encode($g['detalles']) }}">
+                {{-- detalles_json se actualiza por JS antes del submit --}}
+                <input type="hidden" name="ventas[{{ $i }}][detalles_json]"
+                       class="detalles-json-input"
+                       value="{{ json_encode($g['detalles']) }}">
+
+                {{-- Tabla de productos con código editable --}}
+                <div class="mb-3">
+                    <details open>
+                        <summary class="small fw-semibold text-secondary mb-2" style="cursor:pointer;list-style:none;">
+                            <i class="bi bi-box-seam me-1"></i>Productos
+                            <span class="badge bg-light text-secondary border ms-1" style="font-size:.72rem;">{{ count($g['detalles']) }}</span>
+                        </summary>
+                        <div class="table-responsive mt-2">
+                            <table class="table table-sm table-bordered mb-0 detalles-table" style="font-size:.82rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Producto</th>
+                                        <th style="width:120px;">Código</th>
+                                        <th class="text-end" style="width:70px;">Cant.</th>
+                                        <th class="text-end" style="width:80px;">P.Unit</th>
+                                        <th class="text-end" style="width:85px;">Subtotal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($g['detalles'] as $di => $d)
+                                    <tr>
+                                        <td class="det-producto">{{ $d['producto'] }}</td>
+                                        <td>
+                                            <input type="text"
+                                                class="form-control form-control-sm det-codigo"
+                                                value="{{ $d['codigo'] ?? '' }}"
+                                                placeholder="—"
+                                                maxlength="100">
+                                        </td>
+                                        <td class="text-end text-muted det-cantidad">{{ $d['cantidad'] }}</td>
+                                        <td class="text-end text-muted det-precio">{{ $d['precio_unitario'] }}</td>
+                                        <td class="text-end fw-semibold det-subtotal">{{ number_format($d['subtotal'], 2) }}</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                </div>
 
                 <div class="row g-3 align-items-end">
                     {{-- MÉTODOS DE PAGO --}}
@@ -181,6 +222,24 @@
 <script>
 const METODOS       = @json($metodos);
 const METODO_LABELS = @json($metodoLabels);
+
+// Serializa la tabla de productos (con codigos editados) al hidden detalles_json
+function serializarDetalles(card) {
+    const jsonInput = card.querySelector('.detalles-json-input');
+    const base = JSON.parse(jsonInput.value);
+    const rows = card.querySelectorAll('.detalles-table tbody tr');
+    rows.forEach((tr, idx) => {
+        const codigoInput = tr.querySelector('.det-codigo');
+        if (codigoInput && base[idx] !== undefined) {
+            base[idx].codigo = codigoInput.value.trim();
+        }
+    });
+    jsonInput.value = JSON.stringify(base);
+}
+
+document.getElementById('formImport').addEventListener('submit', function() {
+    document.querySelectorAll('.venta-card').forEach(card => serializarDetalles(card));
+});
 
 function opcionesSelect(ventaIdx, pagoIdx, metodoSel) {
     return METODOS.map(m =>
