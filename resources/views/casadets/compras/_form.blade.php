@@ -95,6 +95,23 @@
             Busca por número de documento, vendedor o nombre de producto. Marca los ítems que correspondan a esta compra.
         </p>
 
+        {{-- Filtro por rango de fecha --}}
+        <div class="row g-2 mb-3 align-items-end">
+            <div class="col-auto">
+                <label class="form-label small mb-1">Fecha desde</label>
+                <input type="date" id="ventaFechaDesde" class="form-control form-control-sm" style="width:155px;">
+            </div>
+            <div class="col-auto">
+                <label class="form-label small mb-1">Fecha hasta</label>
+                <input type="date" id="ventaFechaHasta" class="form-control form-control-sm" style="width:155px;">
+            </div>
+            <div class="col-auto">
+                <button type="button" id="btnLimpiarFechas" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-x-circle me-1"></i>Limpiar
+                </button>
+            </div>
+        </div>
+
         <div class="mb-3">
             <label class="form-label small mb-1">Buscar por documento, vendedor o producto</label>
             <div class="position-relative">
@@ -251,15 +268,23 @@ $ventasJson = $facturas->map(fn($f) => [
 @endphp
 const todasLasVentas = @json($ventasJson);
 
-const buscador = document.getElementById('ventaBuscador');
-const dropdown = document.getElementById('ventaDropdown');
+const buscador     = document.getElementById('ventaBuscador');
+const dropdown     = document.getElementById('ventaDropdown');
+const fechaDesde   = document.getElementById('ventaFechaDesde');
+const fechaHasta   = document.getElementById('ventaFechaHasta');
+const btnLimpiar   = document.getElementById('btnLimpiarFechas');
 
 function filtrarVentas() {
     const texto = buscador.value.toLowerCase().trim();
-    return todasLasVentas.filter(v =>
-        (!texto || (v.tipo + ' ' + v.numero + ' ' + v.vendedor + ' ' + v.productos).toLowerCase().includes(texto)) &&
-        !facturasCargadas.has(v.id)
-    );
+    const desde = fechaDesde.value;   // 'YYYY-MM-DD' o ''
+    const hasta = fechaHasta.value;   // 'YYYY-MM-DD' o ''
+    return todasLasVentas.filter(v => {
+        if (facturasCargadas.has(v.id)) return false;
+        if (texto && !(v.tipo + ' ' + v.numero + ' ' + v.vendedor + ' ' + v.productos).toLowerCase().includes(texto)) return false;
+        if (desde && v.fecha < desde) return false;
+        if (hasta && v.fecha > hasta) return false;
+        return true;
+    });
 }
 
 function mostrarDropdown() {
@@ -294,6 +319,14 @@ function mostrarDropdown() {
 buscador.addEventListener('focus', mostrarDropdown);
 buscador.addEventListener('input', mostrarDropdown);
 buscador.addEventListener('blur',  () => setTimeout(() => { dropdown.style.display = 'none'; buscador.value = ''; }, 200));
+
+fechaDesde.addEventListener('change', () => { if (dropdown.style.display !== 'none') mostrarDropdown(); });
+fechaHasta.addEventListener('change', () => { if (dropdown.style.display !== 'none') mostrarDropdown(); });
+btnLimpiar.addEventListener('click', () => {
+    fechaDesde.value = '';
+    fechaHasta.value = '';
+    if (dropdown.style.display !== 'none') mostrarDropdown();
+});
 
 function actualizarSinSel() {
     sinSel.style.display = container.querySelectorAll('input.detalle-check:checked').length ? 'none' : '';
