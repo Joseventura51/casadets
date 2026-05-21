@@ -347,7 +347,7 @@ function renderFactura(data) {
     const tbody = card.querySelector('tbody');
     data.detalles.forEach(d => {
         const checked      = seleccionadosIniciales.includes(d.id) ? 'checked' : '';
-        const cantPivot    = cantidadesIniciales[d.id] ?? 1;
+        const cantPivot    = cantidadesIniciales[d.id] ?? d.cantidad;
         const lineaInicial = (lineaSeleccionadaYa[String(d.id)] !== null &&
                               lineaSeleccionadaYa[String(d.id)] !== undefined)
                            ? String(lineaSeleccionadaYa[String(d.id)]) : '';
@@ -384,7 +384,8 @@ function renderFactura(data) {
         cb.addEventListener('change', () => {
             cantInput.disabled   = !cb.checked;
             lineaSelect.disabled = !cb.checked;
-            if (!cb.checked) cantInput.value = 1;
+            if (cb.checked)  cantInput.value = cantidadesIniciales[d.id] ?? d.cantidad;
+            if (!cb.checked) cantInput.value = d.cantidad;
             actualizarSinSel();
         });
     });
