@@ -8,6 +8,11 @@ if [ ! -f .env ]; then
     cp .env.example .env
 fi
 
+# Usar la URL pública de Render si está disponible
+if [ -n "$RENDER_EXTERNAL_URL" ]; then
+    sed -i "s|APP_URL=.*|APP_URL=${RENDER_EXTERNAL_URL}|" .env
+fi
+
 # Generar APP_KEY solo si no está definida
 if [ -z "$APP_KEY" ]; then
     php artisan key:generate --force --no-interaction
