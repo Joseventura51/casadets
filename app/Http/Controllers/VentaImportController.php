@@ -244,10 +244,10 @@ class VentaImportController extends Controller
                 }
 
                 $pagosReales  = collect($g['pagos'])->filter(fn($p) => $p['metodo'] !== 'ninguno');
-                $metodosPago  = $pagosReales->pluck('metodo')->unique()->values()->implode(',') ?: null;
+                $metodosPago  = $pagosReales->pluck('metodo')->unique()->values()->implode(',') ?: '';
                 $totalCobrado = round($pagosReales->sum(fn($p) => (float) $p['monto']), 2);
-                $ajuste       = $metodosPago ? round($totalCobrado - $totalReal, 2) : 0;
-                $estado       = $metodosPago ? 'pagado' : 'pendiente';
+                $ajuste       = $metodosPago !== '' ? round($totalCobrado - $totalReal, 2) : 0;
+                $estado       = $metodosPago !== '' ? 'pagado' : 'pendiente';
 
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
