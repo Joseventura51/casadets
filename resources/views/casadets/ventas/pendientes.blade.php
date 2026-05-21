@@ -48,14 +48,14 @@
 
 {{-- KPIs --}}
 <div class="row g-3 mb-3">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-6">
         <div class="card kpi-card">
             <small class="text-muted">Total pendientes</small>
             <h4 class="mb-0 text-danger fw-bold">{{ $ventas->count() }}</h4>
             <small class="text-muted">ventas sin cobrar</small>
         </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-6">
         <div class="card kpi-card">
             <small class="text-muted">Monto total</small>
             <h4 class="mb-0 text-danger fw-bold">S/ {{ number_format($ventas->sum('total'), 2) }}</h4>
