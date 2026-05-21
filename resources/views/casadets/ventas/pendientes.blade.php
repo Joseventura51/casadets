@@ -7,6 +7,8 @@
 .select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
 .select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
+.fila-amarillo { background: #fff9e6 !important; }
+.fila-rojo     { background: #fff0f0 !important; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -72,13 +74,9 @@
     <div class="col-6 col-md-3">
         <div class="card kpi-card">
             <small class="text-muted">Vendedor con más pendientes</small>
-            @php
-                $topVendedor = $ventas->groupBy('vendedor_id')->sortByDesc(fn($g) => $g->count())->first();
-            @endphp
+            @php $topVendedor = $ventas->groupBy('vendedor_id')->sortByDesc(fn($g) => $g->count())->first(); @endphp
             <h4 class="mb-0">{{ $topVendedor ? $topVendedor->first()->vendedor->nombre ?? '—' : '—' }}</h4>
-            @if($topVendedor)
-                <small class="text-muted">{{ $topVendedor->count() }} venta(s)</small>
-            @endif
+            @if($topVendedor)<small class="text-muted">{{ $topVendedor->count() }} venta(s)</small>@endif
         </div>
     </div>
 </div>
@@ -89,34 +87,59 @@
         <table class="table mb-0 align-middle">
             <thead class="table-light">
                 <tr>
-                    <th>Días vencida</th>
-                    <th>Fecha</th>
+                    <th>Estado</th>
+                    <th>Días</th>
+                    <th>Fecha venta</th>
+                    <th>Vencimiento</th>
                     <th>Vendedor</th>
                     <th>Cliente</th>
                     <th>Productos</th>
                     <th>Documento</th>
                     <th class="text-end">Total</th>
-                    <th>Estado</th>
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($ventas as $v)
                 @php
-                    $dias = $v->fecha->diffInDays(today());
-                    $diasColor = $dias >= 30 ? 'danger' : ($dias >= 7 ? 'warning' : 'secondary');
+                    $dias       = $v->fecha->diffInDays(today());
+                    $vencimiento = $v->fecha->copy()->addDays(30);
+                    $filaClass  = $dias >= 20 ? 'fila-rojo' : ($dias >= 10 ? 'fila-amarillo' : '');
+                    $diasColor  = $dias >= 20 ? 'danger'    : ($dias >= 10 ? 'warning'        : 'secondary');
+                    $diasText   = $diasColor  === 'warning'  ? 'text-dark' : 'text-white';
                 @endphp
-                <tr>
+                <tr class="{{ $filaClass }}">
                     <td>
-                        <span class="dias-badge bg-{{ $diasColor }} {{ $diasColor === 'warning' ? 'text-dark' : 'text-white' }}">
-                            {{ $dias }} día{{ $dias != 1 ? 's' : '' }}
-                        </span>
+                        <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
+                            @csrf
+                            <select name="estado" class="select-estado est-{{ $v->estado ?? 'pendiente' }}"
+                                onchange="this.form.submit()">
+                                <option value="pendiente" selected>⏳ Pendiente</option>
+                                <option value="pagado">✔ Pagado</option>
+                                <option value="anulado">✕ Anulado</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        @if($dias >= 10)
+                            <span class="dias-badge bg-{{ $diasColor }} {{ $diasText }}">{{ $dias }}d</span>
+                        @else
+                            <span class="text-muted small">{{ $dias }}d</span>
+                        @endif
                     </td>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
+                    <td>
+                        <span class="{{ $vencimiento->isPast() ? 'text-danger fw-semibold' : 'text-muted' }}">
+                            {{ $vencimiento->format('d/m/Y') }}
+                            @if($vencimiento->isPast())
+                                <i class="bi bi-exclamation-circle ms-1" title="Vencida"></i>
+                            @endif
+                        </span>
+                    </td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
                     <td>
                         @if($v->cliente)
-                            <span>{{ $v->cliente->nombre }}</span>
+                            <span class="fw-semibold">{{ $v->cliente->nombre }}</span>
                             @if($v->cliente->documento)<br><small class="text-muted">{{ $v->cliente->documento }}</small>@endif
                         @else
                             <span class="text-muted">—</span>
@@ -131,17 +154,6 @@
                     </td>
                     <td>{{ $v->documento_tipo ? ucfirst($v->documento_tipo).' '.$v->documento_numero : '—' }}</td>
                     <td class="text-end fw-semibold">S/ {{ number_format($v->total, 2) }}</td>
-                    <td>
-                        <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
-                            @csrf
-                            <select name="estado" class="select-estado est-{{ $v->estado ?? 'pendiente' }}"
-                                onchange="this.form.submit()" title="Cambiar estado">
-                                <option value="pendiente" {{ ($v->estado ?? 'pendiente') === 'pendiente' ? 'selected' : '' }}>⏳ Pendiente</option>
-                                <option value="pagado"    {{ ($v->estado ?? '') === 'pagado'   ? 'selected' : '' }}>✔ Pagado</option>
-                                <option value="anulado"   {{ ($v->estado ?? '') === 'anulado'  ? 'selected' : '' }}>✕ Anulado</option>
-                            </select>
-                        </form>
-                    </td>
                     <td class="text-end">
                         <div class="d-flex gap-1 justify-content-end">
                             <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-outline-secondary btn-sm">Ver</a>
@@ -153,7 +165,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">
+                    <td colspan="10" class="text-center text-muted py-4">
                         <i class="bi bi-check-circle text-success fs-3 d-block mb-2"></i>
                         No hay ventas pendientes de días anteriores.
                     </td>
@@ -163,9 +175,9 @@
             @if($ventas->count())
             <tfoot class="table-light">
                 <tr>
-                    <th colspan="6" class="text-end">Total por cobrar</th>
+                    <th colspan="8" class="text-end">Total por cobrar</th>
                     <th class="text-end text-danger">S/ {{ number_format($ventas->sum('total'), 2) }}</th>
-                    <th colspan="2"></th>
+                    <th></th>
                 </tr>
             </tfoot>
             @endif
@@ -174,7 +186,6 @@
 </div>
 
 <script>
-// Actualizar color del select al cambiar
 document.querySelectorAll('.select-estado').forEach(sel => {
     sel.addEventListener('change', function() {
         this.className = 'select-estado est-' + this.value;
