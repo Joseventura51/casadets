@@ -48,7 +48,8 @@ class VentaImportController extends Controller
             return back()->with('error', 'El archivo está vacío o no tiene datos.');
         }
 
-        $headers = array_map(fn($h) => $this->normalizarTexto((string) $h), $rows[0]);
+        $headersOriginales = array_map(fn($h) => trim((string) $h), $rows[0]);
+        $headers = array_map(fn($h) => $this->normalizarTexto($h), $headersOriginales);
         $mapa = $this->mapearColumnas($headers);
 
         $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total', 'razon_social', 'ruc'];
@@ -137,6 +138,29 @@ class VentaImportController extends Controller
         // Guardar grupos en sesión para no reenviarlos como inputs
         session(['import_grupos' => $gruposNuevos]);
 
+        // Construir info de columnas detectadas para mostrar en preview
+        $nombresLegibles = [
+            'fecha'        => 'Fecha',
+            'doc'          => 'Tipo doc.',
+            'serie'        => 'Serie',
+            'nro'          => 'Nro. documento',
+            'producto'     => 'Producto',
+            'precio'       => 'Precio unitario',
+            'cantidad'     => 'Cantidad',
+            'total'        => 'Total',
+            'razon_social' => 'Razón social',
+            'ruc'          => 'RUC',
+            'codigo'       => 'Código producto',
+        ];
+        $columnasInfo = [];
+        foreach ($mapa as $campo => $idx) {
+            $columnasInfo[$campo] = [
+                'label'       => $nombresLegibles[$campo] ?? $campo,
+                'detectada'   => $idx !== null,
+                'header_real' => $idx !== null ? ($headersOriginales[$idx] ?? '?') : null,
+            ];
+        }
+
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
         if ($vendedores->isEmpty()) {
@@ -154,6 +178,7 @@ class VentaImportController extends Controller
             'metodo_pago_default'=> 'ninguno',
             'duplicadosExistentes' => [],
             'omitidos'           => $omitidos,
+            'columnasInfo'       => $columnasInfo,
         ]);
     }
 
@@ -363,7 +388,7 @@ class VentaImportController extends Controller
             'total'        => ['total', 'subtotal', 'importe'],
             'razon_social' => ['nombrerazonsocial', 'razon_social', 'razon social', 'denominacion', 'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
             'ruc'          => ['ruc', 'ruc_cliente', 'nro_ruc', 'nroruc', 'documento'],
-            'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code', 'clave'],
+            'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code', 'clave', 'referencia', 'ref', 'item', 'part', 'codbarr', 'codbien', 'codprod', 'id_producto', 'idproducto', 'numero_parte', 'nroparte'],
         ];
 
         $mapa = [];

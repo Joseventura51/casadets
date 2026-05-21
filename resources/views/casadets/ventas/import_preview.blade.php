@@ -36,6 +36,59 @@
     </div>
 @endif
 
+{{-- Panel de columnas detectadas --}}
+@if(!empty($columnasInfo ?? []))
+@php
+    $obligatorios = ['fecha','doc','serie','nro','producto','precio','cantidad','total','razon_social','ruc'];
+    $opcionales   = ['codigo'];
+    $codigoOk     = $columnasInfo['codigo']['detectada'] ?? false;
+@endphp
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2 px-3">
+        <p class="mb-2 small fw-semibold text-secondary">
+            <i class="bi bi-layout-three-columns me-1 text-primary"></i>Columnas detectadas en el archivo
+        </p>
+        <div class="d-flex flex-wrap gap-1">
+            @foreach($columnasInfo as $campo => $info)
+            @php
+                $esOpcional = in_array($campo, $opcionales);
+                if ($info['detectada']) {
+                    $cls = $esOpcional ? 'bg-success-subtle text-success border-success-subtle' : 'bg-primary-subtle text-primary border-primary-subtle';
+                    $icon = 'bi-check-circle-fill';
+                } else {
+                    $cls = $esOpcional ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle' : 'bg-danger-subtle text-danger border-danger-subtle';
+                    $icon = $esOpcional ? 'bi-dash-circle' : 'bi-x-circle-fill';
+                }
+            @endphp
+            <span class="badge border d-inline-flex align-items-center gap-1 fw-normal px-2 py-1 {{ $cls }}" style="font-size:.75rem;">
+                <i class="bi {{ $icon }}" style="font-size:.7rem;"></i>
+                {{ $info['label'] }}
+                @if($info['detectada'])
+                    <span class="opacity-75 fw-normal" style="font-size:.7rem;">({{ $info['header_real'] }})</span>
+                @endif
+            </span>
+            @endforeach
+        </div>
+        @if(!$codigoOk)
+        <div class="alert alert-warning border-warning-subtle mt-2 mb-0 py-2 px-3 d-flex gap-2 align-items-start" style="font-size:.82rem;">
+            <i class="bi bi-exclamation-triangle-fill text-warning mt-1" style="font-size:1rem;flex-shrink:0;"></i>
+            <div>
+                <strong>Código de producto no detectado.</strong>
+                No se encontró una columna que coincida con los nombres conocidos (<code>Codigo</code>, <code>Cod</code>, <code>SKU</code>, <code>Referencia</code>, etc.).<br>
+                Puedes escribir los códigos manualmente en la tabla de abajo, o renombrar la columna en tu Excel y volver a subir el archivo.
+                <details class="mt-1">
+                    <summary class="text-muted" style="cursor:pointer;font-size:.77rem;">Ver nombres de columna aceptados</summary>
+                    <div class="mt-1 text-muted" style="font-size:.77rem;">
+                        codigo · cod · sku · code · clave · referencia · ref · item · part · codprod · codigoproducto · codigo_producto · codbarr · codbien · id_producto · numero_parte · nroparte
+                    </div>
+                </details>
+            </div>
+        </div>
+        @endif
+    </div>
+</div>
+@endif
+
 @if(!empty($omitidos ?? []))
     <div class="alert alert-warning mb-3 d-flex gap-2 align-items-start">
         <i class="bi bi-skip-forward-fill fs-5 mt-1 text-warning"></i>
