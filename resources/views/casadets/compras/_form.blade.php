@@ -263,7 +263,7 @@ $ventasJson = $facturas->map(fn($f) => [
     'fecha_display' => $f->fecha->format('d/m/Y'),
     'vendedor'      => $f->vendedor->nombre ?? 'Sin vendedor',
     'total'         => number_format($f->total_cobrado, 2),
-    'productos'     => $f->detalles->pluck('producto')->filter()->implode(' '),
+    'productos'     => $f->detalles->pluck('producto')->filter()->values()->toArray(),
 ]);
 @endphp
 const todasLasVentas = @json($ventasJson);
@@ -274,34 +274,47 @@ const fechaDesde   = document.getElementById('ventaFechaDesde');
 const fechaHasta   = document.getElementById('ventaFechaHasta');
 const btnLimpiar   = document.getElementById('btnLimpiarFechas');
 
-function filtrarVentas() {
+function filtrarItems() {
     const texto = buscador.value.toLowerCase().trim();
-    const desde = fechaDesde.value;   // 'YYYY-MM-DD' o ''
-    const hasta = fechaHasta.value;   // 'YYYY-MM-DD' o ''
-    return todasLasVentas.filter(v => {
-        if (facturasCargadas.has(v.id)) return false;
-        if (texto && !(v.tipo + ' ' + v.numero + ' ' + v.vendedor + ' ' + v.productos).toLowerCase().includes(texto)) return false;
-        if (desde && v.fecha < desde) return false;
-        if (hasta && v.fecha > hasta) return false;
-        return true;
+    const desde = fechaDesde.value;
+    const hasta = fechaHasta.value;
+    const items = [];
+    todasLasVentas.forEach(v => {
+        if (facturasCargadas.has(v.id)) return;
+        if (desde && v.fecha < desde) return;
+        if (hasta && v.fecha > hasta) return;
+        const ventaStr = (v.tipo + ' ' + v.numero + ' ' + v.vendedor).toLowerCase();
+        const ventaMatch = !texto || ventaStr.includes(texto);
+        if (v.productos.length === 0) {
+            if (ventaMatch) items.push({ v, producto: null });
+            return;
+        }
+        v.productos.forEach(prod => {
+            const prodMatch = !texto || (prod || '').toLowerCase().includes(texto);
+            if (ventaMatch || prodMatch) items.push({ v, producto: prod || '(sin nombre)' });
+        });
     });
+    return items;
 }
 
 function mostrarDropdown() {
-    const res = filtrarVentas();
+    const items = filtrarItems();
     dropdown.innerHTML = '';
-    if (res.length === 0) {
+    if (items.length === 0) {
         dropdown.innerHTML = '<div style="padding:.5rem .9rem;color:#6c757d;font-size:.85rem;">Sin resultados</div>';
     } else {
-        res.forEach(v => {
+        items.forEach(({ v, producto }) => {
             const item = document.createElement('div');
-            item.style.cssText = 'padding:.45rem .9rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid #f1f3f5;';
-            item.innerHTML = `<span class="badge bg-secondary me-1" style="font-size:.7rem;">${escHtml(v.tipo)}</span>`
-                + `<strong>${escHtml(v.numero)}</strong>`
-                + ` <span class="text-muted small">· ${v.fecha_display} · ${escHtml(v.vendedor)} · S/ ${v.total}</span>`;
-            if (v.productos) {
-                item.innerHTML += `<div style="font-size:.78rem;color:#888;margin-top:1px;">${escHtml(v.productos.slice(0, 80))}</div>`;
-            }
+            item.style.cssText = 'padding:.4rem .9rem;cursor:pointer;font-size:.84rem;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;gap:8px;min-width:0;';
+            item.innerHTML =
+                `<div style="flex:0 0 auto;white-space:nowrap;">` +
+                    `<span class="badge bg-secondary me-1" style="font-size:.68rem;">${escHtml(v.tipo)}</span>` +
+                    `<strong>${escHtml(v.numero)}</strong>` +
+                    ` <span class="text-muted" style="font-size:.78rem;">· ${v.fecha_display} · ${escHtml(v.vendedor)}</span>` +
+                `</div>` +
+                `<div style="flex:1;min-width:0;text-align:right;font-size:.8rem;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">` +
+                    (producto ? escHtml(producto) : '<span class="text-muted">—</span>') +
+                `</div>`;
             item.addEventListener('mouseover', () => item.style.background = '#f0f4ff');
             item.addEventListener('mouseout',  () => item.style.background = '');
             item.addEventListener('mousedown', e => {
