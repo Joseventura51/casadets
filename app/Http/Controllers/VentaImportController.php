@@ -205,31 +205,37 @@ class VentaImportController extends Controller
         }
         $sessionGrupos = json_decode(file_get_contents($rutaTemp), true) ?? [];
 
-        $data = $request->validate([
-            'ventas'                      => 'required|array|min:1',
-            'ventas.*.session_idx'        => 'required|integer',
-            'ventas.*.vendedor_id'        => 'required|exists:vendedores,id',
-            'ventas.*.total_cobrado'      => 'required|numeric|min:0',
-            'ventas.*.pagos'              => 'required|array|min:1',
-            'ventas.*.pagos.*.metodo'     => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
-            'ventas.*.pagos.*.monto'      => 'required|numeric|min:0',
-            'ventas.*.detalles_json'      => 'required|string',
-        ]);
+        // Leer datos desde el único campo JSON (evita límite max_input_vars de PHP)
+        $ventasJson = $request->input('ventas_json', '');
+        $submitted  = json_decode($ventasJson, true);
 
-        // Reconstruir grupos completos mezclando sesión + inputs del form
+        if (empty($submitted) || !is_array($submitted)) {
+            return back()->with('error', 'No se recibieron datos del formulario. Intenta de nuevo.');
+        }
+
+        $metodosValidos = ['ninguno','efectivo','tarjeta','yape','plin','transferencia'];
+
+        // Reconstruir grupos completos mezclando archivo temporal + datos del form
         $grupos = [];
-        foreach ($data['ventas'] as $submitted) {
-            $idx = (int) $submitted['session_idx'];
+        foreach ($submitted as $item) {
+            $idx  = (int) ($item['session_idx'] ?? -1);
             $base = $sessionGrupos[$idx] ?? null;
             if (!$base) continue;
 
-            $detalles = json_decode($submitted['detalles_json'], true) ?? [];
+            $detalles = $item['detalles'] ?? [];
             if (empty($detalles)) continue;
 
+            $vendedorId = (int) ($item['vendedor_id'] ?? 0);
+            if (!$vendedorId) continue;
+
+            $pagos = array_filter($item['pagos'] ?? [], fn($p) =>
+                in_array($p['metodo'] ?? '', $metodosValidos) && isset($p['monto'])
+            );
+
             $grupos[] = array_merge($base, [
-                'vendedor_id'   => $submitted['vendedor_id'],
-                'total_cobrado' => $submitted['total_cobrado'],
-                'pagos'         => $submitted['pagos'],
+                'vendedor_id'   => $vendedorId,
+                'total_cobrado' => (float) ($item['total_cobrado'] ?? 0),
+                'pagos'         => array_values($pagos),
                 'detalles'      => $detalles,
             ]);
         }

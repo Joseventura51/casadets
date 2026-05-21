@@ -57,8 +57,10 @@
     Si aún no se cobró, deja <strong>Ninguno</strong> y quedará como <em>pendiente</em>.
 </div>
 
+{{-- Un solo campo JSON: evita el límite de max_input_vars de PHP --}}
 <form action="/casadets/ventas/import/confirm" method="POST" id="formImport">
     @csrf
+    <input type="hidden" name="ventas_json" id="ventasJson">
 
     <div class="d-flex justify-content-end mb-3">
         <button type="submit" class="btn btn-success px-4">
@@ -75,6 +77,7 @@
         @endphp
         <div class="card mb-2 venta-card shadow-sm border-0"
              data-idx="{{ $i }}"
+             data-vendedor-id="{{ $vendedor_id_default }}"
              data-total-real="{{ $g['total'] }}">
 
             {{-- HEADER --}}
@@ -101,12 +104,6 @@
             </div>
 
             <div class="card-body py-3">
-                <input type="hidden" name="ventas[{{ $i }}][session_idx]" value="{{ $i }}">
-                <input type="hidden" name="ventas[{{ $i }}][vendedor_id]" value="{{ $vendedor_id_default }}">
-                {{-- detalles_json se actualiza por JS antes del submit --}}
-                <input type="hidden" name="ventas[{{ $i }}][detalles_json]"
-                       class="detalles-json-input"
-                       value="{{ json_encode($g['detalles']) }}">
 
                 {{-- Tabla de productos con código editable --}}
                 <div class="mb-3">
@@ -128,7 +125,11 @@
                                 </thead>
                                 <tbody>
                                     @foreach($g['detalles'] as $di => $d)
-                                    <tr>
+                                    <tr
+                                        data-producto="{{ $d['producto'] }}"
+                                        data-cantidad="{{ $d['cantidad'] }}"
+                                        data-precio="{{ $d['precio_unitario'] }}"
+                                        data-subtotal="{{ $d['subtotal'] }}">
                                         <td class="det-producto">{{ $d['producto'] }}</td>
                                         <td>
                                             <input type="text"
@@ -137,9 +138,9 @@
                                                 placeholder="—"
                                                 maxlength="100">
                                         </td>
-                                        <td class="text-end text-muted det-cantidad">{{ $d['cantidad'] }}</td>
-                                        <td class="text-end text-muted det-precio">{{ $d['precio_unitario'] }}</td>
-                                        <td class="text-end fw-semibold det-subtotal">{{ number_format($d['subtotal'], 2) }}</td>
+                                        <td class="text-end text-muted">{{ $d['cantidad'] }}</td>
+                                        <td class="text-end text-muted">{{ $d['precio_unitario'] }}</td>
+                                        <td class="text-end fw-semibold">{{ number_format($d['subtotal'], 2) }}</td>
                                     </tr>
                                     @endforeach
                                 </tbody>
@@ -149,15 +150,14 @@
                 </div>
 
                 <div class="row g-3 align-items-end">
-                    {{-- MÉTODOS DE PAGO --}}
+                    {{-- MÉTODOS DE PAGO (sin name= para no contar en max_input_vars) --}}
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold mb-1">
                             <i class="bi bi-credit-card me-1"></i>Método de pago
                         </label>
-                        <div class="pagos-container" data-venta-idx="{{ $i }}">
+                        <div class="pagos-container">
                             <div class="pago-row">
-                                <select name="ventas[{{ $i }}][pagos][0][metodo]"
-                                        class="form-select form-select-sm metodo-sel" style="flex:1;">
+                                <select class="form-select form-select-sm metodo-sel" style="flex:1;">
                                     @foreach($metodos as $m)
                                         <option value="{{ $m }}" {{ $m == $metodo_pago_default ? 'selected' : '' }}>
                                             {{ $metodoLabels[$m] ?? ucfirst($m) }}
@@ -166,10 +166,8 @@
                                 </select>
                                 <div class="input-group input-group-sm" style="width:120px;">
                                     <span class="input-group-text py-0 px-1 bg-white border-end-0 small text-muted">S/</span>
-                                    <input type="number" name="ventas[{{ $i }}][pagos][0][monto]"
-                                        value="0" step="0.01" min="0"
-                                        class="form-control form-control-sm text-end monto-pago border-start-0"
-                                        required>
+                                    <input type="number" value="0" step="0.01" min="0"
+                                        class="form-control form-control-sm text-end monto-pago border-start-0">
                                 </div>
                                 <button type="button" class="btn btn-sm p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1rem;">
                                     <i class="bi bi-x-circle-fill"></i>
@@ -191,8 +189,6 @@
                             <div class="col-4">
                                 <div class="text-muted small">Total cobrado</div>
                                 <div class="total-cobrado-display">S/ 0.00</div>
-                                <input type="hidden" name="ventas[{{ $i }}][total_cobrado]"
-                                       value="0" class="total-cobrado-hidden">
                             </div>
                             <div class="col-4">
                                 <div class="text-muted small">Diferencia</div>
@@ -223,25 +219,7 @@
 const METODOS       = @json($metodos);
 const METODO_LABELS = @json($metodoLabels);
 
-// Serializa la tabla de productos (con codigos editados) al hidden detalles_json
-function serializarDetalles(card) {
-    const jsonInput = card.querySelector('.detalles-json-input');
-    const base = JSON.parse(jsonInput.value);
-    const rows = card.querySelectorAll('.detalles-table tbody tr');
-    rows.forEach((tr, idx) => {
-        const codigoInput = tr.querySelector('.det-codigo');
-        if (codigoInput && base[idx] !== undefined) {
-            base[idx].codigo = codigoInput.value.trim();
-        }
-    });
-    jsonInput.value = JSON.stringify(base);
-}
-
-document.getElementById('formImport').addEventListener('submit', function() {
-    document.querySelectorAll('.venta-card').forEach(card => serializarDetalles(card));
-});
-
-function opcionesSelect(ventaIdx, pagoIdx, metodoSel) {
+function opcionesSelect(metodoSel) {
     return METODOS.map(m =>
         `<option value="${m}" ${m===metodoSel?'selected':''}>${METODO_LABELS[m]||m}</option>`
     ).join('');
@@ -253,7 +231,6 @@ function recalcPagos(card) {
     const realRaw = parseFloat(card.dataset.totalReal) || 0;
 
     card.querySelector('.total-cobrado-display').textContent = 'S/ ' + totalCob.toFixed(2);
-    card.querySelector('.total-cobrado-hidden').value = totalCob.toFixed(2);
 
     const d = totalCob - realRaw;
     const pill = card.querySelector('.diferencia-pill');
@@ -269,19 +246,17 @@ function recalcPagos(card) {
     }
 }
 
-function crearPagoRow(ventaIdx, pagoIdx) {
+function crearPagoRow() {
     const div = document.createElement('div');
     div.className = 'pago-row';
     div.innerHTML = `
-        <select name="ventas[${ventaIdx}][pagos][${pagoIdx}][metodo]"
-                class="form-select form-select-sm metodo-sel" style="flex:1;">
-            ${opcionesSelect(ventaIdx, pagoIdx, 'ninguno')}
+        <select class="form-select form-select-sm metodo-sel" style="flex:1;">
+            ${opcionesSelect('ninguno')}
         </select>
         <div class="input-group input-group-sm" style="width:120px;">
             <span class="input-group-text py-0 px-1 bg-white border-end-0 small text-muted">S/</span>
-            <input type="number" name="ventas[${ventaIdx}][pagos][${pagoIdx}][monto]"
-                value="0" step="0.01" min="0"
-                class="form-control form-control-sm text-end monto-pago border-start-0" required>
+            <input type="number" value="0" step="0.01" min="0"
+                class="form-control form-control-sm text-end monto-pago border-start-0">
         </div>
         <button type="button" class="btn btn-sm p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1rem;">
             <i class="bi bi-x-circle-fill"></i>
@@ -289,15 +264,48 @@ function crearPagoRow(ventaIdx, pagoIdx) {
     return div;
 }
 
-function reindexarPagos(container, ventaIdx) {
-    container.querySelectorAll('.pago-row').forEach((row, idx) => {
-        row.querySelector('select').name = `ventas[${ventaIdx}][pagos][${idx}][metodo]`;
-        row.querySelector('input[type=number]').name = `ventas[${ventaIdx}][pagos][${idx}][monto]`;
+// Serializa todos los datos visibles en un único JSON
+function serializarTodo() {
+    const ventas = [];
+    document.querySelectorAll('.venta-card').forEach(card => {
+        const idx       = parseInt(card.dataset.idx);
+        const vendedorId = card.dataset.vendedorId;
+
+        // Detalles desde la tabla
+        const detalles = [];
+        card.querySelectorAll('.detalles-table tbody tr').forEach(tr => {
+            detalles.push({
+                producto:        tr.dataset.producto,
+                codigo:          tr.querySelector('.det-codigo')?.value.trim() ?? '',
+                cantidad:        parseFloat(tr.dataset.cantidad) || 0,
+                precio_unitario: parseFloat(tr.dataset.precio) || 0,
+                subtotal:        parseFloat(tr.dataset.subtotal) || 0,
+            });
+        });
+
+        // Pagos desde los inputs visibles
+        const pagos = [];
+        card.querySelectorAll('.pago-row').forEach(row => {
+            pagos.push({
+                metodo: row.querySelector('.metodo-sel').value,
+                monto:  parseFloat(row.querySelector('.monto-pago').value) || 0,
+            });
+        });
+
+        const totalCobrado = pagos.reduce((s, p) => s + p.monto, 0);
+
+        ventas.push({ session_idx: idx, vendedor_id: vendedorId, detalles, pagos, total_cobrado: totalCobrado });
     });
+    return ventas;
 }
 
+document.getElementById('formImport').addEventListener('submit', function(e) {
+    const ventas = serializarTodo();
+    if (ventas.length === 0) { e.preventDefault(); alert('No hay ventas para importar.'); return; }
+    document.getElementById('ventasJson').value = JSON.stringify(ventas);
+});
+
 document.querySelectorAll('.venta-card').forEach(card => {
-    const idx = card.dataset.idx;
     recalcPagos(card);
 
     card.addEventListener('input', e => {
@@ -312,17 +320,16 @@ document.querySelectorAll('.venta-card').forEach(card => {
                 alert('Debe quedar al menos un método de pago.'); return;
             }
             btnD.closest('.pago-row').remove();
-            reindexarPagos(container, idx);
             recalcPagos(card);
         }
     });
 
     card.querySelector('.btn-agregar-pago').addEventListener('click', () => {
         const container = card.querySelector('.pagos-container');
-        const pagoIdx = container.querySelectorAll('.pago-row').length;
-        const row = crearPagoRow(idx, pagoIdx);
+        const row = crearPagoRow();
         container.appendChild(row);
         row.querySelector('.monto-pago').focus();
+        recalcPagos(card);
     });
 
     card.querySelector('.btn-eliminar-venta').addEventListener('click', () => {
