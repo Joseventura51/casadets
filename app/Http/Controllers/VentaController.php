@@ -186,7 +186,12 @@ class VentaController extends Controller
         $venta->update([
             'metodo_pago' => $metodosPago,
             'ajuste'      => $ajuste,
+            'estado'      => 'pagado',
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true, 'venta_id' => $venta->id]);
+        }
 
         return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Pago verificado correctamente.');
     }

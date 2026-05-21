@@ -11,6 +11,8 @@
 .diferencia-pill { font-size:.82rem; padding:.2rem .6rem; border-radius:20px; display:inline-block; }
 </style>
 
+<div id="toastContainer" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;min-width:280px;"></div>
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0"><i class="bi bi-cash-stack me-2 text-success"></i>Verificar pago</h3>
@@ -24,11 +26,7 @@
     <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary btn-sm">← Volver</a>
 </div>
 
-@if($errors->any())
-<div class="alert alert-danger mb-3">
-    <ul class="mb-0">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-</div>
-@endif
+<div id="alertContainer"></div>
 
 <div class="row g-3">
 
@@ -71,7 +69,7 @@
 
     {{-- Verificar pago --}}
     <div class="col-md-7">
-        <form action="/casadets/ventas/{{ $venta->id }}/pago" method="POST">
+        <form id="formPago" action="/casadets/ventas/{{ $venta->id }}/pago" method="POST">
             @csrf
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
@@ -88,7 +86,6 @@
                 </div>
                 <div class="card-body">
                     <div id="pagosContainer">
-                        {{-- Pre-poblar con métodos existentes --}}
                         @php
                             $metodosActuales = array_filter(explode(',', $venta->metodo_pago ?? ''));
                             $totalCobradoActual = $venta->total_cobrado;
@@ -138,9 +135,9 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer bg-white d-flex justify-content-between">
+                <div class="card-footer bg-white d-flex justify-content-between align-items-center">
                     <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary">Cancelar</a>
-                    <button class="btn btn-success px-4">
+                    <button id="btnGuardar" class="btn btn-success px-4">
                         <i class="bi bi-check-lg me-1"></i> Guardar pago
                     </button>
                 </div>
@@ -151,8 +148,9 @@
 </div>
 
 <script>
-const METODOS = @json($metodos);
+const METODOS    = @json($metodos);
 const TOTAL_REAL = {{ (float) $venta->total }};
+const VENTA_ID   = {{ $venta->id }};
 let pagoIdx = {{ count($primerosMetodos) }};
 
 function recalc() {
@@ -219,6 +217,50 @@ document.getElementById('btnAgregarPago').addEventListener('click', () => {
     const row = crearFila('efectivo', '');
     document.getElementById('pagosContainer').appendChild(row);
     row.querySelector('.monto-pago').focus();
+});
+
+// ── AJAX submit ───────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+    const el = document.createElement('div');
+    el.className = `alert alert-${type} shadow mb-2`;
+    el.style.cssText = 'animation:fadeIn .2s;';
+    el.innerHTML = `<i class="bi bi-${type==='success'?'check-circle':'exclamation-circle'} me-2"></i>${msg}`;
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+}
+
+document.getElementById('formPago').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnGuardar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando…';
+
+    try {
+        const res = await fetch(e.target.action, {
+            method:  'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body:    new FormData(e.target),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            const msgs = data.errors
+                ? Object.values(data.errors).flat().join(' ')
+                : (data.message || 'Error al guardar el pago.');
+            throw new Error(msgs);
+        }
+
+        showToast('Pago guardado. Venta marcada como <strong>pagada</strong>.');
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardado';
+        btn.className = 'btn btn-outline-success px-4';
+
+        setTimeout(() => { window.location.href = `/casadets/ventas/${VENTA_ID}`; }, 1600);
+
+    } catch (err) {
+        showToast(err.message, 'danger');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardar pago';
+    }
 });
 
 recalc();
