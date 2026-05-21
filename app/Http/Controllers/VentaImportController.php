@@ -34,7 +34,7 @@ class VentaImportController extends Controller
         ini_set('memory_limit', '256M');
 
         $request->validate([
-            'archivo' => 'required|file|mimes:xlsx,xls,csv|max:20480',
+            'archivo' => 'required|file|mimes:xlsx,xls,csv|max:102400',
         ]);
 
         try {
