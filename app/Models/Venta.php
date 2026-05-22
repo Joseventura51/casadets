@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\Cliente;
 
 class Venta extends Model
 {
@@ -13,6 +12,7 @@ class Venta extends Model
         'vendedor_id',
         'cliente_id',
         'total',
+        'pagado',
         'ajuste',
         'metodo_pago',
         'documento_tipo',
@@ -23,8 +23,9 @@ class Venta extends Model
     ];
 
     protected $casts = [
-        'fecha' => 'date',
-        'total' => 'decimal:2',
+        'fecha'  => 'date',
+        'total'  => 'decimal:2',
+        'pagado' => 'decimal:2',
         'ajuste' => 'decimal:2',
     ];
 
@@ -43,6 +44,23 @@ class Venta extends Model
         return $this->hasMany(VentaDetalle::class);
     }
 
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(VentaPago::class);
+    }
+
+    public function pagoFacturas(): HasMany
+    {
+        return $this->hasMany(DetallePagoFactura::class);
+    }
+
+    public function pagosAplicados()
+    {
+        return $this->belongsToMany(Pago::class, 'detalle_pago_factura')
+                    ->withPivot('monto_aplicado')
+                    ->withTimestamps();
+    }
+
     /**
      * Compras vinculadas a esta venta (vía sus detalles/productos).
      */
@@ -52,11 +70,43 @@ class Venta extends Model
         return collect($this->detalles->flatMap->compras->unique('id')->values()->all());
     }
 
+    /**
+     * Total cobrado real = suma de pagos aplicados desde detalle_pago_factura.
+     * Fallback a columna `pagado` si las relaciones no están cargadas.
+     */
     public function getTotalCobradoAttribute(): float
     {
-        return (float) $this->total + (float) $this->ajuste;
+        // Si ya tenemos la columna pagado actualizada, la usamos directamente
+        return (float) ($this->attributes['pagado'] ?? 0);
     }
-     Public function pagos(){
-        return $this->hasMany(VentaPago::class);
+
+    /**
+     * Saldo pendiente de cobro.
+     */
+    public function getSaldoPendienteAttribute(): float
+    {
+        return max(0, (float) $this->total - $this->total_cobrado);
+    }
+
+    /**
+     * Recalcula y guarda el estado según lo pagado.
+     * pendiente | parcial | pagado | anulado
+     */
+    public function recalcularEstado(): void
+    {
+        if ($this->estado === 'anulado') return;
+
+        $pagado = (float) $this->pagado;
+        $total  = (float) $this->total;
+
+        if ($pagado <= 0) {
+            $estado = 'pendiente';
+        } elseif ($pagado >= $total - 0.005) {
+            $estado = 'pagado';
+        } else {
+            $estado = 'parcial';
+        }
+
+        $this->update(['estado' => $estado]);
     }
 }

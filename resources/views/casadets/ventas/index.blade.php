@@ -3,9 +3,11 @@
 @section('content')
 <style>
 .fila-pagado  { background: #d1e7dd !important; }
+.fila-parcial { background: #fff3cd !important; }
 .fila-anulado { background: #f8d7da !important; opacity:.85; }
 .select-estado { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; font-weight:600; cursor:pointer; border:1.5px solid; appearance:none; -webkit-appearance:none; text-align:center; min-width:110px; }
 .select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
+.select-estado.est-parcial   { border-color:#fd7e14; background:#fff3cd; color:#7c4a00; }
 .select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
 .filter-input { font-size:.78rem; border-radius:5px; border:1px solid #ced4da; padding:.2rem .4rem; background:#fff; width:100%; min-width:0; transition:border-color .15s,box-shadow .15s; }
@@ -135,7 +137,7 @@
                 @php
                     $metodosArr  = array_filter(explode(',', $v->metodo_pago ?? ''));
                     $estado      = $v->estado ?? 'pendiente';
-                    $filaClase   = $estado === 'pagado' ? 'fila-pagado' : ($estado === 'anulado' ? 'fila-anulado' : '');
+                    $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado',default=>'' };
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
@@ -151,6 +153,7 @@
                             @csrf
                             <select name="estado" class="select-estado est-{{ $estado }}" onchange="this.form.submit()">
                                 <option value="pendiente" {{ $estado==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
+                                <option value="parcial"   {{ $estado==='parcial'  ?'selected':'' }}>◑ Parcial</option>
                                 <option value="pagado"    {{ $estado==='pagado'   ?'selected':'' }}>✓ Pagado</option>
                                 <option value="anulado"   {{ $estado==='anulado'  ?'selected':'' }}>✕ Anulado</option>
                             </select>
@@ -183,11 +186,13 @@
                         @endif
                     </td>
                     <td class="text-end fw-semibold">
-                        S/ {{ number_format($v->total_cobrado, 2) }}
-                        @if($v->ajuste != 0)
-                            <br><small class="{{ $v->ajuste > 0 ? 'text-success' : 'text-danger' }}">
-                                ({{ $v->ajuste > 0 ? '+' : '' }}{{ number_format($v->ajuste, 2) }})
-                            </small>
+                        S/ {{ number_format($v->total, 2) }}
+                        @if((float)$v->pagado > 0 && $estado !== 'pagado')
+                            <br><small class="text-success">Cobrado: S/ {{ number_format($v->pagado, 2) }}</small>
+                            @php $saldoV = max(0, (float)$v->total - (float)$v->pagado); @endphp
+                            @if($saldoV > 0)
+                                <br><small class="text-danger">Saldo: S/ {{ number_format($saldoV, 2) }}</small>
+                            @endif
                         @endif
                     </td>
                     <td class="text-end">

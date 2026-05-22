@@ -5,6 +5,7 @@
 .dias-badge { font-size:.72rem; padding:.2rem .55rem; border-radius:20px; font-weight:600; }
 .select-estado { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; font-weight:600; cursor:pointer; border:1.5px solid; appearance:none; -webkit-appearance:none; text-align:center; min-width:110px; }
 .select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
+.select-estado.est-parcial   { border-color:#fd7e14; background:#fff3cd; color:#7c4a00; }
 .select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
 .fila-amarillo { background: #fff9e6 !important; }
@@ -58,7 +59,7 @@
         <div class="card p-3">
             <small class="text-muted">Total pendientes</small>
             <h4 class="mb-0 text-danger fw-bold" id="kpiConteo">{{ $ventas->count() }}</h4>
-            <small class="text-muted">ventas sin cobrar</small>
+            <small class="text-muted">ventas pendientes / parciales</small>
         </div>
     </div>
     <div class="col-6 col-md-6">
@@ -121,13 +122,15 @@
                     data-documento="{{ strtolower($docTxt) }}"
                     data-total="{{ number_format($v->total, 2) }}">
                     <td>
+                        @php $estV = $v->estado ?? 'pendiente'; @endphp
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
                             @csrf
-                            <select name="estado" class="select-estado est-{{ $v->estado ?? 'pendiente' }}"
+                            <select name="estado" class="select-estado est-{{ $estV }}"
                                 onchange="this.form.submit()">
-                                <option value="pendiente" selected>⏳ Pendiente</option>
-                                <option value="pagado">✔ Pagado</option>
-                                <option value="anulado">✕ Anulado</option>
+                                <option value="pendiente" {{ $estV==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
+                                <option value="parcial"   {{ $estV==='parcial'  ?'selected':'' }}>◑ Parcial</option>
+                                <option value="pagado"    {{ $estV==='pagado'   ?'selected':'' }}>✔ Pagado</option>
+                                <option value="anulado"   {{ $estV==='anulado'  ?'selected':'' }}>✕ Anulado</option>
                             </select>
                         </form>
                     </td>
@@ -165,7 +168,16 @@
                         @endif
                     </td>
                     <td class="small">{{ $v->documento_tipo ? ucfirst($v->documento_tipo).' '.$v->documento_numero : '—' }}</td>
-                    <td class="text-end fw-semibold">S/ {{ number_format($v->total, 2) }}</td>
+                    <td class="text-end fw-semibold">
+                        S/ {{ number_format($v->total, 2) }}
+                        @if((float)$v->pagado > 0)
+                            <br><small class="text-success">Cobrado: S/ {{ number_format($v->pagado, 2) }}</small>
+                            @php $saldoPend = max(0, (float)$v->total - (float)$v->pagado); @endphp
+                            @if($saldoPend > 0)
+                                <br><small class="text-danger fw-semibold">Falta: S/ {{ number_format($saldoPend, 2) }}</small>
+                            @endif
+                        @endif
+                    </td>
                     <td class="text-end">
                         <div class="d-flex gap-1 justify-content-end flex-wrap">
                             <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-outline-secondary btn-sm">Ver</a>

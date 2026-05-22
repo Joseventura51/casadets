@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Venta;
 use App\Models\Vendedor;
+use App\Services\CobranzaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -199,8 +200,8 @@ class VentaController extends Controller
                 'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
             ])
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
-                     'total', 'ajuste', 'metodo_pago', 'documento_tipo', 'documento_numero')
-            ->where('estado', 'pendiente')
+                     'total', 'pagado', 'ajuste', 'metodo_pago', 'documento_tipo', 'documento_numero')
+            ->whereIn('estado', ['pendiente', 'parcial'])
             ->whereDate('fecha', '<', today());
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
@@ -217,47 +218,51 @@ class VentaController extends Controller
 
     public function pago(Venta $venta)
     {
-        $venta->load(['vendedor', 'detalles']);
-        return view('casadets.ventas.verificar_pago', compact('venta'));
+        $venta->load([
+            'vendedor:id,nombre',
+            'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
+            'cliente:id,nombre,documento',
+        ]);
+        $historial = app(CobranzaService::class)->historialPagos($venta);
+        $saldoFavor = $venta->cliente_id
+            ? app(CobranzaService::class)->saldoFavorDisponible($venta->cliente_id)
+            : 0;
+        return view('casadets.ventas.verificar_pago', compact('venta', 'historial', 'saldoFavor'));
     }
 
     public function updatePago(Request $request, Venta $venta)
     {
         $data = $request->validate([
-            'pagos'           => 'required|array|min:1',
-            'pagos.*.metodo'  => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
-            'pagos.*.monto'   => 'required|numeric|min:0',
-            'estado_manual'   => 'nullable|in:pendiente,pagado,anulado',
+            'pagos'          => 'required|array|min:1',
+            'pagos.*.metodo' => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
+            'pagos.*.monto'  => 'required|numeric|min:0',
+            'estado_manual'  => 'nullable|in:pendiente,pagado,anulado',
         ]);
 
-        $pagosReales  = collect($data['pagos'])->filter(fn($p) => $p['metodo'] !== 'ninguno');
-        $metodosPago  = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
-        $totalCobrado = round($pagosReales->sum(fn($p) => (float) $p['monto']), 2);
-        $ajuste       = $metodosPago ? round($totalCobrado - (float) $venta->total, 2) : 0;
-
-        // Estado: si el usuario lo eligió manualmente lo respetamos;
-        // si no, se calcula automáticamente según si el monto cubre el total.
-        if (!empty($data['estado_manual'])) {
-            $estado = $data['estado_manual'];
-        } elseif (!$metodosPago) {
-            $estado = 'pendiente';
-        } elseif ($totalCobrado >= (float) $venta->total - 0.005) {
-            $estado = 'pagado';
-        } else {
-            $estado = 'pendiente';
-        }
-
-        $venta->update([
-            'metodo_pago' => $metodosPago,
-            'ajuste'      => $ajuste,
-            'estado'      => $estado,
-        ]);
+        $result = app(CobranzaService::class)->registrarPago(
+            $venta,
+            $data['pagos'],
+            $data['estado_manual'] ?? null
+        );
 
         if ($request->expectsJson()) {
-            return response()->json(['success' => true, 'venta_id' => $venta->id, 'estado' => $estado]);
+            return response()->json([
+                'success'          => true,
+                'venta_id'         => $venta->id,
+                'estado'           => $result['estado'],
+                'saldo_favor'      => $result['saldo_favor'],
+                'saldo_pendiente'  => $result['saldo_pendiente'],
+                'msg_saldo_favor'  => $result['saldo_favor'] > 0
+                    ? 'Se generó un saldo a favor de S/ ' . number_format($result['saldo_favor'], 2)
+                    : null,
+            ]);
         }
 
-        return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Pago verificado correctamente.');
+        $msg = 'Pago registrado correctamente.';
+        if ($result['saldo_favor'] > 0) {
+            $msg .= ' Se generó un saldo a favor de S/ ' . number_format($result['saldo_favor'], 2) . '.';
+        }
+        return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
     }
 
     /* ─── Estado rápido ────────────────────────────────────── */
@@ -265,7 +270,7 @@ class VentaController extends Controller
     public function updateEstado(Request $request, Venta $venta)
     {
         $data = $request->validate([
-            'estado' => 'required|in:pendiente,pagado,anulado',
+            'estado' => 'required|in:pendiente,parcial,pagado,anulado',
         ]);
         $venta->update(['estado' => $data['estado']]);
         return back();
