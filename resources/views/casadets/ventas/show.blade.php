@@ -118,15 +118,6 @@
                     <td class="text-end">S/ {{ number_format($venta->total, 2) }}</td>
                     <td></td>
                 </tr>
-                @if($venta->ajuste != 0)
-                <tr>
-                    <td colspan="3" class="text-end text-muted small">Ajuste de pago</td>
-                    <td class="text-end {{ $venta->ajuste > 0 ? 'text-success' : 'text-danger' }}">
-                        {{ $venta->ajuste > 0 ? '+' : '' }}S/ {{ number_format($venta->ajuste,2) }}
-                    </td>
-                    <td></td>
-                </tr>
-                @endif
                 <tr class="table-light">
                     <td colspan="3" class="text-end fw-bold">TOTAL COBRADO</td>
                     <td class="text-end fw-bold fs-5">S/ {{ number_format($venta->total_cobrado,2) }}</td>

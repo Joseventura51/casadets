@@ -63,9 +63,6 @@ class CajaController extends Controller
         );
         $balance = round($totalVentasCobradas + $totalOtrosIngresos - $totalSalidas, 2);
 
-        // Ajustes informativos desde ventas cobradas
-        $totalAjustes = $ventasCobradas->sum('ajuste');
-
         // ── Desglose por método de pago (fuente: pago_metodos) ──────────
         $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas);
 
@@ -81,7 +78,7 @@ class CajaController extends Controller
             'ventas', 'ventasCobradas', 'ventasPendientes',
             'movimientos', 'movActivos',
             'totalVentasCobradas', 'totalOtrosIngresos', 'totalCompras',
-            'totalSalidas', 'totalAjustes', 'balance',
+            'totalSalidas', 'balance',
             'ventasPorMetodo', 'ventasPorVendedor'
         ));
     }

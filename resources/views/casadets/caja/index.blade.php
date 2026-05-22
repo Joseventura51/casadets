@@ -36,11 +36,6 @@
         <div class="card kpi-card">
             <div class="text-muted small">Ventas cobradas</div>
             <h4 class="text-primary mb-0">S/ {{ number_format($totalVentasCobradas, 2) }}</h4>
-            @if($totalAjustes != 0)
-                <small class="{{ $totalAjustes > 0 ? 'text-success' : 'text-danger' }}">
-                    Ajustes: {{ $totalAjustes > 0 ? '+' : '' }}S/ {{ number_format($totalAjustes, 2) }}
-                </small>
-            @endif
             @if($ventasPendientes->count())
                 <small class="text-warning d-block">
                     <i class="bi bi-clock me-1"></i>{{ $ventasPendientes->count() }} pendiente(s)
@@ -188,11 +183,6 @@
                     </td>
                     <td class="text-end fw-semibold">
                         S/ {{ number_format($cobrada ? $v->total_cobrado : $v->total, 2) }}
-                        @if($cobrada && $v->ajuste != 0)
-                            <br><small class="{{ $v->ajuste > 0 ? 'text-success' : 'text-danger' }}">
-                                ({{ $v->ajuste > 0 ? '+' : '' }}{{ number_format($v->ajuste, 2) }})
-                            </small>
-                        @endif
                     </td>
                 </tr>
                 @empty

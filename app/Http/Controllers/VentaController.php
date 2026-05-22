@@ -35,7 +35,7 @@ class VentaController extends Controller
                 'detalles:id,venta_id,producto_id,producto,cantidad,precio_unitario,subtotal',
             ])
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
-                     'total', 'ajuste', 'metodo_pago',
+                     'total', 'metodo_pago',
                      'documento_tipo', 'documento_numero', 'observaciones');
 
         if (!$request->boolean('todas')) {
@@ -186,16 +186,11 @@ class VentaController extends Controller
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data, $venta) {
-            // Total exacto con bcmath (FIX: era float plain)
             $nuevoTotal = (float) collect($data['productos'])->reduce(
                 fn ($carry, $p) => bcadd($carry, bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 4), 2),
                 '0'
             );
 
-            $totalCobradoActual = (float) $venta->total_cobrado;
-            $nuevoAjuste        = round($totalCobradoActual - $nuevoTotal, 2);
-
-            // Estado NO se toca aquí — lo gestiona recalcularEstado() al final
             $venta->update([
                 'vendedor_id'      => $data['vendedor_id'],
                 'cliente_id'       => $data['cliente_id'] ?? null,
@@ -204,7 +199,6 @@ class VentaController extends Controller
                 'fecha'            => $data['fecha'],
                 'observaciones'    => $data['observaciones'] ?? null,
                 'total'            => $nuevoTotal,
-                'ajuste'           => $nuevoAjuste,
             ]);
 
             // ── Upsert de detalles preservando IDs ────────────────────────
@@ -253,7 +247,6 @@ class VentaController extends Controller
 
             $this->recalcularStockVenta($venta);
 
-            // Recalcular estado según lo pagado vs nuevo total (FIX: era solo ajuste manual)
             $venta->refresh();
             $venta->recalcularEstado();
         });
@@ -271,7 +264,7 @@ class VentaController extends Controller
                 'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
             ])
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
-                     'total', 'pagado', 'ajuste', 'metodo_pago', 'documento_tipo', 'documento_numero')
+                     'total', 'pagado', 'metodo_pago', 'documento_tipo', 'documento_numero')
             ->whereIn('estado', ['pendiente', 'parcial'])
             ->whereDate('fecha', '<=', today());
 
@@ -452,7 +445,7 @@ class VentaController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Ventas');
 
-        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Productos', 'Método Pago', 'Total', 'Ajuste', 'Total Cobrado', 'Estado'];
+        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Productos', 'Método Pago', 'Total', 'Total Cobrado', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
 
         $headerStyle = [
@@ -461,7 +454,7 @@ class VentaController extends Controller
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             'borders'   => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1D4ED8']]],
         ];
-        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
 
         $row = 2;
         foreach ($ventas as $v) {
@@ -474,22 +467,21 @@ class VentaController extends Controller
             $sheet->setCellValue("F{$row}", $productos);
             $sheet->setCellValue("G{$row}", $v->metodo_pago ?? '');
             $sheet->setCellValue("H{$row}", (float) $v->total);
-            $sheet->setCellValue("I{$row}", (float) $v->ajuste);
-            $sheet->setCellValue("J{$row}", (float) $v->total_cobrado);
-            $sheet->setCellValue("K{$row}", ucfirst($v->estado ?? 'pendiente'));
+            $sheet->setCellValue("I{$row}", (float) $v->total_cobrado);
+            $sheet->setCellValue("J{$row}", ucfirst($v->estado ?? 'pendiente'));
 
             if (($v->estado ?? '') === 'pagado') {
-                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
             } elseif (($v->estado ?? '') === 'anulado') {
-                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
             }
             $row++;
         }
 
-        foreach (range('A', 'K') as $col) {
+        foreach (range('A', 'J') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-        $sheet->getStyle('H2:J' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('H2:I' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
 
         $filename = 'ventas_' . now()->format('Y-m-d') . '.xlsx';
         $writer   = new Xlsx($spreadsheet);
