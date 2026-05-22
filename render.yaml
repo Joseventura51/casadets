@@ -11,8 +11,6 @@ services:
         value: production
       - key: APP_DEBUG
         value: false
-      - key: APP_URL
-        value: https://casadets.onrender.com
       - key: APP_KEY
         generateValue: true
       - key: DB_CONNECTION
