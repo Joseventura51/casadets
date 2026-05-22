@@ -49,6 +49,15 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/casadets/saldos-favor" class="nav-link {{ request()->is('casadets/saldos-favor*') ? 'active' : '' }}">
+                        <i class="bi bi-wallet2 me-2"></i>Saldos a favor
+                        @php $nSaldos = \App\Models\SaldoFavor::whereIn('estado',['disponible','parcialmente_usado'])->where('monto_disponible','>',0)->distinct('cliente_id')->count('cliente_id'); @endphp
+                        @if($nSaldos > 0)
+                            <span class="badge bg-info text-dark ms-auto">{{ $nSaldos }}</span>
+                        @endif
+                    </a>
+                </li>
+                <li>
                     <a href="/movimientos" class="nav-link {{ request()->is('movimientos*') ? 'active' : '' }}">
                         <i class="bi bi-arrow-left-right me-2"></i>Movimientos
                     </a>

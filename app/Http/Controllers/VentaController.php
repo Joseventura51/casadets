@@ -223,11 +223,11 @@ class VentaController extends Controller
             'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
             'cliente:id,nombre,documento',
         ]);
-        $historial = app(CobranzaService::class)->historialPagos($venta);
-        $saldoFavor = $venta->cliente_id
-            ? app(CobranzaService::class)->saldoFavorDisponible($venta->cliente_id)
-            : 0;
-        return view('casadets.ventas.verificar_pago', compact('venta', 'historial', 'saldoFavor'));
+        $cobranza         = app(CobranzaService::class);
+        $historial        = $cobranza->historialPagos($venta);
+        $saldoFavor       = $venta->cliente_id ? $cobranza->saldoFavorDisponible($venta->cliente_id) : 0;
+        $saldosDisponibles = $venta->cliente_id ? $cobranza->saldosDisponibles($venta->cliente_id) : collect();
+        return view('casadets.ventas.verificar_pago', compact('venta', 'historial', 'saldoFavor', 'saldosDisponibles'));
     }
 
     public function updatePago(Request $request, Venta $venta)

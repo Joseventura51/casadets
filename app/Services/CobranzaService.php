@@ -164,4 +164,123 @@ class CobranzaService
             ->orderBy('created_at', 'desc')
             ->get();
     }
+
+    /**
+     * Aplica un saldo a favor a una venta pendiente/parcial.
+     *
+     * @param  SaldoFavor  $saldo       El registro de saldo a consumir
+     * @param  Venta       $venta       La venta destino (debe ser del mismo cliente)
+     * @param  float       $monto       Cuánto aplicar (máx: min(saldo disponible, deuda venta))
+     * @return array  ['aplicado'=>float, 'saldo_restante'=>float, 'estado_venta'=>string]
+     */
+    public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto): array
+    {
+        return DB::transaction(function () use ($saldo, $venta, $monto) {
+
+            if ($saldo->cliente_id !== $venta->cliente_id) {
+                throw new \InvalidArgumentException('El saldo no pertenece al cliente de la venta.');
+            }
+            if (!in_array($saldo->estado, ['disponible', 'parcialmente_usado'])) {
+                throw new \InvalidArgumentException('El saldo ya fue utilizado completamente.');
+            }
+            if ($venta->estado === 'pagado') {
+                throw new \InvalidArgumentException('La venta ya está pagada.');
+            }
+
+            $disponible   = (float) $saldo->monto_disponible;
+            $deuda        = max(0, (float) $venta->total - (float) $venta->pagado);
+            $aplicar      = round(min($monto, $disponible, $deuda), 2);
+
+            if ($aplicar <= 0) {
+                throw new \InvalidArgumentException('El monto a aplicar debe ser mayor a cero.');
+            }
+
+            // Crear o reusar un Pago tipo "saldo_favor" para el registro contable
+            $pago = Pago::create([
+                'cliente_id'  => $venta->cliente_id,
+                'monto_total' => $aplicar,
+                'metodo_pago' => 'saldo_favor',
+                'estado'      => 'aplicado',
+                'fecha'       => now()->toDateString(),
+                'observacion' => "Uso de saldo a favor SF#{$saldo->id}",
+            ]);
+
+            // Vincular pago con venta
+            DetallePagoFactura::create([
+                'pago_id'        => $pago->id,
+                'venta_id'       => $venta->id,
+                'monto_aplicado' => $aplicar,
+            ]);
+
+            // Actualizar venta
+            $nuevoPagado = round((float) $venta->pagado + $aplicar, 2);
+            $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $venta->metodo_pago]);
+            $venta->refresh();
+            $venta->recalcularEstado();
+
+            // Actualizar saldo a favor
+            $nuevoDisponible = round($disponible - $aplicar, 2);
+            $nuevoEstado = $nuevoDisponible <= 0.005
+                ? 'usado'
+                : 'parcialmente_usado';
+            $saldo->update([
+                'monto_disponible' => max(0, $nuevoDisponible),
+                'estado'           => $nuevoEstado,
+            ]);
+
+            // Movimiento de caja
+            $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
+            Movimiento::create([
+                'tipo'             => 'ingreso',
+                'subtipo'          => 'saldo_favor_usado',
+                'categoria'        => 'Saldo a favor aplicado',
+                'metodo_pago'      => 'saldo_favor',
+                'referencia_tipo'  => 'saldo_favor',
+                'referencia_id'    => $saldo->id,
+                'cliente_id'       => $venta->cliente_id,
+                'documento_tipo'   => $venta->documento_tipo ?? 'venta',
+                'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
+                'monto'            => $aplicar,
+                'fecha'            => now()->toDateString(),
+                'observaciones'    => "Saldo a favor SF#{$saldo->id} aplicado a venta #{$venta->id}" . ($docStr ? " ({$docStr})" : ''),
+            ]);
+
+            $venta->refresh();
+            return [
+                'aplicado'       => $aplicar,
+                'saldo_restante' => max(0, $nuevoDisponible),
+                'estado_venta'   => $venta->estado,
+                'saldo_estado'   => $nuevoEstado,
+            ];
+        });
+    }
+
+    /**
+     * Saldos a favor disponibles de un cliente (colección).
+     */
+    public function saldosDisponibles(int $clienteId): \Illuminate\Support\Collection
+    {
+        return SaldoFavor::with('pago')
+            ->where('cliente_id', $clienteId)
+            ->whereIn('estado', ['disponible', 'parcialmente_usado'])
+            ->where('monto_disponible', '>', 0)
+            ->orderBy('created_at', 'asc')
+            ->get();
+    }
+
+    /**
+     * Ventas pendientes o parciales de un cliente.
+     */
+    public function ventasPendientesCliente(int $clienteId): \Illuminate\Support\Collection
+    {
+        return Venta::where('cliente_id', $clienteId)
+            ->whereIn('estado', ['pendiente', 'parcial'])
+            ->select('id', 'fecha', 'total', 'pagado', 'documento_tipo', 'documento_numero', 'estado')
+            ->orderBy('fecha', 'asc')
+            ->get()
+            ->map(function ($v) {
+                $v->saldo_pendiente = round((float) $v->total - (float) $v->pagado, 2);
+                return $v;
+            });
+    }
 }

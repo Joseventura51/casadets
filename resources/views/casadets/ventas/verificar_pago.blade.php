@@ -75,12 +75,64 @@
 </div>
 @endif
 
-{{-- Saldo a favor del cliente --}}
-@if(isset($saldoFavor) && $saldoFavor > 0)
-<div class="alert alert-info d-flex align-items-center gap-2 mb-3">
-    <i class="bi bi-wallet2 fs-5"></i>
-    <div>
-        El cliente tiene un <strong>saldo a favor de S/ {{ number_format($saldoFavor, 2) }}</strong> disponible.
+{{-- Saldo a favor del cliente: panel interactivo --}}
+@if(isset($saldoFavor) && $saldoFavor > 0 && !$ventaPagada)
+<div class="alert alert-info border-info mb-3 p-0 overflow-hidden">
+    <div class="d-flex align-items-center gap-3 px-3 py-2">
+        <i class="bi bi-wallet2 fs-4 text-info flex-shrink-0"></i>
+        <div class="flex-grow-1">
+            <strong>Saldo a favor disponible: S/ {{ number_format($saldoFavor, 2) }}</strong>
+            <span class="text-muted small ms-2">— puedes aplicarlo a esta venta antes de cobrar</span>
+        </div>
+        <button class="btn btn-sm btn-info text-white flex-shrink-0"
+            type="button" data-bs-toggle="collapse" data-bs-target="#panelSaldos">
+            <i class="bi bi-chevron-down me-1"></i>Ver saldos
+        </button>
+    </div>
+    <div class="collapse" id="panelSaldos">
+        <div class="border-top border-info border-opacity-25 bg-white">
+            <div id="saldosAplicarAlerta" class="mx-3 mt-2 d-none alert"></div>
+            <table class="table table-sm mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Origen</th>
+                        <th>Fecha</th>
+                        <th class="text-end">Disponible</th>
+                        <th class="text-end pe-3">Aplicar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($saldosDisponibles as $sf)
+                    <tr>
+                        <td class="ps-3 small text-muted">{{ $sf->descripcion ?? 'Saldo a favor' }}</td>
+                        <td class="small text-muted">{{ $sf->fecha->format('d/m/Y') }}</td>
+                        <td class="text-end fw-semibold text-info">S/ {{ number_format($sf->monto_disponible, 2) }}</td>
+                        <td class="text-end pe-3">
+                            <div class="d-flex align-items-center justify-content-end gap-1">
+                                <div class="input-group input-group-sm" style="width:100px;">
+                                    <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                                    <input type="number" id="montoSaldo{{ $sf->id }}"
+                                        value="{{ number_format(min((float)$sf->monto_disponible, $saldoPendiente), 2, '.', '') }}"
+                                        step="0.01" min="0.01" max="{{ $sf->monto_disponible }}"
+                                        class="form-control form-control-sm text-end border-start-0">
+                                </div>
+                                <button type="button"
+                                    class="btn btn-sm btn-info text-white btn-aplicar-saldo"
+                                    data-saldo-id="{{ $sf->id }}"
+                                    data-disponible="{{ (float)$sf->monto_disponible }}"
+                                    data-input="montoSaldo{{ $sf->id }}">
+                                    <i class="bi bi-lightning-fill"></i> Usar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+            <div class="px-3 py-2 text-muted small border-top">
+                Al aplicar un saldo se registra automáticamente en caja y se actualiza el estado de la venta.
+            </div>
+        </div>
     </div>
 </div>
 @endif
@@ -460,6 +512,66 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardar pago';
     }
+});
+
+// ── Aplicar saldo a favor desde esta misma pantalla ───────────
+document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const saldoId   = this.dataset.saldoId;
+        const inputEl   = document.getElementById(this.dataset.input);
+        const monto     = parseFloat(inputEl?.value) || 0;
+        const disponible = parseFloat(this.dataset.disponible) || 0;
+        const alerta    = document.getElementById('saldosAplicarAlerta');
+
+        alerta.className = 'mx-3 mt-2 alert d-none';
+
+        if (monto <= 0) {
+            alerta.className = 'mx-3 mt-2 alert alert-warning';
+            alerta.textContent = 'Ingresa un monto mayor a cero.';
+            return;
+        }
+        if (monto > disponible + 0.005) {
+            alerta.className = 'mx-3 mt-2 alert alert-danger';
+            alerta.textContent = 'El monto supera el saldo disponible (S/ ' + disponible.toFixed(2) + ').';
+            return;
+        }
+
+        const orig = this.innerHTML;
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        try {
+            const form = new FormData();
+            form.append('venta_id', VENTA_ID);
+            form.append('monto', monto.toFixed(2));
+            form.append('_token', '{{ csrf_token() }}');
+
+            const res  = await fetch(`/casadets/saldos-favor/${saldoId}/aplicar`, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: form,
+            });
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.message || 'Error al aplicar el saldo.');
+
+            const estadoLabels = { pagado:'Pagado', parcial:'Pago parcial', pendiente:'Pendiente' };
+            showToast(
+                '<i class="bi bi-wallet2 me-1"></i>Saldo de S/ ' + data.aplicado.toFixed(2)
+                + ' aplicado. Estado venta: <strong>' + (estadoLabels[data.estado_venta] || data.estado_venta) + '</strong>'
+                + (data.saldo_restante > 0 ? '<br>Saldo restante: S/ ' + data.saldo_restante.toFixed(2) : '')
+            );
+
+            // Recargar después de mostrar el toast
+            setTimeout(() => window.location.reload(), 2000);
+
+        } catch (err) {
+            alerta.className = 'mx-3 mt-2 alert alert-danger';
+            alerta.textContent = err.message;
+            this.disabled = false;
+            this.innerHTML = orig;
+        }
+    });
 });
 
 recalc();

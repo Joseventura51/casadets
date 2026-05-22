@@ -9,6 +9,7 @@ use App\Http\Controllers\VentaImportController;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\SaldoFavorController;
 
 Route::get('/', [HomeController::class, 'index']);
 
@@ -49,6 +50,12 @@ Route::get('/casadets/ventas/{venta}/pago', [VentaController::class, 'pago']);
 Route::post('/casadets/ventas/{venta}/pago', [VentaController::class, 'updatePago']);
 Route::post('/casadets/ventas/{venta}/estado', [VentaController::class, 'updateEstado']);
 Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
+
+// CASADETS — Saldos a favor
+Route::get('/casadets/saldos-favor', [SaldoFavorController::class, 'index']);
+Route::get('/casadets/saldos-favor/cliente/{clienteId}/saldos.json', [SaldoFavorController::class, 'saldosCliente']);
+Route::get('/casadets/saldos-favor/cliente/{clienteId}/ventas.json', [SaldoFavorController::class, 'ventasPendientesCliente']);
+Route::post('/casadets/saldos-favor/{saldo}/aplicar', [SaldoFavorController::class, 'aplicar']);
 
 // CASADETS — Clientes
 Route::get('/casadets/clientes', [ClienteController::class, 'index']);
