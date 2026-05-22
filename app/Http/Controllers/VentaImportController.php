@@ -15,7 +15,13 @@ use Carbon\Carbon;
 
 class VentaImportController extends Controller
 {
-    private array $tiposDoc = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma', 'PR' => 'proforma'];
+    private array $tiposDoc = [
+        'B'  => 'boleta',
+        'F'  => 'factura',
+        'P'  => 'proforma',
+        'PR' => 'proforma',
+        'NC' => 'nota_credito',
+    ];
 
     public function form()
     {
@@ -90,6 +96,7 @@ class VentaImportController extends Controller
             if (!isset($grupos[$key])) {
                 $razonSocial = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
                 $ruc         = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
+                $canjeRaw    = trim((string) ($mapa['canje'] !== null ? ($r[$mapa['canje']] ?? '') : ''));
                 $grupos[$key] = [
                     'fecha'        => $this->parseFecha($r[$mapa['fecha']] ?? null),
                     'doc'          => $doc,
@@ -97,6 +104,9 @@ class VentaImportController extends Controller
                     'numero'       => $numero,
                     'razon_social' => $razonSocial,
                     'ruc'          => $ruc,
+                    'canje_raw'    => $canjeRaw,
+                    'canjeada'     => false,
+                    'canjes'       => [],
                     'detalles'     => [],
                     'total'        => 0,
                 ];
@@ -120,6 +130,9 @@ class VentaImportController extends Controller
         if (empty($grupos)) {
             return back()->with('error', 'No se encontraron filas válidas en el archivo.');
         }
+
+        // Resolver canjes: marcar proformas que ya fueron canjeadas
+        $grupos = $this->resolverCanjes($grupos);
 
         $grupos = array_values($grupos);
 
@@ -156,6 +169,7 @@ class VentaImportController extends Controller
             'razon_social' => 'Razón social',
             'ruc'          => 'RUC',
             'codigo'       => 'Código producto',
+            'canje'        => 'Canje',
         ];
         $columnasInfo = [];
         foreach ($mapa as $campo => $idx) {
@@ -238,14 +252,23 @@ class VentaImportController extends Controller
             return back()->with('error', 'No se importó nada. ' . implode(' ', $errores));
         }
 
-        $totalCreadas  = 0;
-        $totalDetalles = 0;
+        $totalCreadas       = 0;
+        $totalDetalles      = 0;
+        $totalCanjeadas     = 0;
+        $totalNotasCredito  = 0;
 
-        DB::transaction(function () use ($grupos, &$totalCreadas, &$totalDetalles) {
+        DB::transaction(function () use ($grupos, &$totalCreadas, &$totalDetalles, &$totalCanjeadas, &$totalNotasCredito) {
             $cobranza = app(CobranzaService::class);
             $todosProductosAfectados = [];
 
             foreach ($grupos as $g) {
+                $tipoLetra = strtoupper(trim($g['doc'] ?? ''));
+                if ($tipoLetra === 'PROFORMA') $tipoLetra = 'P';
+
+                $tipoDoc   = $this->tiposDoc[$tipoLetra] ?? null;
+                $esNC      = $tipoDoc === 'nota_credito';
+                $esCanjeada = (bool) ($g['canjeada'] ?? false);
+
                 $detallesCalc = array_map(function ($d) {
                     return [
                         'producto'        => $d['producto'],
@@ -256,15 +279,31 @@ class VentaImportController extends Controller
                     ];
                 }, $g['detalles']);
 
-                // Total exacto con bcmath
                 $totalReal = (float) collect($detallesCalc)->reduce(
                     fn ($carry, $d) => bcadd($carry, (string) $d['subtotal'], 2),
                     '0'
                 );
 
-                $tipoLetra = strtoupper(trim($g['doc'] ?? ''));
-                if ($tipoLetra === 'PROFORMA') $tipoLetra = 'P';
+                // Notas de crédito se almacenan con total negativo
+                if ($esNC) {
+                    $totalReal = -abs($totalReal);
+                }
+
                 $numero = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+
+                // Construir observaciones con info de canje
+                $observaciones = 'Importado desde Excel';
+                if ($esCanjeada) {
+                    $observaciones .= ' — Proforma canjeada';
+                    if (!empty($g['canjes'])) {
+                        $observaciones .= ' por: ' . implode(', ', $g['canjes']);
+                    }
+                } elseif (!empty($g['canjes'])) {
+                    $observaciones .= ' — Canjea proformas: ' . implode(', ', $g['canjes']);
+                }
+                if ($esNC) {
+                    $observaciones .= ' — Nota de crédito';
+                }
 
                 // Buscar o crear cliente
                 $clienteId   = null;
@@ -284,20 +323,32 @@ class VentaImportController extends Controller
                     $clienteId = $cliente->id;
                 }
 
-                // Crear venta en estado pendiente — CobranzaService gestiona estado final
+                // Estado inicial según tipo de documento
+                if ($esCanjeada) {
+                    $estadoInicial = 'canjeada';
+                } elseif ($esNC) {
+                    $estadoInicial = 'pagado'; // NC no genera deuda pendiente
+                } else {
+                    $estadoInicial = 'pendiente';
+                }
+
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
                     'cliente_id'       => $clienteId,
                     'total'            => $totalReal,
-                    'estado'           => 'pendiente',
-                    'documento_tipo'   => $this->tiposDoc[$tipoLetra] ?? null,
+                    'estado'           => $estadoInicial,
+                    'documento_tipo'   => $tipoDoc,
                     'documento_numero' => $numero ?: null,
-                    'observaciones'    => 'Importado desde Excel',
+                    'observaciones'    => $observaciones,
                     'fecha'            => $g['fecha'],
                 ]);
 
-                // Crear detalles con producto_id + stock_movimientos
-                // FIX: NO llamar recalcularStock() por cada línea — acumular y batch al final
+                // Crear detalles
+                // Proformas canjeadas y NC usan 'entrada' (devolucion/anulacion), ventas normales 'salida'
+                $tipoMovStock = ($esNC) ? 'entrada' : 'salida';
+                // Proformas canjeadas no mueven stock (la factura resultante ya lo hace)
+                $moverStock = !$esCanjeada;
+
                 $productosDeEstaVenta = [];
                 foreach ($detallesCalc as $d) {
                     $producto = Producto::firstOrCreate(
@@ -305,7 +356,7 @@ class VentaImportController extends Controller
                         ['precio_venta' => $d['precio_unitario']]
                     );
 
-                    if ($d['precio_unitario'] > (float) $producto->precio_venta) {
+                    if (!$esNC && $d['precio_unitario'] > (float) $producto->precio_venta) {
                         $producto->update(['precio_venta' => $d['precio_unitario']]);
                     }
 
@@ -318,40 +369,48 @@ class VentaImportController extends Controller
                         'subtotal'        => $d['subtotal'],
                     ]);
 
-                    StockMovimiento::create([
-                        'producto_id'     => $producto->id,
-                        'tipo'            => 'salida',
-                        'cantidad'        => $d['cantidad'],
-                        'precio_unitario' => $d['precio_unitario'],
-                        'referencia_tipo' => 'venta',
-                        'referencia_id'   => $venta->id,
-                        'fecha'           => $g['fecha'],
-                    ]);
+                    if ($moverStock) {
+                        StockMovimiento::create([
+                            'producto_id'     => $producto->id,
+                            'tipo'            => $tipoMovStock,
+                            'cantidad'        => $d['cantidad'],
+                            'precio_unitario' => $d['precio_unitario'],
+                            'referencia_tipo' => 'venta',
+                            'referencia_id'   => $venta->id,
+                            'fecha'           => $g['fecha'],
+                        ]);
+                        $productosDeEstaVenta[] = $producto->id;
+                    }
 
-                    $productosDeEstaVenta[] = $producto->id;
                     $totalDetalles++;
                 }
 
-                // Acumular IDs únicos para recalcular al final
                 foreach (array_unique($productosDeEstaVenta) as $pid) {
                     $todosProductosAfectados[$pid] = true;
                 }
 
-                // Registrar pagos vía CobranzaService
-                $pagosParaService = collect($g['pagos'])
-                    ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
-                    ->map(fn ($p) => ['metodo' => $p['metodo'], 'monto' => (float) $p['monto']])
-                    ->values()
-                    ->toArray();
+                // Registrar pagos solo para ventas normales (no canjeadas ni NC)
+                if (!$esCanjeada && !$esNC) {
+                    $pagosParaService = collect($g['pagos'])
+                        ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
+                        ->map(fn ($p) => ['metodo' => $p['metodo'], 'monto' => (float) $p['monto']])
+                        ->values()
+                        ->toArray();
 
-                if (!empty($pagosParaService)) {
-                    $cobranza->registrarPago($venta, $pagosParaService);
+                    if (!empty($pagosParaService)) {
+                        $cobranza->registrarPago($venta, $pagosParaService);
+                    }
                 }
 
-                $totalCreadas++;
+                if ($esCanjeada) {
+                    $totalCanjeadas++;
+                } elseif ($esNC) {
+                    $totalNotasCredito++;
+                } else {
+                    $totalCreadas++;
+                }
             }
 
-            // FIX: recalcularStock una sola vez por producto al final de la importación
             foreach (array_keys($todosProductosAfectados) as $pid) {
                 Producto::find($pid)?->recalcularStock();
             }
@@ -362,14 +421,92 @@ class VentaImportController extends Controller
         }
         session()->forget('import_id');
 
+        $partes = [];
+        if ($totalCreadas > 0)      $partes[] = "$totalCreadas venta(s) con $totalDetalles producto(s)";
+        if ($totalCanjeadas > 0)    $partes[] = "$totalCanjeadas proforma(s) canjeada(s)";
+        if ($totalNotasCredito > 0) $partes[] = "$totalNotasCredito nota(s) de crédito";
+
         return redirect('/casadets/ventas')->with('success',
-            "Importación completada: $totalCreadas venta(s) con $totalDetalles producto(s)."
+            'Importación completada: ' . implode(', ', $partes) . '.'
         );
+    }
+
+    /**
+     * Detecta y marca las proformas canjeadas usando el campo Proforma_Canjeada.
+     *
+     * Lógica:
+     * - Si una FACTURA/BOLETA tiene canje = "|PR-0006-65513|PR-0006-65543", esas proformas fueron
+     *   reemplazadas por esta factura → marcar esas proformas como canjeadas.
+     * - Si una PROFORMA tiene canje = "F-F006-43957", fue reemplazada por esa factura
+     *   → marcarla como canjeada directamente.
+     */
+    private function resolverCanjes(array $grupos): array
+    {
+        // Paso 1: construir índice por tipo|serie|numero para búsqueda rápida
+        $indice = [];
+        foreach ($grupos as $key => $g) {
+            $doc   = strtoupper(trim($g['doc'] ?? ''));
+            $serie = trim($g['serie'] ?? '');
+            $nro   = trim($g['numero'] ?? '');
+            $indice[$doc . '|' . $serie . '|' . $nro] = $key;
+        }
+
+        foreach ($grupos as $key => $g) {
+            $canjeRaw = trim($g['canje_raw'] ?? '');
+            if ($canjeRaw === '') continue;
+
+            $docLetra = strtoupper(trim($g['doc'] ?? ''));
+
+            // Facturas/Boletas: el campo lista las proformas que canjean
+            // Formato: "|PR-0006-65513|PR-0006-65543" o "PR-0006-65513"
+            if (in_array($docLetra, ['F', 'B'])) {
+                $refs = array_filter(explode('|', $canjeRaw));
+                $canjesResueltos = [];
+                foreach ($refs as $ref) {
+                    $ref = trim($ref);
+                    if ($ref === '') continue;
+                    // Formato: PR-0006-65513 → doc=PR, serie=0006, nro=65513
+                    $partes = explode('-', $ref, 3);
+                    if (count($partes) >= 2) {
+                        $refDoc   = strtoupper($partes[0]);
+                        $refSerie = $partes[1] ?? '';
+                        $refNro   = $partes[2] ?? '';
+                        $refKey   = $refDoc . '|' . $refSerie . '|' . $refNro;
+                        if (isset($indice[$refKey])) {
+                            $grupos[$indice[$refKey]]['canjeada'] = true;
+                            $grupos[$indice[$refKey]]['canjes'][] = $docLetra . '-' . $g['serie'] . '-' . $g['numero'];
+                        }
+                        $canjesResueltos[] = $ref;
+                    }
+                }
+                if (!empty($canjesResueltos)) {
+                    $grupos[$key]['canjes'] = $canjesResueltos;
+                }
+            }
+
+            // Proformas: el campo indica la factura/boleta por la que fue reemplazada
+            // Formato: "F-F006-43957"
+            if (in_array($docLetra, ['PR', 'P'])) {
+                $partes = explode('-', $canjeRaw, 3);
+                if (count($partes) >= 2) {
+                    $grupos[$key]['canjeada'] = true;
+                    $grupos[$key]['canjes'][] = $canjeRaw;
+                }
+            }
+        }
+
+        return $grupos;
     }
 
     private function filtrarDuplicados(array $grupos): array
     {
-        $tipoMap = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma', 'PR' => 'proforma'];
+        $tipoMap = [
+            'B'  => 'boleta',
+            'F'  => 'factura',
+            'P'  => 'proforma',
+            'PR' => 'proforma',
+            'NC' => 'nota_credito',
+        ];
 
         $buscar = [];
         foreach ($grupos as $g) {
@@ -446,6 +583,7 @@ class VentaImportController extends Controller
             'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code',
                                'clave', 'referencia', 'ref', 'item', 'part', 'codbarr', 'codbien',
                                'codprod', 'id_producto', 'idproducto', 'numero_parte', 'nroparte'],
+            'canje'        => ['proforma_canjeada', 'canje', 'canjeada', 'canje_proforma', 'canjeado'],
         ];
 
         $excluir = [
