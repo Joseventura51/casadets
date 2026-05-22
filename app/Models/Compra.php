@@ -5,10 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 
 class Compra extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'empresa',
         'documento_tipo',
@@ -35,9 +38,21 @@ class Compra extends Model
             ->withTimestamps();
     }
 
+    public function stockMovimientos(): HasMany
+    {
+        return $this->hasMany(StockMovimiento::class, 'referencia_id')
+                    ->where('referencia_tipo', 'compra');
+    }
+
+    /**
+     * Ventas vinculadas a esta compra (vía detalles).
+     * Requiere haber precargado: with('detalles.venta.vendedor') en el controller.
+     */
     public function getVentasAttribute(): Collection
     {
-        $this->loadMissing('detalles.venta.vendedor');
-        return collect($this->detalles->pluck('venta')->filter()->unique('id')->values()->all());
+        if (!$this->relationLoaded('detalles')) {
+            return collect();
+        }
+        return $this->detalles->pluck('venta')->filter()->unique('id')->values();
     }
 }

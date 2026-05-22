@@ -117,6 +117,7 @@
                     @foreach($venta->detalles as $j => $d)
                     <tr class="producto-row">
                         <td>
+                            <input type="hidden" name="productos[{{ $j }}][id]" value="{{ $d->id }}">
                             <input type="text" name="productos[{{ $j }}][producto]"
                                 value="{{ old("productos.$j.producto", $d->producto) }}"
                                 class="form-control form-control-sm" required>
@@ -175,6 +176,8 @@ function recalcTotal() {
 
 function reindexar() {
     document.querySelectorAll('.producto-row').forEach((row, i) => {
+        const idInput = row.querySelector('input[name*="[id]"]');
+        if (idInput) idInput.name                                  = `productos[${i}][id]`;
         row.querySelector('input[name*="[producto]"]').name        = `productos[${i}][producto]`;
         row.querySelector('input[name*="[cantidad]"]').name        = `productos[${i}][cantidad]`;
         row.querySelector('input[name*="[precio_unitario]"]').name = `productos[${i}][precio_unitario]`;
@@ -201,7 +204,10 @@ document.getElementById('btnAgregarProducto').addEventListener('click', () => {
     const tr = document.createElement('tr');
     tr.className = 'producto-row';
     tr.innerHTML = `
-        <td><input type="text" name="productos[${prodIdx}][producto]" class="form-control form-control-sm" required placeholder="Nombre del producto"></td>
+        <td>
+            <input type="hidden" name="productos[${prodIdx}][id]" value="">
+            <input type="text" name="productos[${prodIdx}][producto]" class="form-control form-control-sm" required placeholder="Nombre del producto">
+        </td>
         <td><input type="number" name="productos[${prodIdx}][cantidad]" value="1" step="0.01" min="0.01" class="form-control form-control-sm text-end cantidad-input" required></td>
         <td><input type="number" name="productos[${prodIdx}][precio_unitario]" value="0" step="0.01" min="0" class="form-control form-control-sm text-end precio-input" required></td>
         <td class="text-end subtotal-cell">S/ 0.00</td>

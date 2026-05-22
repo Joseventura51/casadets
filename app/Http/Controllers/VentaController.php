@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Producto;
+use App\Models\StockMovimiento;
 use App\Models\Venta;
+use App\Models\VentaDetalle;
 use App\Models\Vendedor;
 use App\Services\CobranzaService;
 use Illuminate\Http\Request;
@@ -20,7 +23,6 @@ class VentaController extends Controller
 
     public function index(Request $request)
     {
-        // Por defecto carga solo el día de hoy; el usuario puede ampliar el rango
         $hasFechas = $request->hasAny(['desde', 'hasta']);
         $desde = $request->input('desde', today()->toDateString());
         $hasta = $request->input('hasta', $desde);
@@ -29,13 +31,12 @@ class VentaController extends Controller
         $query = Venta::with([
                 'vendedor:id,nombre',
                 'cliente:id,nombre,documento',
-                'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
+                'detalles:id,venta_id,producto_id,producto,cantidad,precio_unitario,subtotal',
             ])
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
                      'total', 'ajuste', 'metodo_pago',
                      'documento_tipo', 'documento_numero', 'observaciones');
 
-        // Filtro de fecha: solo si el usuario envió parámetros o se usa el default
         if (!$request->boolean('todas')) {
             $query->whereDate('fecha', '>=', $desde)
                   ->whereDate('fecha', '<=', $hasta);
@@ -66,7 +67,7 @@ class VentaController extends Controller
 
     public function show(Venta $venta)
     {
-        $venta->load(['vendedor', 'cliente', 'detalles.compras']);
+        $venta->load(['vendedor', 'cliente', 'detalles.compras', 'detalles.producto']);
         return view('casadets.ventas.show', compact('venta'));
     }
 
@@ -90,46 +91,63 @@ class VentaController extends Controller
             'cliente_id'       => 'nullable|exists:clientes,id',
             'metodo_pago'      => 'required|string|max:100',
             'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
-            'documento_numero' => ['nullable','string','max:255',
+            'documento_numero' => ['nullable', 'string', 'max:255',
                 Rule::unique('ventas')->where(fn($q) => $q->where('documento_tipo', $request->documento_tipo))],
             'observaciones'    => 'nullable|string',
             'fecha'            => 'required|date',
             'productos'        => 'required|array|min:1',
-            'productos.*.producto'       => 'required|string|max:255',
-            'productos.*.cantidad'       => 'required|numeric|min:0.01',
-            'productos.*.precio_unitario'=> 'required|numeric|min:0',
+            'productos.*.producto'        => 'required|string|max:255',
+            'productos.*.cantidad'        => 'required|numeric|min:0.01',
+            'productos.*.precio_unitario' => 'required|numeric|min:0',
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data) {
-            $total = collect($data['productos'])->sum(fn($p) => $p['cantidad'] * $p['precio_unitario']);
+            $total = round(collect($data['productos'])->sum(fn($p) => $p['cantidad'] * $p['precio_unitario']), 2);
+
             $venta = Venta::create([
                 'vendedor_id'      => $data['vendedor_id'],
                 'cliente_id'       => $data['cliente_id'] ?? null,
-                'total'            => round($total, 2),
+                'total'            => $total,
                 'metodo_pago'      => $data['metodo_pago'],
                 'documento_tipo'   => $data['documento_tipo'] ?? null,
                 'documento_numero' => $data['documento_numero'] ?? null,
                 'observaciones'    => $data['observaciones'] ?? null,
                 'fecha'            => $data['fecha'],
             ]);
+
             foreach ($data['productos'] as $p) {
-                $venta->detalles()->create([
-                    'producto'       => $p['producto'],
-                    'cantidad'       => $p['cantidad'],
-                    'precio_unitario'=> $p['precio_unitario'],
-                    'subtotal'       => round($p['cantidad'] * $p['precio_unitario'], 2),
+                $producto = $this->resolverProducto($p['producto'], $p['precio_unitario']);
+
+                $detalle = $venta->detalles()->create([
+                    'producto_id'     => $producto->id,
+                    'producto'        => $p['producto'],
+                    'cantidad'        => $p['cantidad'],
+                    'precio_unitario' => $p['precio_unitario'],
+                    'subtotal'        => round($p['cantidad'] * $p['precio_unitario'], 2),
+                ]);
+
+                StockMovimiento::create([
+                    'producto_id'     => $producto->id,
+                    'tipo'            => 'salida',
+                    'cantidad'        => $p['cantidad'],
+                    'precio_unitario' => $p['precio_unitario'],
+                    'referencia_tipo' => 'venta',
+                    'referencia_id'   => $venta->id,
+                    'fecha'           => $data['fecha'],
                 ]);
             }
+
+            $this->recalcularStockVenta($venta);
         });
 
         return redirect('/casadets/ventas')->with('success', 'Venta registrada.');
     }
 
-    /* ─── Editar (meta + productos) ────────────────────────── */
+    /* ─── Editar ────────────────────────────────────────────── */
 
     public function edit(Venta $venta)
     {
-        $venta->load('detalles');
+        $venta->load('detalles.producto');
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
         $clientes   = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
         return view('casadets.ventas.edit', compact('venta', 'vendedores', 'clientes'));
@@ -141,7 +159,7 @@ class VentaController extends Controller
             'vendedor_id'      => 'required|exists:vendedores,id',
             'cliente_id'       => 'nullable|exists:clientes,id',
             'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
-            'documento_numero' => ['nullable','string','max:255',
+            'documento_numero' => ['nullable', 'string', 'max:255',
                 Rule::unique('ventas')
                     ->where(fn($q) => $q->where('documento_tipo', $request->documento_tipo))
                     ->ignore($venta->id)],
@@ -149,17 +167,16 @@ class VentaController extends Controller
             'observaciones'    => 'nullable|string',
             'estado'           => 'nullable|in:pendiente,pagado,anulado',
             'productos'        => 'required|array|min:1',
+            'productos.*.id'             => 'nullable|integer',
             'productos.*.producto'       => 'required|string|max:255',
             'productos.*.cantidad'       => 'required|numeric|min:0.01',
             'productos.*.precio_unitario'=> 'required|numeric|min:0',
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data, $venta) {
-            // Recalculate total from edited products
             $nuevoTotal = round(collect($data['productos'])
                 ->sum(fn($p) => $p['cantidad'] * $p['precio_unitario']), 2);
 
-            // Keep existing total_cobrado, adjust ajuste accordingly
             $totalCobradoActual = (float) $venta->total_cobrado;
             $nuevoAjuste = round($totalCobradoActual - $nuevoTotal, 2);
 
@@ -175,22 +192,62 @@ class VentaController extends Controller
                 'ajuste'           => $nuevoAjuste,
             ]);
 
-            // Rebuild detalles
-            $venta->detalles()->delete();
+            // ── Upsert de detalles preservando IDs ────────────────────
+            $idsEnBD      = $venta->detalles()->pluck('id')->toArray();
+            $idsEnviados  = collect($data['productos'])
+                ->pluck('id')
+                ->filter()
+                ->map(fn($id) => (int) $id)
+                ->toArray();
+
+            // Borrar los detalles eliminados en el formulario
+            $aEliminar = array_diff($idsEnBD, $idsEnviados);
+            if (!empty($aEliminar)) {
+                $venta->detalles()->whereIn('id', $aEliminar)->delete();
+            }
+
+            // Limpiar stock movimientos anteriores de esta venta
+            StockMovimiento::where('referencia_tipo', 'venta')
+                ->where('referencia_id', $venta->id)
+                ->delete();
+
             foreach ($data['productos'] as $p) {
-                $venta->detalles()->create([
-                    'producto'       => $p['producto'],
-                    'cantidad'       => $p['cantidad'],
-                    'precio_unitario'=> $p['precio_unitario'],
-                    'subtotal'       => round($p['cantidad'] * $p['precio_unitario'], 2),
+                $detId   = !empty($p['id']) ? (int) $p['id'] : null;
+                $producto = $this->resolverProducto($p['producto'], $p['precio_unitario']);
+
+                $detalleData = [
+                    'producto_id'     => $producto->id,
+                    'producto'        => $p['producto'],
+                    'cantidad'        => $p['cantidad'],
+                    'precio_unitario' => $p['precio_unitario'],
+                    'subtotal'        => round($p['cantidad'] * $p['precio_unitario'], 2),
+                ];
+
+                if ($detId && in_array($detId, $idsEnBD)) {
+                    VentaDetalle::where('id', $detId)->update($detalleData);
+                } else {
+                    $venta->detalles()->create($detalleData);
+                }
+
+                // Recrear movimiento de stock
+                StockMovimiento::create([
+                    'producto_id'     => $producto->id,
+                    'tipo'            => 'salida',
+                    'cantidad'        => $p['cantidad'],
+                    'precio_unitario' => $p['precio_unitario'],
+                    'referencia_tipo' => 'venta',
+                    'referencia_id'   => $venta->id,
+                    'fecha'           => $data['fecha'],
                 ]);
             }
+
+            $this->recalcularStockVenta($venta);
         });
 
         return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Venta actualizada.');
     }
 
-    /* ─── Pendientes de días anteriores ───────────────────── */
+    /* ─── Pendientes ───────────────────────────────────────── */
 
     public function pendientes(Request $request)
     {
@@ -223,9 +280,9 @@ class VentaController extends Controller
             'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
             'cliente:id,nombre,documento',
         ]);
-        $cobranza         = app(CobranzaService::class);
-        $historial        = $cobranza->historialPagos($venta);
-        $saldoFavor       = $venta->cliente_id ? $cobranza->saldoFavorDisponible($venta->cliente_id) : 0;
+        $cobranza          = app(CobranzaService::class);
+        $historial         = $cobranza->historialPagos($venta);
+        $saldoFavor        = $venta->cliente_id ? $cobranza->saldoFavorDisponible($venta->cliente_id) : 0;
         $saldosDisponibles = $venta->cliente_id ? $cobranza->saldosDisponibles($venta->cliente_id) : collect();
         return view('casadets.ventas.verificar_pago', compact('venta', 'historial', 'saldoFavor', 'saldosDisponibles'));
     }
@@ -247,12 +304,12 @@ class VentaController extends Controller
 
         if ($request->expectsJson()) {
             return response()->json([
-                'success'          => true,
-                'venta_id'         => $venta->id,
-                'estado'           => $result['estado'],
-                'saldo_favor'      => $result['saldo_favor'],
-                'saldo_pendiente'  => $result['saldo_pendiente'],
-                'msg_saldo_favor'  => $result['saldo_favor'] > 0
+                'success'         => true,
+                'venta_id'        => $venta->id,
+                'estado'          => $result['estado'],
+                'saldo_favor'     => $result['saldo_favor'],
+                'saldo_pendiente' => $result['saldo_pendiente'],
+                'msg_saldo_favor' => $result['saldo_favor'] > 0
                     ? 'Se generó un saldo a favor de S/ ' . number_format($result['saldo_favor'], 2)
                     : null,
             ]);
@@ -276,11 +333,25 @@ class VentaController extends Controller
         return back();
     }
 
-    /* ─── Eliminar ─────────────────────────────────────────── */
+    /* ─── Eliminar (soft delete) ───────────────────────────── */
 
     public function destroy(Venta $venta)
     {
-        $venta->delete();
+        DB::transaction(function () use ($venta) {
+            // Limpiar movimientos de stock de esta venta
+            StockMovimiento::where('referencia_tipo', 'venta')
+                ->where('referencia_id', $venta->id)
+                ->delete();
+
+            // Recalcular stock de los productos afectados
+            $productoIds = $venta->detalles()->pluck('producto_id')->filter()->unique();
+            foreach ($productoIds as $pid) {
+                \App\Models\Producto::find($pid)?->recalcularStock();
+            }
+
+            $venta->delete(); // SoftDelete — el historial financiero se preserva
+        });
+
         return redirect('/casadets/ventas')->with('success', 'Venta eliminada.');
     }
 
@@ -315,10 +386,10 @@ class VentaController extends Controller
         $sheet->fromArray($headers, null, 'A1');
 
         $headerStyle = [
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2563EB']],
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2563EB']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
-            'borders' => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1D4ED8']]],
+            'borders'   => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1D4ED8']]],
         ];
         $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
 
@@ -342,24 +413,52 @@ class VentaController extends Controller
             } elseif (($v->estado ?? '') === 'anulado') {
                 $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
             }
-
             $row++;
         }
 
         foreach (range('A', 'K') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-
         $sheet->getStyle('H2:J' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
 
         $filename = 'ventas_' . now()->format('Y-m-d') . '.xlsx';
-
-        $writer = new Xlsx($spreadsheet);
+        $writer   = new Xlsx($spreadsheet);
         $tempFile = tempnam(sys_get_temp_dir(), 'ventas_');
         $writer->save($tempFile);
 
         return response()->download($tempFile, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    /* ─── Helpers privados ─────────────────────────────────── */
+
+    /**
+     * Encuentra o crea un Producto por nombre.
+     * Actualiza precio_venta si el nuevo es mayor (conserva el máximo como referencia).
+     */
+    private function resolverProducto(string $nombre, float $precioVenta): Producto
+    {
+        $producto = Producto::firstOrCreate(
+            ['nombre' => trim($nombre)],
+            ['precio_venta' => $precioVenta]
+        );
+
+        if ($precioVenta > (float) $producto->precio_venta) {
+            $producto->update(['precio_venta' => $precioVenta]);
+        }
+
+        return $producto;
+    }
+
+    /**
+     * Recalcula stock_actual de todos los productos afectados por una venta.
+     */
+    private function recalcularStockVenta(Venta $venta): void
+    {
+        $productoIds = $venta->detalles()->pluck('producto_id')->filter()->unique();
+        foreach ($productoIds as $pid) {
+            Producto::find($pid)?->recalcularStock();
+        }
     }
 }

@@ -12,6 +12,7 @@ class VentaDetalle extends Model
 
     protected $fillable = [
         'venta_id',
+        'producto_id',
         'producto',
         'codigo',
         'cantidad',
@@ -20,14 +21,19 @@ class VentaDetalle extends Model
     ];
 
     protected $casts = [
-        'cantidad' => 'decimal:2',
+        'cantidad'        => 'decimal:2',
         'precio_unitario' => 'decimal:2',
-        'subtotal' => 'decimal:2',
+        'subtotal'        => 'decimal:2',
     ];
 
     public function venta(): BelongsTo
     {
         return $this->belongsTo(Venta::class);
+    }
+
+    public function producto(): BelongsTo
+    {
+        return $this->belongsTo(Producto::class);
     }
 
     public function compras(): BelongsToMany

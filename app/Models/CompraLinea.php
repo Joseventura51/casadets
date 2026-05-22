@@ -11,6 +11,7 @@ class CompraLinea extends Model
 
     protected $fillable = [
         'compra_id',
+        'producto_id',
         'producto',
         'cantidad',
         'monto_unitario',
@@ -26,5 +27,10 @@ class CompraLinea extends Model
     public function compra(): BelongsTo
     {
         return $this->belongsTo(Compra::class);
+    }
+
+    public function producto(): BelongsTo
+    {
+        return $this->belongsTo(Producto::class);
     }
 }

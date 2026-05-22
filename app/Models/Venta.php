@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Venta extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'vendedor_id',
         'cliente_id',
@@ -44,11 +47,6 @@ class Venta extends Model
         return $this->hasMany(VentaDetalle::class);
     }
 
-    public function pagos(): HasMany
-    {
-        return $this->hasMany(VentaPago::class);
-    }
-
     public function pagoFacturas(): HasMany
     {
         return $this->hasMany(DetallePagoFactura::class);
@@ -62,46 +60,43 @@ class Venta extends Model
     }
 
     /**
-     * Compras vinculadas a esta venta (vía sus detalles/productos).
+     * Compras vinculadas a esta venta (vía detalles).
+     * Requiere haber precargado: with('detalles.compras') en el controller.
      */
     public function getComprasAttribute(): \Illuminate\Support\Collection
     {
-        $this->loadMissing('detalles.compras');
-        return collect($this->detalles->flatMap->compras->unique('id')->values()->all());
+        if (!$this->relationLoaded('detalles')) {
+            return collect();
+        }
+        return $this->detalles->flatMap->compras->unique('id')->values();
     }
 
-    /**
-     * Total cobrado real = suma de pagos aplicados desde detalle_pago_factura.
-     * Fallback a columna `pagado` si las relaciones no están cargadas.
-     */
     public function getTotalCobradoAttribute(): float
     {
-        // Si ya tenemos la columna pagado actualizada, la usamos directamente
         return (float) ($this->attributes['pagado'] ?? 0);
     }
 
-    /**
-     * Saldo pendiente de cobro.
-     */
     public function getSaldoPendienteAttribute(): float
     {
         return max(0, (float) $this->total - $this->total_cobrado);
     }
 
     /**
-     * Recalcula y guarda el estado según lo pagado.
-     * pendiente | parcial | pagado | anulado
+     * Recalcula y persiste el estado según lo pagado.
+     * Usa round() en lugar de offset manual para evitar errores de punto flotante.
      */
     public function recalcularEstado(): void
     {
-        if ($this->estado === 'anulado') return;
+        if ($this->estado === 'anulado') {
+            return;
+        }
 
-        $pagado = (float) $this->pagado;
-        $total  = (float) $this->total;
+        $pagado = round((float) $this->pagado, 2);
+        $total  = round((float) $this->total, 2);
 
         if ($pagado <= 0) {
             $estado = 'pendiente';
-        } elseif ($pagado >= $total - 0.005) {
+        } elseif ($pagado >= $total) {
             $estado = 'pagado';
         } else {
             $estado = 'parcial';

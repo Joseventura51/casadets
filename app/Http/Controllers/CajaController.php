@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DetallePagoFactura;
 use App\Models\Movimiento;
+use App\Models\Pago;
+use App\Models\PagoMetodo;
 use App\Models\Venta;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class CajaController extends Controller
 {
@@ -16,7 +19,6 @@ class CajaController extends Controller
         $hasta = $request->input('hasta', $desde);
         if ($hasta < $desde) $hasta = $desde;
 
-        // Todas las ventas del período (pendientes, pagadas, anuladas)
         $ventas = Venta::with(['vendedor', 'detalles'])
             ->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta)
@@ -31,7 +33,6 @@ class CajaController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
-        // Solo las efectivamente cobradas (pagado O con metodo_pago registrado)
         $ventasCobradas = $ventas->filter(
             fn($v) => $v->estado === 'pagado' || !empty($v->metodo_pago)
         );
@@ -45,16 +46,8 @@ class CajaController extends Controller
         $totalSalidas  = $movimientos->where('tipo', 'salida')->sum('monto');
         $balance       = $totalVentas + $totalIngresos - $totalSalidas;
 
-        // Desglose por método: solo ventas cobradas, separar métodos combinados
-        $ventasPorMetodo = $ventasCobradas->flatMap(function ($v) {
-            $metodos = array_filter(array_map('trim', explode(',', $v->metodo_pago ?? '')));
-            if (empty($metodos)) return [];
-            $n = count($metodos);
-            return collect($metodos)->map(fn($m) => [
-                'metodo' => $m,
-                'monto'  => round($v->total_cobrado / $n, 2),
-            ]);
-        })->groupBy('metodo')->map(fn($g) => $g->sum('monto'));
+        // ── Desglose por método desde pago_metodos (fuente de verdad) ──
+        $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas);
 
         $ventasPorVendedor = $ventasCobradas
             ->groupBy(fn($v) => $v->vendedor->nombre ?? 'Sin vendedor')
@@ -70,5 +63,53 @@ class CajaController extends Controller
             'totalIngresos', 'totalSalidas', 'balance',
             'ventasPorMetodo', 'ventasPorVendedor'
         ));
+    }
+
+    /**
+     * Calcula el desglose de montos por método de pago para el período.
+     *
+     * Estrategia dual:
+     *  1. Pagos procesados via CobranzaService → fuente: pago_metodos (exacto)
+     *  2. Ventas directas sin pago registrado → fuente: ventas.metodo_pago (único, sin split)
+     */
+    private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas): \Illuminate\Support\Collection
+    {
+        // ── A. Desglose exacto desde pago_metodos ─────────────────────
+        $pagoIds = Pago::whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta)
+            ->pluck('id');
+
+        $metodosDePagos = collect();
+        if ($pagoIds->isNotEmpty()) {
+            $metodosDePagos = PagoMetodo::whereIn('pago_id', $pagoIds)
+                ->selectRaw('metodo, SUM(monto) as total')
+                ->groupBy('metodo')
+                ->pluck('total', 'metodo')
+                ->map(fn($t) => (float) $t);
+        }
+
+        // ── B. Ventas cobradas sin pagos registrados en BD ─────────────
+        // (ventas creadas directamente con metodo_pago sin pasar por verificar_pago)
+        $ventasConPagoRegistrado = DetallePagoFactura::whereIn('venta_id', $ventasCobradas->pluck('id'))
+            ->pluck('venta_id')
+            ->unique();
+
+        $ventasSinPago = $ventasCobradas->filter(
+            fn($v) => !$ventasConPagoRegistrado->contains($v->id) && !empty($v->metodo_pago)
+        );
+
+        $metodosDeVentasDirectas = $ventasSinPago
+            ->groupBy('metodo_pago')
+            ->map(fn($g) => round($g->sum(fn($v) => $v->total_cobrado), 2));
+
+        // ── Merge: sumar ambas fuentes por método ─────────────────────
+        $todos = $metodosDePagos->keys()->merge($metodosDeVentasDirectas->keys())->unique();
+
+        return $todos->mapWithKeys(fn($metodo) => [
+            $metodo => round(
+                ($metodosDePagos->get($metodo, 0)) + ($metodosDeVentasDirectas->get($metodo, 0)),
+                2
+            ),
+        ])->sortKeys();
     }
 }

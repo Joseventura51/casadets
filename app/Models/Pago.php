@@ -5,9 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Pago extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'cliente_id',
         'monto_total',
@@ -30,6 +33,11 @@ class Pago extends Model
     public function detalles(): HasMany
     {
         return $this->hasMany(DetallePagoFactura::class);
+    }
+
+    public function metodos(): HasMany
+    {
+        return $this->hasMany(PagoMetodo::class);
     }
 
     public function ventas()

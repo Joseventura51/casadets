@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Compra;
+use App\Models\Producto;
+use App\Models\StockMovimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use Illuminate\Http\Request;
@@ -21,12 +23,9 @@ class CompraController extends Controller
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
 
-        // Búsqueda de empresa: si es búsqueda exacta, el índice ayuda; LIKE '%x%' no lo usa
-        // pero se mantiene para compatibilidad con búsquedas parciales
         if ($request->filled('empresa')) {
             $query->where('empresa', 'like', '%' . $request->empresa . '%');
         }
-        // whereBetween aprovecha el índice en `fecha`
         if ($request->filled('desde')) {
             $query->whereDate('fecha', '>=', $request->desde);
         }
@@ -42,7 +41,7 @@ class CompraController extends Controller
     public function create()
     {
         $facturas = $this->facturasDisponibles();
-        $compra = new Compra();
+        $compra   = new Compra();
         $detallesSeleccionados = [];
         return view('casadets.compras.create', compact('facturas', 'compra', 'detallesSeleccionados'));
     }
@@ -50,26 +49,50 @@ class CompraController extends Controller
     public function store(Request $request)
     {
         $data = $this->validar($request);
+
         DB::transaction(function () use ($data, $request) {
-            $lineas  = $data['lineas'] ?? [];
-            $total   = collect($lineas)->sum('monto_total');
-            $compra  = Compra::create(array_merge(
+            $lineas = $data['lineas'] ?? [];
+            $total  = collect($lineas)->sum('monto_total');
+
+            $compra = Compra::create(array_merge(
                 collect($data)->except('lineas')->toArray(),
                 ['monto_total' => $total]
             ));
+
             $lineasCreadas = [];
             foreach ($lineas as $idx => $l) {
-                $linea = $compra->lineas()->create($l);
+                $producto = $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
+
+                $linea = $compra->lineas()->create(array_merge($l, [
+                    'producto_id' => $producto?->id,
+                ]));
                 $lineasCreadas[(int) $idx] = $linea->id;
+
+                if ($producto) {
+                    StockMovimiento::create([
+                        'producto_id'    => $producto->id,
+                        'tipo'           => 'entrada',
+                        'cantidad'       => $l['cantidad'],
+                        'costo_unitario' => $l['monto_unitario'],
+                        'referencia_tipo'=> 'compra',
+                        'referencia_id'  => $compra->id,
+                        'fecha'          => $data['fecha'],
+                    ]);
+
+                    $producto->update(['precio_costo' => $l['monto_unitario']]);
+                    $producto->recalcularStock();
+                }
             }
+
             $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
         });
+
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
     }
 
     public function show(Compra $compra)
     {
-        $compra->load(['lineas', 'detalles.venta.vendedor']);
+        $compra->load(['lineas.producto', 'detalles.venta.vendedor']);
         return view('casadets.compras.show', compact('compra'));
     }
 
@@ -92,33 +115,84 @@ class CompraController extends Controller
     public function update(Request $request, Compra $compra)
     {
         $data = $this->validar($request);
+
         DB::transaction(function () use ($data, $request, $compra) {
             $lineas = $data['lineas'] ?? [];
             $total  = collect($lineas)->sum('monto_total');
+
             $compra->update(array_merge(
                 collect($data)->except('lineas')->toArray(),
                 ['monto_total' => $total]
             ));
+
+            // Limpiar stock movimientos anteriores de esta compra
+            $productoIdsAntes = $compra->lineas()->pluck('producto_id')->filter()->unique();
+
+            StockMovimiento::where('referencia_tipo', 'compra')
+                ->where('referencia_id', $compra->id)
+                ->delete();
+
             $compra->lineas()->delete();
+
             $lineasCreadas = [];
             foreach ($lineas as $idx => $l) {
-                $linea = $compra->lineas()->create($l);
+                $producto = $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
+
+                $linea = $compra->lineas()->create(array_merge($l, [
+                    'producto_id' => $producto?->id,
+                ]));
                 $lineasCreadas[(int) $idx] = $linea->id;
+
+                if ($producto) {
+                    StockMovimiento::create([
+                        'producto_id'    => $producto->id,
+                        'tipo'           => 'entrada',
+                        'cantidad'       => $l['cantidad'],
+                        'costo_unitario' => $l['monto_unitario'],
+                        'referencia_tipo'=> 'compra',
+                        'referencia_id'  => $compra->id,
+                        'fecha'          => $data['fecha'],
+                    ]);
+
+                    $producto->update(['precio_costo' => $l['monto_unitario']]);
+                }
             }
+
+            // Recalcular stock de todos los productos afectados (antes + después)
+            $productoIdsAhora = $compra->lineas()->pluck('producto_id')->filter()->unique();
+            $todosIds = $productoIdsAntes->merge($productoIdsAhora)->unique();
+            foreach ($todosIds as $pid) {
+                Producto::find($pid)?->recalcularStock();
+            }
+
             $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
         });
+
         return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');
     }
 
     public function destroy(Compra $compra)
     {
-        $compra->delete();
+        DB::transaction(function () use ($compra) {
+            $productoIds = $compra->lineas()->pluck('producto_id')->filter()->unique();
+
+            StockMovimiento::where('referencia_tipo', 'compra')
+                ->where('referencia_id', $compra->id)
+                ->delete();
+
+            $compra->delete(); // SoftDelete
+
+            foreach ($productoIds as $pid) {
+                Producto::find($pid)?->recalcularStock();
+            }
+        });
+
         return redirect('/casadets/compras')->with('success', 'Compra eliminada.');
     }
 
     public function detallesVenta(Venta $venta)
     {
-        $venta->load(['detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal', 'vendedor:id,nombre']);
+        $venta->load(['detalles:id,venta_id,producto_id,producto,cantidad,precio_unitario,subtotal', 'vendedor:id,nombre']);
         return response()->json([
             'venta' => [
                 'id'        => $venta->id,
@@ -128,6 +202,7 @@ class CompraController extends Controller
             ],
             'detalles' => $venta->detalles->map(fn($d) => [
                 'id'              => $d->id,
+                'producto_id'     => $d->producto_id,
                 'producto'        => $d->producto,
                 'cantidad'        => (float) $d->cantidad,
                 'precio_unitario' => (float) $d->precio_unitario,
@@ -136,7 +211,7 @@ class CompraController extends Controller
         ]);
     }
 
-    /* ── Helpers ─────────────────────────────────────────────── */
+    /* ── Helpers ──────────────────────────────────────────────── */
 
     private function buildDetallesSync(Request $request, array $lineasCreadas = []): array
     {
@@ -166,6 +241,23 @@ class CompraController extends Controller
             ->orderBy('id', 'desc')
             ->limit(300)
             ->get();
+    }
+
+    /**
+     * Encuentra o crea un Producto por nombre de texto libre.
+     */
+    private function resolverProducto(?string $nombre, float $costoUnitario): ?Producto
+    {
+        if (empty(trim($nombre ?? ''))) {
+            return null;
+        }
+
+        $producto = Producto::firstOrCreate(
+            ['nombre' => trim($nombre)],
+            ['precio_costo' => $costoUnitario]
+        );
+
+        return $producto;
     }
 
     private function validar(Request $request): array
