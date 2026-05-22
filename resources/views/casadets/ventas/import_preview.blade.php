@@ -56,6 +56,30 @@
     Selecciona el <strong>método de pago</strong> y el <strong>monto cobrado</strong> por cada venta.
     Si aún no se cobró, deja <strong>Ninguno</strong> y quedará como <em>pendiente</em>.
 </div>
+@php
+    $cntCanjeadas = count(array_filter($grupos, fn($g) => !empty($g['canjeada'])));
+    $cntNC        = count(array_filter($grupos, fn($g) => strtoupper($g['doc'] ?? '') === 'NC'));
+@endphp
+@if($cntCanjeadas > 0 || $cntNC > 0)
+<div class="alert alert-info border small mb-3 py-2">
+    <i class="bi bi-info-circle-fill text-info me-1"></i>
+    <strong>Este archivo contiene documentos especiales:</strong>
+    <ul class="mb-0 mt-1">
+        @if($cntCanjeadas > 0)
+        <li>
+            <span class="badge bg-warning text-dark me-1">{{ $cntCanjeadas }} Proforma(s) canjeada(s)</span>
+            Se importarán como <strong>canjeadas</strong> — sin movimiento de stock ni cobro pendiente, ya que la factura/boleta correspondiente los cubre.
+        </li>
+        @endif
+        @if($cntNC > 0)
+        <li>
+            <span class="badge bg-danger me-1">{{ $cntNC }} Nota(s) de crédito</span>
+            Se importarán con total <strong>negativo</strong> y estado <strong>pagado</strong>. El stock se ajustará como entrada (devolución).
+        </li>
+        @endif
+    </ul>
+</div>
+@endif
 
 {{-- Un solo campo JSON: evita el límite de max_input_vars de PHP --}}
 <form action="/casadets/ventas/import/confirm" method="POST" id="formImport">
@@ -71,22 +95,49 @@
     <div id="ventasContainer">
         @foreach($grupos as $i => $g)
         @php
-            $numFmt = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $numFmt   = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
             $docLetra = strtoupper($g['doc'] ?? '');
-            $badgeCls = $docLetra === 'B' ? 'bg-secondary' : ($docLetra === 'F' ? 'bg-primary' : 'bg-warning text-dark');
+            $esNC      = $docLetra === 'NC';
+            $esCanjeada = !empty($g['canjeada']);
+            $badgeCls = match($docLetra) {
+                'B'  => 'bg-secondary',
+                'F'  => 'bg-primary',
+                'NC' => 'bg-danger',
+                default => 'bg-warning text-dark',
+            };
+            $cardBorder = $esNC ? 'border-danger' : ($esCanjeada ? 'border-warning' : 'border-0');
+            $cardBg     = $esNC ? 'bg-danger bg-opacity-10' : ($esCanjeada ? 'bg-warning bg-opacity-10' : 'bg-white');
         @endphp
-        <div class="card mb-2 venta-card shadow-sm border-0"
+        <div class="card mb-2 venta-card shadow-sm {{ $cardBorder }}"
              data-idx="{{ $i }}"
              data-vendedor-id="{{ $vendedor_id_default }}"
-             data-total-real="{{ $g['total'] }}">
+             data-total-real="{{ $g['total'] }}"
+             data-es-canjeada="{{ $esCanjeada ? '1' : '0' }}">
 
             {{-- HEADER --}}
-            <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+            <div class="card-header {{ $cardBg }} d-flex justify-content-between align-items-center py-2">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <span class="venta-num">#{{ $i + 1 }}</span>
                     <span class="text-dark fw-semibold">{{ \Carbon\Carbon::parse($g['fecha'])->format('d/m/Y') }}</span>
                     @if($numFmt)
                         <span class="badge {{ $badgeCls }} doc-badge">{{ $numFmt }}</span>
+                    @endif
+                    @if($esNC)
+                        <span class="badge bg-danger" style="font-size:.75rem;">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i>Nota de Crédito
+                        </span>
+                    @endif
+                    @if($esCanjeada)
+                        <span class="badge bg-warning text-dark" style="font-size:.75rem;">
+                            <i class="bi bi-arrow-left-right me-1"></i>Proforma canjeada
+                        </span>
+                        @if(!empty($g['canjes']))
+                            <span class="text-muted small">→ {{ implode(', ', $g['canjes']) }}</span>
+                        @endif
+                    @elseif(!empty($g['canjes']) && !$esNC)
+                        <span class="badge bg-info text-dark" style="font-size:.75rem;">
+                            <i class="bi bi-link-45deg me-1"></i>Canjea: {{ implode(', ', $g['canjes']) }}
+                        </span>
                     @endif
                     @if(!empty($g['razon_social']))
                         <span class="text-dark" style="font-size:.9rem;">
@@ -95,7 +146,9 @@
                     @endif
                     <span class="text-muted small">
                         {{ $g['detalles'] ? count($g['detalles']).' producto(s)' : '' }}
-                        · S/ {{ number_format($g['total'], 2) }}
+                        · S/ {{ number_format(abs($g['total']), 2) }}
+                        @if($esNC) <span class="text-danger fw-semibold">(crédito)</span> @endif
+                        @if($esCanjeada) <span class="text-warning fw-semibold">(sin stock / sin cobro)</span> @endif
                     </span>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-venta">
@@ -150,7 +203,8 @@
                 </div>
 
                 <div class="row g-3 align-items-end">
-                    {{-- MÉTODOS DE PAGO (sin name= para no contar en max_input_vars) --}}
+                    {{-- MÉTODOS DE PAGO: solo para ventas normales --}}
+                    @if(!$esCanjeada && !$esNC)
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold mb-1">
                             <i class="bi bi-credit-card me-1"></i>Método de pago
@@ -178,6 +232,20 @@
                             <i class="bi bi-plus-lg me-1"></i>Agregar método
                         </button>
                     </div>
+                    @else
+                    <div class="col-md-6">
+                        <div class="p-3 rounded text-center text-muted small"
+                             style="border: 1.5px dashed #dee2e6; background: #fafafa;">
+                            @if($esCanjeada)
+                                <i class="bi bi-arrow-left-right me-1"></i>
+                                Proforma canjeada — sin pago ni stock adicional
+                            @else
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>
+                                Nota de crédito — se registra automáticamente como abono
+                            @endif
+                        </div>
+                    </div>
+                    @endif
 
                     {{-- TOTALES --}}
                     <div class="col-md-6">
