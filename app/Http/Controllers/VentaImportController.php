@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Producto;
+use App\Models\StockMovimiento;
 use App\Models\Vendedor;
 use App\Models\Venta;
+use App\Services\CobranzaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -23,7 +26,7 @@ class VentaImportController extends Controller
                 ->with('error', 'Primero registra al menos un vendedor.');
         }
 
-        $vendedorDefault = $vendedores->first(fn($v) => stripos($v->nombre, 'jovi') !== false)
+        $vendedorDefault = $vendedores->first(fn ($v) => stripos($v->nombre, 'jovi') !== false)
             ?? $vendedores->first();
 
         return view('casadets.ventas.import', compact('vendedores', 'vendedorDefault'));
@@ -48,20 +51,20 @@ class VentaImportController extends Controller
             return back()->with('error', 'El archivo está vacío o no tiene datos.');
         }
 
-        $headersOriginales = array_map(fn($h) => trim((string) $h), $rows[0]);
-        $headers = array_map(fn($h) => $this->normalizarTexto($h), $headersOriginales);
+        $headersOriginales = array_map(fn ($h) => trim((string) $h), $rows[0]);
+        $headers = array_map(fn ($h) => $this->normalizarTexto($h), $headersOriginales);
         $mapa = $this->mapearColumnas($headers);
 
         \Log::info('IMPORT: headers originales del Excel', $headersOriginales);
         \Log::info('IMPORT: mapa de columnas detectado', array_map(
-            fn($idx) => $idx !== null ? ($headersOriginales[$idx] ?? "idx=$idx") : 'NO DETECTADO',
+            fn ($idx) => $idx !== null ? ($headersOriginales[$idx] ?? "idx=$idx") : 'NO DETECTADO',
             $mapa
         ));
 
         $camposObligatorios = ['fecha', 'doc', 'serie', 'nro', 'producto', 'precio', 'cantidad', 'total', 'razon_social', 'ruc'];
         $faltantes = array_keys(array_filter(
             array_intersect_key($mapa, array_flip($camposObligatorios)),
-            fn($v) => $v === null
+            fn ($v) => $v === null
         ));
         if (!empty($faltantes)) {
             return back()->with('error', 'Faltan columnas en el Excel: ' . implode(', ', $faltantes));
@@ -71,8 +74,8 @@ class VentaImportController extends Controller
         $sinDocContador = 0;
         for ($i = 1; $i < count($rows); $i++) {
             $r = $rows[$i];
-            $doc = trim((string) ($r[$mapa['doc']] ?? ''));
-            $serie = trim((string) ($r[$mapa['serie']] ?? ''));
+            $doc    = trim((string) ($r[$mapa['doc']] ?? ''));
+            $serie  = trim((string) ($r[$mapa['serie']] ?? ''));
             $numero = trim((string) ($r[$mapa['nro']] ?? ''));
             $producto = trim((string) ($r[$mapa['producto']] ?? ''));
 
@@ -80,7 +83,6 @@ class VentaImportController extends Controller
                 continue;
             }
 
-            // Si no hay ningún campo de documento, cada fila es su propio grupo
             if ($doc === '' && $serie === '' && $numero === '') {
                 $key = '__sinDoc__' . $sinDocContador++;
             } else {
@@ -89,7 +91,7 @@ class VentaImportController extends Controller
 
             if (!isset($grupos[$key])) {
                 $razonSocial = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
-                $ruc = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
+                $ruc         = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
                 $grupos[$key] = [
                     'fecha'        => $this->parseFecha($r[$mapa['fecha']] ?? null),
                     'doc'          => $doc,
@@ -103,9 +105,9 @@ class VentaImportController extends Controller
             }
 
             $cantidad = $this->parseNumero($r[$mapa['cantidad']] ?? 0);
-            $precio = $this->parseNumero($r[$mapa['precio']] ?? 0);
-            $total = $this->parseNumero($r[$mapa['total']] ?? ($cantidad * $precio));
-            $codigo = trim((string) ($mapa['codigo'] !== null ? ($r[$mapa['codigo']] ?? '') : ''));
+            $precio   = $this->parseNumero($r[$mapa['precio']] ?? 0);
+            $total    = $this->parseNumero($r[$mapa['total']] ?? ($cantidad * $precio));
+            $codigo   = trim((string) ($mapa['codigo'] !== null ? ($r[$mapa['codigo']] ?? '') : ''));
 
             $grupos[$key]['detalles'][] = [
                 'producto'        => $producto,
@@ -123,17 +125,12 @@ class VentaImportController extends Controller
 
         $grupos = array_values($grupos);
 
-        usort($grupos, function ($a,$b){
-
+        usort($grupos, function ($a, $b) {
             $serie = strcmp($a['serie'], $b['serie']);
-
-            if ($serie !== 0){
-                return $serie;
-            }
+            if ($serie !== 0) return $serie;
             return intval($a['numero']) - intval($b['numero']);
         });
 
-        // Detectar documentos que YA existen en BD y auto-excluirlos
         $grupos = array_values($grupos);
         [$gruposNuevos, $omitidos] = $this->filtrarDuplicados($grupos);
 
@@ -141,16 +138,14 @@ class VentaImportController extends Controller
             return back()->with('error', 'Todos los documentos del Excel ya existen en el sistema. No hay nada nuevo para importar.');
         }
 
-        // Guardar grupos en archivo temporal para evitar payloads de sesión grandes (MySQL max_allowed_packet)
-        $importId = uniqid('import_', true);
-        $rutaTemp = storage_path("app/imports/{$importId}.json");
+        $importId  = uniqid('import_', true);
+        $rutaTemp  = storage_path("app/imports/{$importId}.json");
         if (!is_dir(storage_path('app/imports'))) {
             mkdir(storage_path('app/imports'), 0755, true);
         }
         file_put_contents($rutaTemp, json_encode($gruposNuevos));
         session(['import_id' => $importId]);
 
-        // Construir info de columnas detectadas para mostrar en preview
         $nombresLegibles = [
             'fecha'        => 'Fecha',
             'doc'          => 'Tipo doc.',
@@ -180,32 +175,30 @@ class VentaImportController extends Controller
                 ->with('error', 'No hay vendedores activos. Registra uno antes de importar.');
         }
 
-        $vendedorDefault = $vendedores->first(fn($v) => stripos($v->nombre, 'jovi') !== false)
+        $vendedorDefault = $vendedores->first(fn ($v) => stripos($v->nombre, 'jovi') !== false)
             ?? $vendedores->first();
 
         return view('casadets.ventas.import_preview', [
-            'grupos'             => $gruposNuevos,
-            'vendedores'         => $vendedores,
-            'vendedor_id_default'=> $vendedorDefault->id,
-            'metodo_pago_default'=> 'ninguno',
+            'grupos'              => $gruposNuevos,
+            'vendedores'          => $vendedores,
+            'vendedor_id_default' => $vendedorDefault->id,
+            'metodo_pago_default' => 'ninguno',
             'duplicadosExistentes' => [],
-            'omitidos'           => $omitidos,
-            'columnasInfo'       => $columnasInfo,
+            'omitidos'            => $omitidos,
+            'columnasInfo'        => $columnasInfo,
         ]);
     }
 
     public function confirm(Request $request)
     {
-        // Los datos fijos vienen de un archivo temporal para evitar payloads de sesión grandes.
-        $importId   = session('import_id');
-        $rutaTemp   = $importId ? storage_path("app/imports/{$importId}.json") : null;
+        $importId  = session('import_id');
+        $rutaTemp  = $importId ? storage_path("app/imports/{$importId}.json") : null;
         if (!$rutaTemp || !file_exists($rutaTemp)) {
             return redirect('/casadets/ventas/import')
                 ->with('error', 'La sesión expiró o el archivo temporal fue eliminado. Vuelve a subir el archivo.');
         }
         $sessionGrupos = json_decode(file_get_contents($rutaTemp), true) ?? [];
 
-        // Leer datos desde el único campo JSON (evita límite max_input_vars de PHP)
         $ventasJson = $request->input('ventas_json', '');
         $submitted  = json_decode($ventasJson, true);
 
@@ -213,9 +206,8 @@ class VentaImportController extends Controller
             return back()->with('error', 'No se recibieron datos del formulario. Intenta de nuevo.');
         }
 
-        $metodosValidos = ['ninguno','efectivo','tarjeta','yape','plin','transferencia'];
+        $metodosValidos = ['ninguno', 'efectivo', 'tarjeta', 'yape', 'plin', 'transferencia'];
 
-        // Reconstruir grupos completos mezclando archivo temporal + datos del form
         $grupos = [];
         foreach ($submitted as $item) {
             $idx  = (int) ($item['session_idx'] ?? -1);
@@ -228,15 +220,14 @@ class VentaImportController extends Controller
             $vendedorId = (int) ($item['vendedor_id'] ?? 0);
             if (!$vendedorId) continue;
 
-            $pagos = array_filter($item['pagos'] ?? [], fn($p) =>
+            $pagos = array_filter($item['pagos'] ?? [], fn ($p) =>
                 in_array($p['metodo'] ?? '', $metodosValidos) && isset($p['monto'])
             );
 
             $grupos[] = array_merge($base, [
-                'vendedor_id'   => $vendedorId,
-                'total_cobrado' => (float) ($item['total_cobrado'] ?? 0),
-                'pagos'         => array_values($pagos),
-                'detalles'      => $detalles,
+                'vendedor_id' => $vendedorId,
+                'pagos'       => array_values($pagos),
+                'detalles'    => $detalles,
             ]);
         }
 
@@ -244,32 +235,36 @@ class VentaImportController extends Controller
             return back()->with('error', 'No hay ventas válidas para importar.');
         }
 
-        // Validar unicidad de documentos
         $errores = $this->validarFacturasUnicas($grupos);
         if (!empty($errores)) {
             return back()->with('error', 'No se importó nada. ' . implode(' ', $errores));
         }
 
-        $totalCreadas = 0;
+        $totalCreadas  = 0;
         $totalDetalles = 0;
 
         DB::transaction(function () use ($grupos, &$totalCreadas, &$totalDetalles) {
+            $cobranza = app(CobranzaService::class);
+
             foreach ($grupos as $g) {
                 $detallesCalc = array_map(function ($d) {
-                    $sub = round((float) $d['cantidad'] * (float) $d['precio_unitario'], 2);
                     return [
                         'producto'        => $d['producto'],
                         'codigo'          => $d['codigo'] ?? null,
-                        'cantidad'        => $d['cantidad'],
-                        'precio_unitario' => $d['precio_unitario'],
-                        'subtotal'        => $sub,
+                        'cantidad'        => (float) $d['cantidad'],
+                        'precio_unitario' => (float) $d['precio_unitario'],
+                        'subtotal'        => round((float) $d['cantidad'] * (float) $d['precio_unitario'], 2),
                     ];
                 }, $g['detalles']);
 
-                $totalReal  = round(array_sum(array_column($detallesCalc, 'subtotal')), 2);
-                $tipoLetra  = strtoupper(trim($g['doc'] ?? ''));
+                // Total exacto con bcmath
+                $totalReal = (float) collect($detallesCalc)->reduce(
+                    fn ($carry, $d) => bcadd($carry, (string) $d['subtotal'], 2),
+                    '0'
+                );
+
+                $tipoLetra = strtoupper(trim($g['doc'] ?? ''));
                 if ($tipoLetra === 'PROFORMA') $tipoLetra = 'P';
-                // Número de documento: solo serie-número (ej: "B001-00001234")
                 $numero = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
                 // Buscar o crear cliente
@@ -290,34 +285,67 @@ class VentaImportController extends Controller
                     $clienteId = $cliente->id;
                 }
 
-                $pagosReales  = collect($g['pagos'])->filter(fn($p) => $p['metodo'] !== 'ninguno');
-                $metodosPago  = $pagosReales->pluck('metodo')->unique()->values()->implode(',') ?: '';
-                $totalCobrado = round($pagosReales->sum(fn($p) => (float) $p['monto']), 2);
-                $ajuste       = $metodosPago !== '' ? round($totalCobrado - $totalReal, 2) : 0;
-                $estado       = $metodosPago !== '' ? 'pagado' : 'pendiente';
-
+                // Crear venta en estado pendiente — CobranzaService gestiona el estado final
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
                     'cliente_id'       => $clienteId,
                     'total'            => $totalReal,
-                    'ajuste'           => $ajuste,
-                    'metodo_pago'      => $metodosPago,
-                    'estado'           => $estado,
+                    'estado'           => 'pendiente',
                     'documento_tipo'   => $this->tiposDoc[$tipoLetra] ?? null,
                     'documento_numero' => $numero ?: null,
                     'observaciones'    => 'Importado desde Excel',
                     'fecha'            => $g['fecha'],
                 ]);
 
+                // Crear detalles con producto_id + stock_movimientos
                 foreach ($detallesCalc as $d) {
-                    $venta->detalles()->create($d);
+                    $producto = Producto::firstOrCreate(
+                        ['nombre' => trim($d['producto'])],
+                        ['precio_venta' => $d['precio_unitario']]
+                    );
+
+                    if ($d['precio_unitario'] > (float) $producto->precio_venta) {
+                        $producto->update(['precio_venta' => $d['precio_unitario']]);
+                    }
+
+                    $venta->detalles()->create([
+                        'producto_id'     => $producto->id,
+                        'producto'        => $d['producto'],
+                        'codigo'          => $d['codigo'] ?: null,
+                        'cantidad'        => $d['cantidad'],
+                        'precio_unitario' => $d['precio_unitario'],
+                        'subtotal'        => $d['subtotal'],
+                    ]);
+
+                    StockMovimiento::create([
+                        'producto_id'     => $producto->id,
+                        'tipo'            => 'salida',
+                        'cantidad'        => $d['cantidad'],
+                        'precio_unitario' => $d['precio_unitario'],
+                        'referencia_tipo' => 'venta',
+                        'referencia_id'   => $venta->id,
+                        'fecha'           => $g['fecha'],
+                    ]);
+
+                    $producto->recalcularStock();
                     $totalDetalles++;
                 }
+
+                // Registrar pagos vía CobranzaService (crea Pago + PagoMetodo + Movimiento)
+                $pagosParaService = collect($g['pagos'])
+                    ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
+                    ->map(fn ($p) => ['metodo' => $p['metodo'], 'monto' => (float) $p['monto']])
+                    ->values()
+                    ->toArray();
+
+                if (!empty($pagosParaService)) {
+                    $cobranza->registrarPago($venta, $pagosParaService);
+                }
+
                 $totalCreadas++;
             }
         });
 
-        // Limpiar archivo temporal e id de sesión
         if ($rutaTemp && file_exists($rutaTemp)) {
             unlink($rutaTemp);
         }
@@ -328,16 +356,10 @@ class VentaImportController extends Controller
         );
     }
 
-    /**
-     * Separa grupos en [nuevos, omitidos].
-     * Omitidos = documentos con número que ya existen en la BD.
-     * Grupos sin número de documento siempre se consideran nuevos.
-     */
     private function filtrarDuplicados(array $grupos): array
     {
         $tipoMap = ['B' => 'boleta', 'F' => 'factura', 'P' => 'proforma', 'PR' => 'proforma'];
 
-        // Construir lista de (tipo, numero) a buscar
         $buscar = [];
         foreach ($grupos as $g) {
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
@@ -348,7 +370,6 @@ class VentaImportController extends Controller
             }
         }
 
-        // Consultar BD agrupado por tipo
         $existentes = [];
         foreach ($buscar as $tipo => $numeros) {
             $encontrados = Venta::where('documento_tipo', $tipo)
@@ -399,7 +420,6 @@ class VentaImportController extends Controller
 
     private function mapearColumnas(array $headers): array
     {
-        // Todos los alias ya están normalizados (sin tildes, minúsculas, sin espacios extra)
         $alias = [
             'fecha'        => ['fecha_emisi', 'fecha_emision', 'fecha'],
             'doc'          => ['doc', 'tipo_doc', 'tipo'],
@@ -409,12 +429,14 @@ class VentaImportController extends Controller
             'precio'       => ['precio_unitario', 'preciounit', 'precio'],
             'cantidad'     => ['cantidad', 'unidades', 'cant'],
             'total'        => ['total', 'subtotal', 'importe'],
-            'razon_social' => ['nombrerazonsocial', 'razon_social', 'razon social', 'denominacion', 'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
+            'razon_social' => ['nombrerazonsocial', 'razon_social', 'razon social', 'denominacion',
+                               'nombre_cliente', 'nombre cliente', 'razonsocial', 'cliente'],
             'ruc'          => ['ruc', 'ruc_cliente', 'nro_ruc', 'nroruc', 'documento'],
-            'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code', 'clave', 'referencia', 'ref', 'item', 'part', 'codbarr', 'codbien', 'codprod', 'id_producto', 'idproducto', 'numero_parte', 'nroparte'],
+            'codigo'       => ['codigo', 'cod', 'codigo_producto', 'codigoproducto', 'sku', 'code',
+                               'clave', 'referencia', 'ref', 'item', 'part', 'codbarr', 'codbien',
+                               'codprod', 'id_producto', 'idproducto', 'numero_parte', 'nroparte'],
         ];
 
-        // Palabras que deben excluirse en ciertos campos para evitar falsos positivos
         $excluir = [
             'codigo' => ['sunat', 'aduanero', 'arancelario', 'catalogo'],
         ];
@@ -425,9 +447,7 @@ class VentaImportController extends Controller
             $palabrasExcluidas = $excluir[$campo] ?? [];
 
             foreach ($headers as $idx => $h) {
-                $hNorm = $this->normalizarTexto($h);
-
-                // Saltar si el header contiene palabras excluidas para este campo
+                $hNorm   = $this->normalizarTexto($h);
                 $excluido = false;
                 foreach ($palabrasExcluidas as $ex) {
                     if (str_contains($hNorm, $ex)) { $excluido = true; break; }
@@ -448,7 +468,6 @@ class VentaImportController extends Controller
     private function normalizarTexto(string $texto): string
     {
         $texto = mb_strtolower(trim($texto), 'UTF-8');
-        // Reemplazar vocales con tilde
         $desde = ['á','é','í','ó','ú','ü','ñ','à','è','ì','ò','ù'];
         $hacia  = ['a','e','i','o','u','u','n','a','e','i','o','u'];
         return str_replace($desde, $hacia, $texto);
@@ -464,7 +483,7 @@ class VentaImportController extends Controller
             } catch (\Exception $e) {}
         }
 
-        $valor = trim((string) $valor);
+        $valor    = trim((string) $valor);
         $formatos = ['d/m/Y', 'd-m-Y', 'Y-m-d', 'd/m/y'];
         foreach ($formatos as $f) {
             try {

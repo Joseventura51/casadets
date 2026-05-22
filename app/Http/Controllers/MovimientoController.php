@@ -9,28 +9,45 @@ class MovimientoController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Movimiento::select(
-            'id', 'tipo', 'categoria', 'documento_tipo',
-            'documento_numero', 'monto', 'fecha', 'observaciones'
-        )->orderBy('fecha', 'desc')->orderBy('id', 'desc');
+        $query = Movimiento::with([
+                'cliente:id,nombre,documento',
+                'pago.metodos',
+                'pago.detalles.venta',
+            ])
+            ->orderBy('fecha', 'desc')
+            ->orderBy('id', 'desc');
 
-        // Filtros server-side (aprovechan los índices en tipo y fecha)
-        if ($request->filled('tipo')) {
-            $query->where('tipo', $request->tipo);
-        }
-        if ($request->filled('desde')) {
-            $query->whereDate('fecha', '>=', $request->desde);
-        }
-        if ($request->filled('hasta')) {
-            $query->whereDate('fecha', '<=', $request->hasta);
-        }
+        if ($request->filled('tipo'))    $query->where('tipo', $request->tipo);
+        if ($request->filled('subtipo')) $query->where('subtipo', $request->subtipo);
+        if ($request->filled('origen'))  $query->where('origen', $request->origen);
+        if ($request->filled('desde'))   $query->whereDate('fecha', '>=', $request->desde);
+        if ($request->filled('hasta'))   $query->whereDate('fecha', '<=', $request->hasta);
 
         $movimientos = $query->paginate(50)->withQueryString();
 
-        return view('movimientos.index', compact('movimientos'));
+        // Anular la relación pago para movimientos que no son de tipo referencia='pago'
+        // Evita cruce de referencia_id entre distintos tipos de referencia
+        $movimientos->each(function ($m) {
+            if ($m->referencia_tipo !== 'pago') {
+                $m->setRelation('pago', null);
+            }
+        });
+
+        // Totales de la página actual (no del período completo)
+        $col = $movimientos->getCollection();
+        $totales = [
+            'ingresos' => round($col->where('tipo', 'ingreso')->sum('monto'), 2),
+            'salidas'  => round($col->where('tipo', 'salida')->sum('monto'), 2),
+            'balance'  => round(
+                $col->where('tipo', 'ingreso')->sum('monto') - $col->where('tipo', 'salida')->sum('monto'),
+                2
+            ),
+        ];
+
+        return view('movimientos.index', compact('movimientos', 'totales'));
     }
 
-    public function create($tipo)
+    public function create(string $tipo)
     {
         return view('movimientos.create', compact('tipo'));
     }
@@ -40,17 +57,23 @@ class MovimientoController extends Controller
         $request->validate([
             'tipo'             => 'required|in:ingreso,salida',
             'categoria'        => 'required|string|max:255',
-            'documento_tipo'   => 'required|in:factura,proforma',
-            'documento_numero' => 'required|string|max:255',
+            'documento_tipo'   => 'nullable|string|max:50',
+            'documento_numero' => 'nullable|string|max:255',
             'monto'            => 'required|numeric|min:0.01',
             'fecha'            => 'required|date',
             'observaciones'    => 'nullable|string',
         ]);
 
-        Movimiento::create($request->only([
-            'tipo', 'categoria', 'documento_tipo',
-            'documento_numero', 'monto', 'fecha', 'observaciones',
-        ]));
+        Movimiento::create(array_merge(
+            $request->only([
+                'tipo', 'categoria', 'documento_tipo',
+                'documento_numero', 'monto', 'fecha', 'observaciones',
+            ]),
+            [
+                'subtipo' => 'manual',
+                'origen'  => 'manual',
+            ]
+        ));
 
         return redirect('/movimientos')->with('success', 'Movimiento registrado');
     }

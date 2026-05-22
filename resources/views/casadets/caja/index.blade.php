@@ -24,12 +24,12 @@
     </form>
 </div>
 
-{{-- KPI Cards --}}
+{{-- KPI Cards — fuente: movimientos (sin doble conteo) --}}
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card kpi-card">
             <div class="text-muted small">Ventas cobradas</div>
-            <h4 class="text-primary mb-0">S/ {{ number_format($totalVentas, 2) }}</h4>
+            <h4 class="text-primary mb-0">S/ {{ number_format($totalVentasCobradas, 2) }}</h4>
             @if($totalAjustes != 0)
                 <small class="{{ $totalAjustes > 0 ? 'text-success' : 'text-danger' }}">
                     Ajustes: {{ $totalAjustes > 0 ? '+' : '' }}S/ {{ number_format($totalAjustes, 2) }}
@@ -46,7 +46,8 @@
     <div class="col-md-3">
         <div class="card kpi-card">
             <div class="text-muted small">Otros ingresos</div>
-            <h4 class="text-success mb-0">S/ {{ number_format($totalIngresos, 2) }}</h4>
+            <h4 class="text-success mb-0">S/ {{ number_format($totalOtrosIngresos, 2) }}</h4>
+            <small class="text-muted">Sin pagos de ventas</small>
         </div>
     </div>
     <div class="col-md-3">
@@ -61,6 +62,7 @@
             <h4 class="mb-0 {{ $balance >= 0 ? 'text-success' : 'text-danger' }}">
                 S/ {{ number_format($balance, 2) }}
             </h4>
+            <small class="text-muted">Cobrado + otros − salidas</small>
         </div>
     </div>
 </div>
@@ -185,7 +187,7 @@
             <tfoot class="table-light">
                 <tr>
                     <th colspan="6" class="text-end small text-muted">Total cobrado</th>
-                    <th class="text-end text-primary">S/ {{ number_format($totalVentas, 2) }}</th>
+                    <th class="text-end text-primary">S/ {{ number_format($totalVentasCobradas, 2) }}</th>
                 </tr>
             </tfoot>
             @endif
@@ -193,7 +195,7 @@
     </div>
 </div>
 
-{{-- Movimientos --}}
+{{-- Movimientos del período --}}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span>Movimientos <span class="badge bg-secondary ms-1">{{ $movimientos->count() }}</span></span>
@@ -209,6 +211,7 @@
                     <th>Fecha</th>
                     <th>Tipo</th>
                     <th>Categoría</th>
+                    <th>Origen</th>
                     <th>Documento</th>
                     <th class="text-end">Monto</th>
                 </tr>
@@ -222,12 +225,24 @@
                             {{ ucfirst($m->tipo) }}
                         </span>
                     </td>
-                    <td>{{ $m->categoria }}</td>
-                    <td class="small text-muted">{{ ucfirst($m->documento_tipo) }} {{ $m->documento_numero }}</td>
+                    <td>
+                        {{ $m->categoria }}
+                        @if($m->subtipo === 'pago_venta')
+                            <span class="badge bg-light text-secondary ms-1" style="font-size:.65rem;">venta</span>
+                        @elseif($m->subtipo === 'saldo_favor_usado')
+                            <span class="badge bg-light text-secondary ms-1" style="font-size:.65rem;">saldo favor</span>
+                        @endif
+                    </td>
+                    <td>
+                        <span class="badge {{ ($m->origen ?? 'manual') === 'auto' ? 'bg-info text-dark' : 'bg-secondary' }}" style="font-size:.65rem;">
+                            {{ ($m->origen ?? 'manual') === 'auto' ? 'auto' : 'manual' }}
+                        </span>
+                    </td>
+                    <td class="small text-muted">{{ ucfirst($m->documento_tipo ?? '') }} {{ $m->documento_numero ?? '' }}</td>
                     <td class="text-end fw-semibold">S/ {{ number_format($m->monto, 2) }}</td>
                 </tr>
                 @empty
-                <tr><td colspan="5" class="text-center text-muted py-3">Sin movimientos en este período</td></tr>
+                <tr><td colspan="6" class="text-center text-muted py-3">Sin movimientos en este período</td></tr>
                 @endforelse
             </tbody>
         </table>

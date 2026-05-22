@@ -89,10 +89,10 @@ class VentaController extends Controller
         $data = $request->validate([
             'vendedor_id'      => 'required|exists:vendedores,id',
             'cliente_id'       => 'nullable|exists:clientes,id',
-            'metodo_pago'      => 'required|string|max:100',
+            'metodo_pago'      => 'nullable|string|max:100',
             'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
             'documento_numero' => ['nullable', 'string', 'max:255',
-                Rule::unique('ventas')->where(fn($q) => $q->where('documento_tipo', $request->documento_tipo))],
+                Rule::unique('ventas')->where(fn ($q) => $q->where('documento_tipo', $request->documento_tipo))],
             'observaciones'    => 'nullable|string',
             'fecha'            => 'required|date',
             'productos'        => 'required|array|min:1',
@@ -102,13 +102,17 @@ class VentaController extends Controller
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data) {
-            $total = round(collect($data['productos'])->sum(fn($p) => $p['cantidad'] * $p['precio_unitario']), 2);
+            // Calcular total con bcmath para precisión exacta
+            $total = (float) collect($data['productos'])->reduce(
+                fn ($carry, $p) => bcadd($carry, bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 4), 2),
+                '0'
+            );
 
+            // Crear venta — metodo_pago y estado los gestiona CobranzaService
             $venta = Venta::create([
                 'vendedor_id'      => $data['vendedor_id'],
                 'cliente_id'       => $data['cliente_id'] ?? null,
                 'total'            => $total,
-                'metodo_pago'      => $data['metodo_pago'],
                 'documento_tipo'   => $data['documento_tipo'] ?? null,
                 'documento_numero' => $data['documento_numero'] ?? null,
                 'observaciones'    => $data['observaciones'] ?? null,
@@ -118,7 +122,7 @@ class VentaController extends Controller
             foreach ($data['productos'] as $p) {
                 $producto = $this->resolverProducto($p['producto'], $p['precio_unitario']);
 
-                $detalle = $venta->detalles()->create([
+                $venta->detalles()->create([
                     'producto_id'     => $producto->id,
                     'producto'        => $p['producto'],
                     'cantidad'        => $p['cantidad'],
@@ -138,6 +142,14 @@ class VentaController extends Controller
             }
 
             $this->recalcularStockVenta($venta);
+
+            // Auto-registro de pago si se indicó un método inmediato
+            $metodo = $data['metodo_pago'] ?? null;
+            if (!empty($metodo) && $metodo !== 'ninguno') {
+                app(CobranzaService::class)->registrarPago($venta, [
+                    ['metodo' => $metodo, 'monto' => $total],
+                ]);
+            }
         });
 
         return redirect('/casadets/ventas')->with('success', 'Venta registrada.');

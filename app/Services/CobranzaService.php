@@ -13,27 +13,40 @@ use Illuminate\Support\Facades\DB;
 class CobranzaService
 {
     /**
-     * Registra un pago para una venta.
+     * Registra un pago para una venta y genera el movimiento en el ledger.
      *
      * Escenarios:
      *  - Pago exacto    → venta PAGADA
      *  - Pago parcial   → venta PARCIAL
-     *  - Pago excedente → venta PAGADA + saldo a favor
+     *  - Pago excedente → venta PAGADA + saldo a favor (si hay cliente)
      *  - Venta ya PAGADA → 100% saldo a favor
+     *
+     * @param  Venta         $venta
+     * @param  array         $pagosInput   [['metodo'=>'efectivo','monto'=>100.00], ...]
+     * @param  string|null   $estadoManual Fuerza un estado concreto (opcional)
+     * @param  int|null      $userId       ID del usuario que realiza el pago (para auditoría)
      */
-    public function registrarPago(Venta $venta, array $pagosInput, ?string $estadoManual = null): array
-    {
-        return DB::transaction(function () use ($venta, $pagosInput, $estadoManual) {
+    public function registrarPago(
+        Venta $venta,
+        array $pagosInput,
+        ?string $estadoManual = null,
+        ?int $userId = null
+    ): array {
+        return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId) {
 
             // ── 1. Filtrar métodos reales con monto > 0 ────────────────
             $pagosReales = collect($pagosInput)
-                ->filter(fn($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
-                ->map(fn($p) => [
+                ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
+                ->map(fn ($p) => [
                     'metodo' => $p['metodo'],
                     'monto'  => round((float) $p['monto'], 2),
                 ]);
 
-            $montoNuevo = round($pagosReales->sum('monto'), 2);
+            // Suma exacta usando bcmath para evitar errores de punto flotante
+            $montoNuevo = (float) $pagosReales->reduce(
+                fn ($carry, $p) => bcadd($carry, (string) $p['monto'], 2),
+                '0'
+            );
 
             // String de métodos únicos (para display y compatibilidad)
             $metodoStr = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
@@ -46,13 +59,18 @@ class CobranzaService
                     'pago'            => null,
                     'estado'          => $venta->fresh()->estado,
                     'saldo_favor'     => 0.0,
-                    'saldo_pendiente' => max(0, round((float) $venta->total - (float) $venta->pagado, 2)),
+                    'saldo_pendiente' => max(0, (float) bcsub(
+                        (string) $venta->total,
+                        (string) $venta->pagado,
+                        2
+                    )),
                 ];
             }
 
             // ── 2. Crear registro de Pago ──────────────────────────────
             $pago = Pago::create([
                 'cliente_id'  => $venta->cliente_id,
+                'user_id'     => $userId,
                 'monto_total' => $montoNuevo,
                 'metodo_pago' => $metodoStr,
                 'estado'      => 'aplicado',
@@ -68,18 +86,21 @@ class CobranzaService
                 ]);
             }
 
-            // ── 4. Calcular monto aplicable a la venta ─────────────────
+            // ── 4. Calcular monto aplicable a la venta (bcmath) ────────
             $totalDeuda    = (float) $venta->total;
             $yaPagado      = (float) $venta->pagado;
-            $saldoDeuda    = max(0, round($totalDeuda - $yaPagado, 2));
+            $saldoDeuda    = (float) max(
+                '0',
+                bcsub((string) $totalDeuda, (string) $yaPagado, 2)
+            );
             $ventaYaPagada = $venta->estado === 'pagado';
 
             if ($ventaYaPagada) {
-                $montoAplicado = 0;
+                $montoAplicado = 0.0;
                 $excedente     = $montoNuevo;
             } else {
-                $montoAplicado = min($montoNuevo, $saldoDeuda);
-                $excedente     = round($montoNuevo - $montoAplicado, 2);
+                $montoAplicado = $montoNuevo <= $saldoDeuda ? $montoNuevo : $saldoDeuda;
+                $excedente     = (float) bcsub((string) $montoNuevo, (string) $montoAplicado, 2);
             }
 
             // ── 5. Vincular pago con venta ─────────────────────────────
@@ -90,7 +111,7 @@ class CobranzaService
                     'monto_aplicado' => $montoAplicado,
                 ]);
 
-                $nuevoPagado = round($yaPagado + $montoAplicado, 2);
+                $nuevoPagado = (float) bcadd((string) $yaPagado, (string) $montoAplicado, 2);
                 $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $metodoStr]);
 
                 if ($estadoManual) {
@@ -102,7 +123,7 @@ class CobranzaService
             }
 
             // ── 6. Saldo a favor si hay excedente ─────────────────────
-            $hayExcedente = round($excedente, 2) > 0;
+            $hayExcedente = $excedente > 0;
 
             if ($hayExcedente && $venta->cliente_id) {
                 $descripcion = $ventaYaPagada
@@ -127,11 +148,13 @@ class CobranzaService
             Movimiento::create([
                 'tipo'             => 'ingreso',
                 'subtipo'          => 'pago_venta',
+                'origen'           => 'auto',
                 'categoria'        => 'Cobro de venta',
                 'metodo_pago'      => $metodoStr,
                 'referencia_tipo'  => 'pago',
                 'referencia_id'    => $pago->id,
                 'cliente_id'       => $venta->cliente_id,
+                'user_id'          => $userId,
                 'documento_tipo'   => $venta->documento_tipo ?? 'venta',
                 'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
                 'monto'            => $montoNuevo,
@@ -144,7 +167,11 @@ class CobranzaService
                 'pago'            => $pago,
                 'estado'          => $venta->estado,
                 'saldo_favor'     => $hayExcedente ? $excedente : 0.0,
-                'saldo_pendiente' => max(0, round((float) $venta->total - (float) $venta->pagado, 2)),
+                'saldo_pendiente' => max(0, (float) bcsub(
+                    (string) $venta->total,
+                    (string) $venta->pagado,
+                    2
+                )),
             ];
         });
     }
@@ -172,10 +199,12 @@ class CobranzaService
 
     /**
      * Aplica un saldo a favor existente a una venta pendiente/parcial.
+     *
+     * @param  int|null $userId  ID del usuario que realiza la acción
      */
-    public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto): array
+    public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto, ?int $userId = null): array
     {
-        return DB::transaction(function () use ($saldo, $venta, $monto) {
+        return DB::transaction(function () use ($saldo, $venta, $monto, $userId) {
 
             if ($saldo->cliente_id !== $venta->cliente_id) {
                 throw new \InvalidArgumentException('El saldo no pertenece al cliente de la venta.');
@@ -188,7 +217,7 @@ class CobranzaService
             }
 
             $disponible = (float) $saldo->monto_disponible;
-            $deuda      = max(0, (float) $venta->total - (float) $venta->pagado);
+            $deuda      = max(0.0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2));
             $aplicar    = round(min($monto, $disponible, $deuda), 2);
 
             if ($aplicar <= 0) {
@@ -198,6 +227,7 @@ class CobranzaService
             // Pago contable para el saldo a favor
             $pago = Pago::create([
                 'cliente_id'  => $venta->cliente_id,
+                'user_id'     => $userId,
                 'monto_total' => $aplicar,
                 'metodo_pago' => 'saldo_favor',
                 'estado'      => 'aplicado',
@@ -219,17 +249,18 @@ class CobranzaService
                 'monto_aplicado' => $aplicar,
             ]);
 
-            // Actualizar venta
-            $nuevoPagado = round((float) $venta->pagado + $aplicar, 2);
+            // Actualizar venta (bcmath para el acumulado)
+            $nuevoPagado = (float) bcadd((string) $venta->pagado, (string) $aplicar, 2);
             $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $venta->metodo_pago]);
             $venta->refresh();
             $venta->recalcularEstado();
 
-            // Actualizar saldo a favor
-            $nuevoDisponible = round($disponible - $aplicar, 2);
+            // Actualizar saldo a favor (bcmath)
+            $nuevoDisponible = (float) bcsub((string) $disponible, (string) $aplicar, 2);
+            $nuevoDisponible = max(0.0, $nuevoDisponible);
             $nuevoEstado     = round($nuevoDisponible, 2) <= 0 ? 'usado' : 'parcialmente_usado';
             $saldo->update([
-                'monto_disponible' => max(0, $nuevoDisponible),
+                'monto_disponible' => $nuevoDisponible,
                 'estado'           => $nuevoEstado,
             ]);
 
@@ -238,11 +269,13 @@ class CobranzaService
             Movimiento::create([
                 'tipo'             => 'ingreso',
                 'subtipo'          => 'saldo_favor_usado',
+                'origen'           => 'auto',
                 'categoria'        => 'Saldo a favor aplicado',
                 'metodo_pago'      => 'saldo_favor',
                 'referencia_tipo'  => 'saldo_favor',
                 'referencia_id'    => $saldo->id,
                 'cliente_id'       => $venta->cliente_id,
+                'user_id'          => $userId,
                 'documento_tipo'   => $venta->documento_tipo ?? 'venta',
                 'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
                 'monto'            => $aplicar,
@@ -253,7 +286,7 @@ class CobranzaService
             $venta->refresh();
             return [
                 'aplicado'       => $aplicar,
-                'saldo_restante' => max(0, $nuevoDisponible),
+                'saldo_restante' => $nuevoDisponible,
                 'estado_venta'   => $venta->estado,
                 'saldo_estado'   => $nuevoEstado,
             ];
@@ -284,7 +317,11 @@ class CobranzaService
             ->orderBy('fecha', 'asc')
             ->get()
             ->map(function ($v) {
-                $v->saldo_pendiente = round((float) $v->total - (float) $v->pagado, 2);
+                $v->saldo_pendiente = (float) bcsub(
+                    (string) $v->total,
+                    (string) $v->pagado,
+                    2
+                );
                 return $v;
             });
     }

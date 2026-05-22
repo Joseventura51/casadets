@@ -44,11 +44,13 @@
 
                 <div class="col-md-3">
                     <label class="form-label">Método de pago</label>
-                    <select name="metodo_pago" class="form-select" required>
+                    <select name="metodo_pago" class="form-select">
+                        <option value="" {{ old('metodo_pago') === '' ? 'selected' : '' }}>— Pagar después (crédito) —</option>
                         @foreach(['efectivo','tarjeta','yape','plin','transferencia'] as $m)
                             <option value="{{ $m }}" {{ old('metodo_pago', 'efectivo') == $m ? 'selected' : '' }}>{{ ucfirst($m) }}</option>
                         @endforeach
                     </select>
+                    <div class="form-text">Selecciona "Pagar después" para ventas a crédito.</div>
                 </div>
 
                 <div class="col-md-2">
