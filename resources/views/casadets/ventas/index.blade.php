@@ -8,28 +8,10 @@
 .select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
 .select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
-
-.filter-input {
-    font-size: .78rem;
-    border-radius: 5px;
-    border: 1px solid #ced4da;
-    padding: .2rem .4rem;
-    background: #fff;
-    width: 100%;
-    min-width: 0;
-    transition: border-color .15s, box-shadow .15s;
-}
-.filter-input:focus {
-    outline: none;
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 2px rgba(13,110,253,.15);
-}
-.thead-filter td {
-    background: #e9f0fb;
-    padding: .3rem .5rem;
-    border-bottom: 2px solid #c8d8f5;
-}
-.fila-oculta { display: none !important; }
+.filter-input { font-size:.78rem; border-radius:5px; border:1px solid #ced4da; padding:.2rem .4rem; background:#fff; width:100%; min-width:0; transition:border-color .15s,box-shadow .15s; }
+.filter-input:focus { outline:none; border-color:#86b7fe; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
+.thead-filter td { background:#e9f0fb; padding:.3rem .5rem; border-bottom:2px solid #c8d8f5; }
+.fila-oculta { display:none !important; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -50,34 +32,60 @@
     </div>
 </div>
 
-{{-- RANGO DE FECHAS --}}
-<div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-    <div class="d-flex align-items-center gap-2">
-        <div>
-            <label class="d-block" style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#6c757d; margin-bottom:.2rem;">Fecha Inicio</label>
-            <div class="input-group input-group-sm" style="width:155px;">
-                <input type="date" id="fDesde" class="form-control form-control-sm" style="font-size:.82rem;">
-                <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
+{{-- ── RANGO DE FECHAS (server-side) ──────────────────────────── --}}
+<form method="GET" action="/casadets/ventas" id="formFechas" class="mb-3">
+    <div class="d-flex align-items-end gap-3 flex-wrap">
+
+        <div class="d-flex align-items-center gap-2">
+            <div>
+                <label class="d-block" style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;margin-bottom:.2rem;">Fecha Inicio</label>
+                <div class="input-group input-group-sm" style="width:160px;">
+                    <input type="date" name="desde" id="fDesde"
+                           value="{{ $todas ? '' : $desde }}"
+                           class="form-control form-control-sm" style="font-size:.82rem;">
+                    <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
+                </div>
+            </div>
+            <div style="padding-top:1.2rem;color:#adb5bd;font-size:.9rem;">—</div>
+            <div>
+                <label class="d-block" style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;margin-bottom:.2rem;">Fecha Fin</label>
+                <div class="input-group input-group-sm" style="width:160px;">
+                    <input type="date" name="hasta" id="fHasta"
+                           value="{{ $todas ? '' : $hasta }}"
+                           class="form-control form-control-sm" style="font-size:.82rem;">
+                    <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
+                </div>
+            </div>
+            <div style="padding-top:1.2rem;display:flex;gap:.35rem;">
+                <button type="submit" class="btn btn-sm btn-primary" style="font-size:.78rem;" title="Aplicar rango">
+                    <i class="bi bi-search"></i>
+                </button>
+                <a href="/casadets/ventas" class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;" title="Volver a hoy">
+                    Hoy
+                </a>
+                <a href="/casadets/ventas?todas=1" class="btn btn-sm {{ $todas ? 'btn-secondary' : 'btn-outline-secondary' }}" style="font-size:.78rem;" title="Ver todas las fechas">
+                    Todas
+                </a>
             </div>
         </div>
-        <div style="padding-top:1.2rem; color:#adb5bd; font-size:.9rem;">—</div>
-        <div>
-            <label class="d-block" style="font-size:.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:#6c757d; margin-bottom:.2rem;">Fecha Fin</label>
-            <div class="input-group input-group-sm" style="width:155px;">
-                <input type="date" id="fHasta" class="form-control form-control-sm" style="font-size:.82rem;">
-                <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
-            </div>
+
+        <div style="font-size:.8rem;color:#6c757d;padding-bottom:.1rem;">
+            @if($todas)
+                <span class="badge bg-secondary">Todas las fechas · {{ $ventas->count() }} ventas</span>
+            @else
+                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
+                    {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }}
+                    @if($desde !== $hasta) — {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} @endif
+                    · {{ $ventas->count() }} venta(s)
+                </span>
+            @endif
+            <span id="contadorFiltro" style="display:none;">
+                · Mostrando <span id="cntVisible" class="fw-bold text-dark">0</span> filtradas
+            </span>
         </div>
-        <div style="padding-top:1.2rem;">
-            <button id="btnLimpiarFechas" class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;" title="Limpiar fechas">
-                <i class="bi bi-x-lg"></i>
-            </button>
-        </div>
+
     </div>
-    <div id="contadorFiltro" style="display:none; font-size:.8rem; color:#6c757d; margin-top:0 !important;">
-        Mostrando <span id="cntVisible" class="fw-bold text-dark">0</span> de <span id="cntTotal" class="fw-bold text-dark">0</span> ventas
-    </div>
-</div>
+</form>
 
 <div class="card">
     <div class="table-responsive">
@@ -125,14 +133,14 @@
             <tbody>
                 @forelse($ventas as $v)
                 @php
-                    $metodosArr = array_filter(explode(',', $v->metodo_pago ?? ''));
-                    $estado = $v->estado ?? 'pendiente';
-                    $filaClase = $estado === 'pagado' ? 'fila-pagado' : ($estado === 'anulado' ? 'fila-anulado' : '');
-                    $clienteTexto = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
+                    $metodosArr  = array_filter(explode(',', $v->metodo_pago ?? ''));
+                    $estado      = $v->estado ?? 'pendiente';
+                    $filaClase   = $estado === 'pagado' ? 'fila-pagado' : ($estado === 'anulado' ? 'fila-anulado' : '');
+                    $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
-                    data-cliente="{{ strtolower($clienteTexto) }}"
+                    data-cliente="{{ strtolower($clienteTxt) }}"
                     data-estado="{{ $estado }}"
                     data-fecha="{{ $v->fecha->format('Y-m-d') }}"
                     data-pago="{{ strtolower($v->metodo_pago ?? '') }}"
@@ -141,9 +149,7 @@
                     <td>
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
                             @csrf
-                            <select name="estado"
-                                class="select-estado est-{{ $estado }}"
-                                onchange="this.form.submit()">
+                            <select name="estado" class="select-estado est-{{ $estado }}" onchange="this.form.submit()">
                                 <option value="pendiente" {{ $estado==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
                                 <option value="pagado"    {{ $estado==='pagado'   ?'selected':'' }}>✓ Pagado</option>
                                 <option value="anulado"   {{ $estado==='anulado'  ?'selected':'' }}>✕ Anulado</option>
@@ -199,7 +205,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr id="filaVacia"><td colspan="8" class="text-center text-muted py-4">No hay ventas registradas.</td></tr>
+                <tr><td colspan="8" class="text-center text-muted py-4">No hay ventas en este período.</td></tr>
                 @endforelse
             </tbody>
             @if($ventas->count())
@@ -226,7 +232,7 @@ document.querySelectorAll('.select-estado').forEach(sel => {
     });
 });
 
-// ── Filtrado en vivo ──────────────────────────────────────────
+// ── Filtrado JS en vivo (sobre las filas ya cargadas) ────────────
 const filtros = {
     estado:    document.getElementById('fEstado'),
     vendedor:  document.getElementById('fVendedor'),
@@ -235,21 +241,16 @@ const filtros = {
     documento: document.getElementById('fDocumento'),
     total:     document.getElementById('fTotal'),
 };
-const fDesde = document.getElementById('fDesde');
-const fHasta = document.getElementById('fHasta');
 const fFecha = document.getElementById('fFecha');
 
 const filas        = document.querySelectorAll('.fila-venta');
 const cntVisible   = document.getElementById('cntVisible');
-const cntTotal     = document.getElementById('cntTotal');
 const contador     = document.getElementById('contadorFiltro');
 const noResultados = document.getElementById('filaNoResultados');
 const totalVisible = document.getElementById('totalVisible');
 
-if (cntTotal) cntTotal.textContent = filas.length;
-
 function normalizar(str) {
-    return str.toLowerCase()
+    return (str || '').toLowerCase()
         .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
         .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
         .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
@@ -257,56 +258,44 @@ function normalizar(str) {
 
 function aplicarFiltros() {
     const vals = {};
-    for (const [k, el] of Object.entries(filtros)) {
-        vals[k] = normalizar(el.value.trim());
-    }
-    const desde = fDesde.value;
-    const hasta  = fHasta.value;
-    const fecha  = fFecha.value;
+    for (const [k, el] of Object.entries(filtros)) vals[k] = normalizar(el.value.trim());
+    const fecha = fFecha.value;
+    const hayFiltro = Object.values(vals).some(v => v !== '') || fecha;
 
-    const hayFiltro = Object.values(vals).some(v => v !== '') || desde || hasta || fecha;
     let visibles = 0;
-    let totalCobrado = 0;
+    let totalCob = 0;
 
     filas.forEach(tr => {
         const d = {
-            estado:    normalizar(tr.dataset.estado    || ''),
-            vendedor:  normalizar(tr.dataset.vendedor  || ''),
-            cliente:   normalizar(tr.dataset.cliente   || ''),
-            pago:      normalizar(tr.dataset.pago      || ''),
-            documento: normalizar(tr.dataset.documento || ''),
-            total:     normalizar(tr.dataset.total     || ''),
+            estado:    normalizar(tr.dataset.estado),
+            vendedor:  normalizar(tr.dataset.vendedor),
+            cliente:   normalizar(tr.dataset.cliente),
+            pago:      normalizar(tr.dataset.pago),
+            documento: normalizar(tr.dataset.documento),
+            total:     normalizar(tr.dataset.total),
         };
         const fechaFila = tr.dataset.fecha || '';
 
-        const visible =
+        const ok =
             (!vals.estado    || d.estado === vals.estado)             &&
             (!vals.vendedor  || d.vendedor.includes(vals.vendedor))   &&
             (!vals.cliente   || d.cliente.includes(vals.cliente))     &&
             (!vals.pago      || d.pago.includes(vals.pago))           &&
             (!vals.documento || d.documento.includes(vals.documento)) &&
             (!vals.total     || d.total.includes(vals.total))         &&
-            (!fecha          || fechaFila === fecha)                   &&
-            (!desde          || fechaFila >= desde)                   &&
-            (!hasta          || fechaFila <= hasta);
+            (!fecha          || fechaFila === fecha);
 
-        tr.classList.toggle('fila-oculta', !visible);
-
-        if (visible) {
-            visibles++;
-            totalCobrado += parseFloat(tr.dataset.total) || 0;
-        }
+        tr.classList.toggle('fila-oculta', !ok);
+        if (ok) { visibles++; totalCob += parseFloat(tr.dataset.total) || 0; }
     });
 
+    if (contador) contador.style.display = hayFiltro ? '' : 'none';
     if (cntVisible) cntVisible.textContent = visibles;
-    if (contador)   contador.style.display = hayFiltro ? '' : 'none';
     if (noResultados) noResultados.style.display = (hayFiltro && visibles === 0) ? '' : 'none';
-    if (totalVisible) totalVisible.textContent = 'S/ ' + totalCobrado.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (totalVisible) totalVisible.textContent = 'S/ ' + totalCob.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 Object.values(filtros).forEach(el => el.addEventListener('input', aplicarFiltros));
-fDesde.addEventListener('input', aplicarFiltros);
-fHasta.addEventListener('input', aplicarFiltros);
 fFecha.addEventListener('input', aplicarFiltros);
 
 document.getElementById('btnLimpiar').addEventListener('click', () => {
@@ -315,10 +304,21 @@ document.getElementById('btnLimpiar').addEventListener('click', () => {
     aplicarFiltros();
 });
 
-document.getElementById('btnLimpiarFechas').addEventListener('click', () => {
-    fDesde.value = '';
-    fHasta.value = '';
-    aplicarFiltros();
-});
+// Actualizar href de exportar con el rango actual
+const btnExportar = document.getElementById('btnExportar');
+const fDesde = document.getElementById('fDesde');
+const fHasta = document.getElementById('fHasta');
+function actualizarExport() {
+    const d = fDesde?.value, h = fHasta?.value;
+    let url = '/casadets/ventas/export';
+    const params = [];
+    if (d) params.push('desde=' + d);
+    if (h) params.push('hasta=' + h);
+    if (params.length) url += '?' + params.join('&');
+    if (btnExportar) btnExportar.href = url;
+}
+if (fDesde) fDesde.addEventListener('change', actualizarExport);
+if (fHasta) fHasta.addEventListener('change', actualizarExport);
+actualizarExport();
 </script>
 @endsection

@@ -17,17 +17,30 @@ class VentaController extends Controller
 {
     /* ─── Listado ─────────────────────────────────────────── */
 
-    public function index()
+    public function index(Request $request)
     {
-        // Eager loading con columnas explícitas para evitar SELECT * en relaciones
-        $ventas = Venta::with([
+        // Por defecto carga solo el día de hoy; el usuario puede ampliar el rango
+        $hasFechas = $request->hasAny(['desde', 'hasta']);
+        $desde = $request->input('desde', today()->toDateString());
+        $hasta = $request->input('hasta', $desde);
+        if ($hasta < $desde) $hasta = $desde;
+
+        $query = Venta::with([
                 'vendedor:id,nombre',
                 'cliente:id,nombre,documento',
                 'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
             ])
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
                      'total', 'ajuste', 'metodo_pago',
-                     'documento_tipo', 'documento_numero', 'observaciones')
+                     'documento_tipo', 'documento_numero', 'observaciones');
+
+        // Filtro de fecha: solo si el usuario envió parámetros o se usa el default
+        if (!$request->boolean('todas')) {
+            $query->whereDate('fecha', '>=', $desde)
+                  ->whereDate('fecha', '<=', $hasta);
+        }
+
+        $ventas = $query
             ->orderByRaw("CASE WHEN documento_tipo='factura'  THEN 0
                                WHEN documento_tipo='boleta'   THEN 1
                                WHEN documento_tipo='proforma' THEN 2
@@ -43,7 +56,9 @@ class VentaController extends Controller
             ->orderBy('nombre')
             ->get();
 
-        return view('casadets.ventas.index', compact('ventas', 'vendedores'));
+        $todas = $request->boolean('todas');
+
+        return view('casadets.ventas.index', compact('ventas', 'vendedores', 'desde', 'hasta', 'todas'));
     }
 
     /* ─── Detalle ──────────────────────────────────────────── */
@@ -178,7 +193,13 @@ class VentaController extends Controller
 
     public function pendientes(Request $request)
     {
-        $query = Venta::with(['vendedor', 'cliente', 'detalles'])
+        $query = Venta::with([
+                'vendedor:id,nombre',
+                'cliente:id,nombre,documento',
+                'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
+            ])
+            ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
+                     'total', 'ajuste', 'metodo_pago', 'documento_tipo', 'documento_numero')
             ->where('estado', 'pendiente')
             ->whereDate('fecha', '<', today());
 
@@ -186,7 +207,7 @@ class VentaController extends Controller
         if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
         if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
 
-        $ventas    = $query->orderBy('fecha', 'asc')->get();
+        $ventas     = $query->orderBy('fecha', 'asc')->get();
         $vendedores = \App\Models\Vendedor::select('id', 'nombre')->orderBy('nombre')->get();
 
         return view('casadets.ventas.pendientes', compact('ventas', 'vendedores'));
