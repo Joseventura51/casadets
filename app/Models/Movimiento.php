@@ -11,6 +11,8 @@ class Movimiento extends Model
         'tipo',
         'subtipo',
         'origen',
+        'estado',
+        'empresa',
         'categoria',
         'metodo_pago',
         'referencia_tipo',
@@ -26,7 +28,13 @@ class Movimiento extends Model
 
     protected $casts = [
         'fecha' => 'date',
-        'monto' => 'float',
+        'monto' => 'decimal:2',
+    ];
+
+    protected $attributes = [
+        'estado'  => 'activo',
+        'empresa' => 'casadets',
+        'origen'  => 'manual',
     ];
 
     public function cliente(): BelongsTo
@@ -35,8 +43,7 @@ class Movimiento extends Model
     }
 
     /**
-     * Relación con Pago usada para eager loading en el ledger.
-     * Para acceso seguro usa getPagoDetalleAttribute().
+     * Relación con Pago — solo eager-load cuando referencia_tipo='pago'.
      */
     public function pago(): BelongsTo
     {
@@ -44,15 +51,31 @@ class Movimiento extends Model
     }
 
     /**
-     * Retorna el Pago relacionado SOLO cuando este movimiento es de tipo referencia='pago'.
-     * Evita cruce de referencia_id entre distintos tipos de referencia.
+     * Retorna el Pago SOLO cuando este movimiento referencia un pago real.
+     * Previene cruce de referencia_id polimórfico.
      */
     public function getPagoDetalleAttribute(): ?Pago
     {
         if ($this->referencia_tipo !== 'pago') {
             return null;
         }
-
         return $this->getRelationValue('pago');
+    }
+
+    /**
+     * ¿Este movimiento está anulado?
+     */
+    public function getEsAnuladoAttribute(): bool
+    {
+        return $this->estado === 'anulado';
+    }
+
+    /**
+     * ¿Afecta el balance de caja? (activo + tipo financiero)
+     */
+    public function getAfectaBalanceAttribute(): bool
+    {
+        return $this->estado === 'activo'
+            && in_array($this->tipo, ['ingreso', 'salida']);
     }
 }

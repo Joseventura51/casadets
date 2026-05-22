@@ -39,7 +39,11 @@
                 </div>
 
                 <div class="col-md-4">
-                    {{-- Espacio visual --}}
+                    <label class="form-label">Empresa</label>
+                    <select name="empresa" class="form-select">
+                        <option value="casadets" {{ old('empresa', 'casadets') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+                        <option value="zendy"    {{ old('empresa') === 'zendy' ? 'selected' : '' }}>ZENDY</option>
+                    </select>
                 </div>
 
                 <div class="col-12">

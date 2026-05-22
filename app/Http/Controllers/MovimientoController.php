@@ -20,26 +20,28 @@ class MovimientoController extends Controller
         if ($request->filled('tipo'))    $query->where('tipo', $request->tipo);
         if ($request->filled('subtipo')) $query->where('subtipo', $request->subtipo);
         if ($request->filled('origen'))  $query->where('origen', $request->origen);
+        if ($request->filled('empresa')) $query->where('empresa', $request->empresa);
+        if ($request->filled('estado'))  $query->where('estado', $request->estado);
         if ($request->filled('desde'))   $query->whereDate('fecha', '>=', $request->desde);
         if ($request->filled('hasta'))   $query->whereDate('fecha', '<=', $request->hasta);
 
         $movimientos = $query->paginate(50)->withQueryString();
 
-        // Anular la relación pago para movimientos que no son de tipo referencia='pago'
-        // Evita cruce de referencia_id entre distintos tipos de referencia
+        // Anular relación pago para movimientos que no son referencia='pago'
         $movimientos->each(function ($m) {
             if ($m->referencia_tipo !== 'pago') {
                 $m->setRelation('pago', null);
             }
         });
 
-        // Totales de la página actual (no del período completo)
+        // Totales de la página — solo movimientos activos afectan balance
         $col = $movimientos->getCollection();
+        $activos = $col->where('estado', 'activo');
         $totales = [
-            'ingresos' => round($col->where('tipo', 'ingreso')->sum('monto'), 2),
-            'salidas'  => round($col->where('tipo', 'salida')->sum('monto'), 2),
+            'ingresos' => round($activos->where('tipo', 'ingreso')->sum('monto'), 2),
+            'salidas'  => round($activos->where('tipo', 'salida')->sum('monto'), 2),
             'balance'  => round(
-                $col->where('tipo', 'ingreso')->sum('monto') - $col->where('tipo', 'salida')->sum('monto'),
+                $activos->where('tipo', 'ingreso')->sum('monto') - $activos->where('tipo', 'salida')->sum('monto'),
                 2
             ),
         ];
@@ -57,6 +59,7 @@ class MovimientoController extends Controller
         $request->validate([
             'tipo'             => 'required|in:ingreso,salida',
             'categoria'        => 'required|string|max:255',
+            'empresa'          => 'nullable|string|in:casadets,zendy',
             'documento_tipo'   => 'nullable|string|max:50',
             'documento_numero' => 'nullable|string|max:255',
             'monto'            => 'required|numeric|min:0.01',
@@ -72,9 +75,11 @@ class MovimientoController extends Controller
             [
                 'subtipo' => 'manual',
                 'origen'  => 'manual',
+                'estado'  => 'activo',
+                'empresa' => $request->input('empresa', 'casadets'),
             ]
         ));
 
-        return redirect('/movimientos')->with('success', 'Movimiento registrado');
+        return redirect('/movimientos')->with('success', 'Movimiento registrado.');
     }
 }

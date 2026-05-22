@@ -6,9 +6,15 @@
         <h3 class="mb-0">Caja</h3>
         <p class="text-muted mb-0">
             {{ $esRango ? 'Período: '.$desde.' al '.$hasta : 'Día: '.$desde }}
+            &nbsp;·&nbsp;
+            <span class="badge bg-light text-dark border" style="font-size:.75rem;">{{ strtoupper($empresa) }}</span>
         </p>
     </div>
     <form method="GET" class="d-flex gap-2 align-items-center flex-wrap">
+        <select name="empresa" class="form-select form-select-sm" style="width:130px;">
+            <option value="casadets" {{ $empresa === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+            <option value="zendy"    {{ $empresa === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
+        </select>
         <div class="d-flex align-items-center gap-1">
             <label class="form-label mb-0 small text-muted">Desde</label>
             <input type="date" name="desde" value="{{ $desde }}"
@@ -24,7 +30,7 @@
     </form>
 </div>
 
-{{-- KPI Cards — fuente: movimientos (sin doble conteo) --}}
+{{-- KPI Cards — fuente: movimientos activos (sin doble conteo) --}}
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card kpi-card">
@@ -50,13 +56,20 @@
             <small class="text-muted">Sin pagos de ventas</small>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card kpi-card">
-            <div class="text-muted small">Salidas</div>
-            <h4 class="text-danger mb-0">S/ {{ number_format($totalSalidas, 2) }}</h4>
+            <div class="text-muted small">Compras</div>
+            <h4 class="text-warning mb-0">S/ {{ number_format($totalCompras, 2) }}</h4>
+            <small class="text-muted">Egresos por compras</small>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <div class="card kpi-card">
+            <div class="text-muted small">Otras salidas</div>
+            <h4 class="text-danger mb-0">S/ {{ number_format($totalSalidas - $totalCompras, 2) }}</h4>
+        </div>
+    </div>
+    <div class="col-md-2">
         <div class="card kpi-card">
             <div class="text-muted small">Saldo de caja</div>
             <h4 class="mb-0 {{ $balance >= 0 ? 'text-success' : 'text-danger' }}">
@@ -136,10 +149,10 @@
             </thead>
             <tbody>
                 @forelse($ventas as $v)
-                @php
-                    $cobrada = $v->estado === 'pagado' || !empty($v->metodo_pago);
-                @endphp
-                <tr class="{{ !$cobrada ? 'table-warning' : '' }}">
+                {{-- BUG #2 FIX: cobrada = SOLO estado 'pagado', no metodo_pago --}}
+                @php $cobrada = $v->estado === 'pagado'; @endphp
+                <tr class="{{ !$cobrada && $v->estado !== 'anulado' ? 'table-warning' : '' }}
+                            {{ $v->estado === 'anulado' ? 'table-secondary text-muted' : '' }}">
                     <td class="text-muted small">{{ $v->fecha->format('d/m/Y') }}</td>
                     <td class="small text-muted">{{ $v->documento_numero ?? '—' }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>
@@ -164,10 +177,13 @@
                             @foreach(array_filter(array_map('trim', explode(',', $v->metodo_pago))) as $m)
                                 <span class="badge bg-success" style="font-size:.7rem;">{{ ucfirst($m) }}</span>
                             @endforeach
-                        @else
-                            <a href="/casadets/ventas/{{ $v->id }}/pago" class="btn btn-xs btn-outline-warning py-0 px-1" style="font-size:.75rem;">
+                        @elseif($v->estado !== 'anulado')
+                            <a href="/casadets/ventas/{{ $v->id }}/pago"
+                               class="btn btn-xs btn-outline-warning py-0 px-1" style="font-size:.75rem;">
                                 <i class="bi bi-cash me-1"></i>Cobrar
                             </a>
+                        @else
+                            <span class="text-muted small">—</span>
                         @endif
                     </td>
                     <td class="text-end fw-semibold">
@@ -198,7 +214,15 @@
 {{-- Movimientos del período --}}
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Movimientos <span class="badge bg-secondary ms-1">{{ $movimientos->count() }}</span></span>
+        <span>
+            Movimientos
+            <span class="badge bg-secondary ms-1">{{ $movimientos->count() }}</span>
+            @if($movimientos->where('estado','anulado')->count())
+                <span class="badge bg-light text-muted ms-1" style="font-size:.7rem;">
+                    {{ $movimientos->where('estado','anulado')->count() }} anulado(s)
+                </span>
+            @endif
+        </span>
         <div>
             <a href="/movimientos/create/ingreso" class="btn btn-sm btn-success">+ Ingreso</a>
             <a href="/movimientos/create/salida" class="btn btn-sm btn-danger">+ Salida</a>
@@ -213,36 +237,48 @@
                     <th>Categoría</th>
                     <th>Origen</th>
                     <th>Documento</th>
+                    <th>Estado</th>
                     <th class="text-end">Monto</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($movimientos as $m)
-                <tr>
+                <tr class="{{ $m->estado === 'anulado' ? 'text-muted' : '' }}">
                     <td class="text-muted small">{{ $m->fecha->format('d/m/Y') }}</td>
                     <td>
-                        <span class="badge {{ $m->tipo == 'ingreso' ? 'bg-success' : 'bg-danger' }}">
-                            {{ ucfirst($m->tipo) }}
-                        </span>
-                    </td>
-                    <td>
-                        {{ $m->categoria }}
+                        @if($m->tipo === 'ingreso')
+                            <span class="badge bg-success {{ $m->estado === 'anulado' ? 'opacity-50' : '' }}">Ingreso</span>
+                        @elseif($m->tipo === 'salida')
+                            <span class="badge bg-danger {{ $m->estado === 'anulado' ? 'opacity-50' : '' }}">Salida</span>
+                        @else
+                            <span class="badge bg-secondary opacity-50">{{ ucfirst($m->tipo) }}</span>
+                        @endif
                         @if($m->subtipo === 'pago_venta')
-                            <span class="badge bg-light text-secondary ms-1" style="font-size:.65rem;">venta</span>
+                            <br><span class="badge bg-light text-secondary" style="font-size:.6rem;">venta</span>
+                        @elseif($m->subtipo === 'compra')
+                            <br><span class="badge bg-light text-secondary" style="font-size:.6rem;">compra</span>
                         @elseif($m->subtipo === 'saldo_favor_usado')
-                            <span class="badge bg-light text-secondary ms-1" style="font-size:.65rem;">saldo favor</span>
+                            <br><span class="badge bg-light text-info" style="font-size:.6rem;">saldo favor</span>
                         @endif
                     </td>
+                    <td>{{ $m->categoria }}</td>
                     <td>
                         <span class="badge {{ ($m->origen ?? 'manual') === 'auto' ? 'bg-info text-dark' : 'bg-secondary' }}" style="font-size:.65rem;">
                             {{ ($m->origen ?? 'manual') === 'auto' ? 'auto' : 'manual' }}
                         </span>
                     </td>
                     <td class="small text-muted">{{ ucfirst($m->documento_tipo ?? '') }} {{ $m->documento_numero ?? '' }}</td>
-                    <td class="text-end fw-semibold">S/ {{ number_format($m->monto, 2) }}</td>
+                    <td>
+                        @if($m->estado === 'anulado')
+                            <span class="badge bg-secondary" style="font-size:.65rem;">Anulado</span>
+                        @endif
+                    </td>
+                    <td class="text-end fw-semibold {{ $m->estado === 'anulado' ? 'text-decoration-line-through text-muted' : '' }}">
+                        S/ {{ number_format($m->monto, 2) }}
+                    </td>
                 </tr>
                 @empty
-                <tr><td colspan="6" class="text-center text-muted py-3">Sin movimientos en este período</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-3">Sin movimientos en este período</td></tr>
                 @endforelse
             </tbody>
         </table>

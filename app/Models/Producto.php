@@ -10,6 +10,7 @@ class Producto extends Model
     protected $fillable = [
         'nombre',
         'codigo',
+        'empresa',
         'precio_venta',
         'precio_costo',
         'stock_actual',
@@ -40,13 +41,13 @@ class Producto extends Model
 
     /**
      * Stock calculado desde el kardex (fuente de verdad).
-     * Usar solo cuando se necesite precisión absoluta; para listados usar stock_actual.
+     * Usar para verificación; para display usar stock_actual.
      */
     public function stockDesdeKardex(): float
     {
-        return (float) $this->stockMovimientos()
+        return (float) ($this->stockMovimientos()
             ->selectRaw("SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END) as total")
-            ->value('total') ?? 0.0;
+            ->value('total') ?? 0.0);
     }
 
     /**
@@ -55,5 +56,24 @@ class Producto extends Model
     public function recalcularStock(): void
     {
         $this->update(['stock_actual' => $this->stockDesdeKardex()]);
+    }
+
+    /**
+     * Margen de ganancia estimado (%).
+     */
+    public function getMargenAttribute(): ?float
+    {
+        $pv = (float) $this->precio_venta;
+        $pc = (float) $this->precio_costo;
+        if ($pv <= 0) return null;
+        return round(($pv - $pc) / $pv * 100, 1);
+    }
+
+    /**
+     * Tiene stock bajo (≤ 0).
+     */
+    public function getStockBajoAttribute(): bool
+    {
+        return (float) $this->stock_actual <= 0;
     }
 }

@@ -1,0 +1,173 @@
+Además de los fixes críticos anteriores, agrega estos módulos y mejoras obligatorias:
+
+CRUD COMPLETO DE PRODUCTOS
+El sistema ya tiene tabla productos y kardex, pero falta la capa operativa real.
+
+Crear módulo completo:
+
+* ruta /productos
+* listado paginado
+* búsqueda por nombre/código
+* filtros por:
+
+  * activo/inactivo
+  * stock bajo
+  * empresa
+* crear/editar/desactivar productos
+* NO borrar físicamente productos
+
+Campos:
+
+* nombre
+* código
+* precio_venta
+* precio_costo
+* stock_actual (solo lectura)
+* activo
+* empresa
+
+Requisitos importantes:
+
+* evitar productos duplicados
+* normalizar nombres al crear automáticamente desde ventas/importaciones
+* validar unicidad de código por empresa
+* agregar índices donde haga falta
+
+Vista detalle del producto:
+
+* stock actual
+* últimas ventas
+* últimas compras
+* movimientos de kardex
+* margen estimado
+* botón “Ver kardex completo”
+
+KARDEX / INVENTARIO
+Crear vista:
+
+* movimientos de stock por producto
+* entradas/salidas
+* saldo acumulado
+* referencia origen (venta/compra/ajuste)
+* filtros por fecha
+
+Agregar:
+
+* ajuste manual de stock
+* esto debe generar StockMovimiento tipo='ajuste'
+* registrar usuario y observación
+
+CAJA / LEDGER — MEJORAS IMPORTANTES
+La caja debe comportarse como un ledger financiero auditado, no como una tabla simple.
+
+Agregar:
+
+1. Detalle expandible por movimiento
+   Cada movimiento debe mostrar:
+
+* métodos de pago exactos
+* ventas relacionadas
+* cliente
+* usuario creador
+* origen:
+  auto/manual/anulación
+* documento relacionado
+* observaciones
+* timestamp exacto
+
+2. Balance real por período
+   Separar visualmente:
+
+* ingresos por ventas
+* otros ingresos
+* egresos por compras
+* gastos manuales
+* ajustes
+
+NO mezclar conceptos en un solo total ambiguo.
+
+3. Reversiones auditadas
+   Cuando:
+
+* se elimina una venta
+* se anula un pago
+* se corrige una compra
+
+NO borrar movimientos.
+Crear:
+
+* movimiento compensatorio
+* referencia al movimiento original
+* estado='anulado' o 'revertido'
+
+El ledger debe ser inmutable.
+
+4. Caja por empresa
+   Separar completamente:
+
+* CASADETS
+* ZENDY
+
+Filtros:
+
+* por empresa
+* por rango de fechas
+* por subtipo
+* por método de pago
+* por usuario
+
+5. Dashboard financiero real
+   Agregar métricas:
+
+* ventas cobradas reales
+* deuda pendiente
+* saldos a favor disponibles
+* compras del período
+* utilidad estimada
+* flujo neto de caja
+
+6. Exportaciones
+   Permitir exportar:
+
+* caja
+* kardex
+* productos
+* movimientos
+  a Excel/PDF.
+
+7. Alertas operativas
+   Dashboard debe mostrar:
+
+* stock bajo
+* ventas pendientes vencidas
+* saldos a favor antiguos
+* diferencias financieras detectadas
+* productos sin movimiento hace mucho tiempo
+
+REGLAS IMPORTANTES
+
+* NO usar lógica basada en strings concatenados
+* TODO debe salir de relaciones reales
+* mantener compatibilidad con SoftDeletes
+* mantener precisión financiera exacta con bcmath
+* NO reintroducir floats en lógica monetaria
+* NO agregar complejidad innecesaria
+* evitar tablas redundantes
+* mantener arquitectura limpia y auditada
+
+Antes de terminar:
+
+* revisar integridad completa de BD
+* verificar FKs
+* verificar cascadas
+* revisar queries lentas
+* validar que no existan dobles conteos
+* probar flujo completo:
+  compra → stock → venta → pago → saldo → reversa → caja → reportes
+
+Entregar al final:
+
+* lista de cambios
+* riesgos restantes
+* mejoras futuras recomendadas
+* puntos donde aún puede haber inconsistencia financiera.

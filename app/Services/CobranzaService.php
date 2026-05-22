@@ -21,20 +21,22 @@ class CobranzaService
      *  - Pago excedente → venta PAGADA + saldo a favor (si hay cliente)
      *  - Venta ya PAGADA → 100% saldo a favor
      *
-     * @param  Venta         $venta
-     * @param  array         $pagosInput   [['metodo'=>'efectivo','monto'=>100.00], ...]
-     * @param  string|null   $estadoManual Fuerza un estado concreto (opcional)
-     * @param  int|null      $userId       ID del usuario que realiza el pago (para auditoría)
+     * @param  Venta        $venta
+     * @param  array        $pagosInput   [['metodo'=>'efectivo','monto'=>100.00], ...]
+     * @param  string|null  $estadoManual Fuerza estado concreto (sin efecto financiero)
+     * @param  int|null     $userId       ID del usuario (auditoría)
+     * @param  string       $empresa      Empresa dueña de la operación
      */
     public function registrarPago(
         Venta $venta,
         array $pagosInput,
         ?string $estadoManual = null,
-        ?int $userId = null
+        ?int $userId = null,
+        string $empresa = 'casadets'
     ): array {
-        return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId) {
+        return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId, $empresa) {
 
-            // ── 1. Filtrar métodos reales con monto > 0 ────────────────
+            // ── 1. Filtrar métodos reales con monto > 0 ────────────────────
             $pagosReales = collect($pagosInput)
                 ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
                 ->map(fn ($p) => [
@@ -42,13 +44,13 @@ class CobranzaService
                     'monto'  => round((float) $p['monto'], 2),
                 ]);
 
-            // Suma exacta usando bcmath para evitar errores de punto flotante
+            // Suma exacta con bcmath
             $montoNuevo = (float) $pagosReales->reduce(
                 fn ($carry, $p) => bcadd($carry, (string) $p['monto'], 2),
                 '0'
             );
 
-            // String de métodos únicos (para display y compatibilidad)
+            // String de métodos únicos (display / compatibilidad)
             $metodoStr = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
 
             if ($montoNuevo <= 0) {
@@ -67,7 +69,7 @@ class CobranzaService
                 ];
             }
 
-            // ── 2. Crear registro de Pago ──────────────────────────────
+            // ── 2. Crear registro de Pago ────────────────────────────────
             $pago = Pago::create([
                 'cliente_id'  => $venta->cliente_id,
                 'user_id'     => $userId,
@@ -77,7 +79,7 @@ class CobranzaService
                 'fecha'       => now()->toDateString(),
             ]);
 
-            // ── 3. Persistir el desglose real por método ───────────────
+            // ── 3. Desglose real por método ──────────────────────────────
             foreach ($pagosReales as $p) {
                 PagoMetodo::create([
                     'pago_id' => $pago->id,
@@ -86,7 +88,7 @@ class CobranzaService
                 ]);
             }
 
-            // ── 4. Calcular monto aplicable a la venta (bcmath) ────────
+            // ── 4. Calcular monto aplicable (bcmath) ─────────────────────
             $totalDeuda    = (float) $venta->total;
             $yaPagado      = (float) $venta->pagado;
             $saldoDeuda    = (float) max(
@@ -103,7 +105,7 @@ class CobranzaService
                 $excedente     = (float) bcsub((string) $montoNuevo, (string) $montoAplicado, 2);
             }
 
-            // ── 5. Vincular pago con venta ─────────────────────────────
+            // ── 5. Vincular pago con venta ───────────────────────────────
             if ($montoAplicado > 0) {
                 DetallePagoFactura::create([
                     'pago_id'        => $pago->id,
@@ -122,7 +124,7 @@ class CobranzaService
                 }
             }
 
-            // ── 6. Saldo a favor si hay excedente ─────────────────────
+            // ── 6. Saldo a favor si hay excedente + cliente ──────────────
             $hayExcedente = $excedente > 0;
 
             if ($hayExcedente && $venta->cliente_id) {
@@ -143,19 +145,24 @@ class CobranzaService
                 $pago->update(['estado' => $montoAplicado > 0 ? 'parcial' : 'saldo_favor']);
             }
 
-            // ── 7. Movimiento en ledger de caja ────────────────────────
+            // ── 7. Movimiento en ledger ──────────────────────────────────
+            // NOTA: solo se registra el monto total del pago recibido (montoNuevo).
+            // NO se registra el saldo a favor como ingreso separado
+            // (ya está incluido en montoNuevo). Sin doble conteo.
             $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
             Movimiento::create([
                 'tipo'             => 'ingreso',
                 'subtipo'          => 'pago_venta',
                 'origen'           => 'auto',
+                'estado'           => 'activo',
+                'empresa'          => $empresa,
                 'categoria'        => 'Cobro de venta',
                 'metodo_pago'      => $metodoStr,
                 'referencia_tipo'  => 'pago',
                 'referencia_id'    => $pago->id,
                 'cliente_id'       => $venta->cliente_id,
                 'user_id'          => $userId,
-                'documento_tipo'   => $venta->documento_tipo ?? 'venta',
+                'documento_tipo'   => $venta->documento_tipo,
                 'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
                 'monto'            => $montoNuevo,
                 'fecha'            => now()->toDateString(),
@@ -200,11 +207,15 @@ class CobranzaService
     /**
      * Aplica un saldo a favor existente a una venta pendiente/parcial.
      *
-     * @param  int|null $userId  ID del usuario que realiza la acción
+     * BUG #3 CORREGIDO: NO genera movimiento tipo='ingreso'.
+     * El dinero ya entró al sistema cuando se registró el excedente.
+     * Se registra un movimiento tipo='contable' solo para trazabilidad.
+     *
+     * @param  int|null $userId
      */
-    public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto, ?int $userId = null): array
+    public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto, ?int $userId = null, string $empresa = 'casadets'): array
     {
-        return DB::transaction(function () use ($saldo, $venta, $monto, $userId) {
+        return DB::transaction(function () use ($saldo, $venta, $monto, $userId, $empresa) {
 
             if ($saldo->cliente_id !== $venta->cliente_id) {
                 throw new \InvalidArgumentException('El saldo no pertenece al cliente de la venta.');
@@ -214,6 +225,9 @@ class CobranzaService
             }
             if ($venta->estado === 'pagado') {
                 throw new \InvalidArgumentException('La venta ya está pagada.');
+            }
+            if ($venta->estado === 'anulado') {
+                throw new \InvalidArgumentException('La venta está anulada.');
             }
 
             $disponible = (float) $saldo->monto_disponible;
@@ -235,48 +249,50 @@ class CobranzaService
                 'observacion' => "Uso de saldo a favor SF#{$saldo->id}",
             ]);
 
-            // Desglose de método
             PagoMetodo::create([
                 'pago_id' => $pago->id,
                 'metodo'  => 'saldo_favor',
                 'monto'   => $aplicar,
             ]);
 
-            // Vincular pago con venta
             DetallePagoFactura::create([
                 'pago_id'        => $pago->id,
                 'venta_id'       => $venta->id,
                 'monto_aplicado' => $aplicar,
             ]);
 
-            // Actualizar venta (bcmath para el acumulado)
+            // Actualizar venta (bcmath)
             $nuevoPagado = (float) bcadd((string) $venta->pagado, (string) $aplicar, 2);
             $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $venta->metodo_pago]);
             $venta->refresh();
             $venta->recalcularEstado();
 
             // Actualizar saldo a favor (bcmath)
-            $nuevoDisponible = (float) bcsub((string) $disponible, (string) $aplicar, 2);
-            $nuevoDisponible = max(0.0, $nuevoDisponible);
+            $nuevoDisponible = max(0.0, (float) bcsub((string) $disponible, (string) $aplicar, 2));
             $nuevoEstado     = round($nuevoDisponible, 2) <= 0 ? 'usado' : 'parcialmente_usado';
             $saldo->update([
                 'monto_disponible' => $nuevoDisponible,
                 'estado'           => $nuevoEstado,
             ]);
 
-            // Movimiento en ledger de caja
+            // ── Movimiento CONTABLE — solo trazabilidad, NO afecta balance ──
+            // El dinero ya fue registrado como ingreso cuando se recibió el pago
+            // original que generó el excedente. Aplicar el saldo es una
+            // transferencia contable (deuda → saldada), no un nuevo ingreso de caja.
             $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
             Movimiento::create([
-                'tipo'             => 'ingreso',
+                'tipo'             => 'contable',
                 'subtipo'          => 'saldo_favor_usado',
                 'origen'           => 'auto',
+                'estado'           => 'activo',
+                'empresa'          => $empresa,
                 'categoria'        => 'Saldo a favor aplicado',
                 'metodo_pago'      => 'saldo_favor',
                 'referencia_tipo'  => 'saldo_favor',
                 'referencia_id'    => $saldo->id,
                 'cliente_id'       => $venta->cliente_id,
                 'user_id'          => $userId,
-                'documento_tipo'   => $venta->documento_tipo ?? 'venta',
+                'documento_tipo'   => $venta->documento_tipo,
                 'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
                 'monto'            => $aplicar,
                 'fecha'            => now()->toDateString(),

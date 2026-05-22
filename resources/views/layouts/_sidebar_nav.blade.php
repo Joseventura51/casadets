@@ -39,6 +39,15 @@
                     </a>
                 </li>
                 <li>
+                    <a href="/casadets/productos" class="nav-link {{ request()->is('casadets/productos*') ? 'active' : '' }}">
+                        <i class="bi bi-box-seam me-2"></i>Productos
+                        @php $nStockBajo = \App\Models\Producto::where('activo', true)->where('stock_actual', '<=', 0)->count(); @endphp
+                        @if($nStockBajo > 0)
+                            <span class="badge bg-warning text-dark ms-auto">{{ $nStockBajo }}</span>
+                        @endif
+                    </a>
+                </li>
+                <li>
                     <a href="/casadets/clientes" class="nav-link {{ request()->is('casadets/clientes*') ? 'active' : '' }}">
                         <i class="bi bi-person-lines-fill me-2"></i>Clientes
                     </a>

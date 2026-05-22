@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DetallePagoFactura;
+use App\Models\Movimiento;
 use App\Models\Producto;
 use App\Models\StockMovimiento;
 use App\Models\Venta;
@@ -19,11 +21,10 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 
 class VentaController extends Controller
 {
-    /* ─── Listado ─────────────────────────────────────────── */
+    /* ─── Listado ──────────────────────────────────────────────── */
 
     public function index(Request $request)
     {
-        $hasFechas = $request->hasAny(['desde', 'hasta']);
         $desde = $request->input('desde', today()->toDateString());
         $hasta = $request->input('hasta', $desde);
         if ($hasta < $desde) $hasta = $desde;
@@ -63,7 +64,7 @@ class VentaController extends Controller
         return view('casadets.ventas.index', compact('ventas', 'vendedores', 'desde', 'hasta', 'todas'));
     }
 
-    /* ─── Detalle ──────────────────────────────────────────── */
+    /* ─── Detalle ──────────────────────────────────────────────── */
 
     public function show(Venta $venta)
     {
@@ -71,7 +72,7 @@ class VentaController extends Controller
         return view('casadets.ventas.show', compact('venta'));
     }
 
-    /* ─── Crear ────────────────────────────────────────────── */
+    /* ─── Crear ─────────────────────────────────────────────────── */
 
     public function create()
     {
@@ -102,13 +103,13 @@ class VentaController extends Controller
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data) {
-            // Calcular total con bcmath para precisión exacta
+            // Total exacto con bcmath
             $total = (float) collect($data['productos'])->reduce(
                 fn ($carry, $p) => bcadd($carry, bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 4), 2),
                 '0'
             );
 
-            // Crear venta — metodo_pago y estado los gestiona CobranzaService
+            // Venta creada en estado pendiente — metodo_pago NULL hasta que CobranzaService lo asigne
             $venta = Venta::create([
                 'vendedor_id'      => $data['vendedor_id'],
                 'cliente_id'       => $data['cliente_id'] ?? null,
@@ -127,7 +128,7 @@ class VentaController extends Controller
                     'producto'        => $p['producto'],
                     'cantidad'        => $p['cantidad'],
                     'precio_unitario' => $p['precio_unitario'],
-                    'subtotal'        => round($p['cantidad'] * $p['precio_unitario'], 2),
+                    'subtotal'        => (float) bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 2),
                 ]);
 
                 StockMovimiento::create([
@@ -143,7 +144,7 @@ class VentaController extends Controller
 
             $this->recalcularStockVenta($venta);
 
-            // Auto-registro de pago si se indicó un método inmediato
+            // Auto-pago si se indicó método inmediato (no crédito)
             $metodo = $data['metodo_pago'] ?? null;
             if (!empty($metodo) && $metodo !== 'ninguno') {
                 app(CobranzaService::class)->registrarPago($venta, [
@@ -155,7 +156,7 @@ class VentaController extends Controller
         return redirect('/casadets/ventas')->with('success', 'Venta registrada.');
     }
 
-    /* ─── Editar ────────────────────────────────────────────── */
+    /* ─── Editar ────────────────────────────────────────────────── */
 
     public function edit(Venta $venta)
     {
@@ -177,7 +178,6 @@ class VentaController extends Controller
                     ->ignore($venta->id)],
             'fecha'            => 'required|date',
             'observaciones'    => 'nullable|string',
-            'estado'           => 'nullable|in:pendiente,pagado,anulado',
             'productos'        => 'required|array|min:1',
             'productos.*.id'             => 'nullable|integer',
             'productos.*.producto'       => 'required|string|max:255',
@@ -186,12 +186,16 @@ class VentaController extends Controller
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data, $venta) {
-            $nuevoTotal = round(collect($data['productos'])
-                ->sum(fn($p) => $p['cantidad'] * $p['precio_unitario']), 2);
+            // Total exacto con bcmath (FIX: era float plain)
+            $nuevoTotal = (float) collect($data['productos'])->reduce(
+                fn ($carry, $p) => bcadd($carry, bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 4), 2),
+                '0'
+            );
 
             $totalCobradoActual = (float) $venta->total_cobrado;
-            $nuevoAjuste = round($totalCobradoActual - $nuevoTotal, 2);
+            $nuevoAjuste        = round($totalCobradoActual - $nuevoTotal, 2);
 
+            // Estado NO se toca aquí — lo gestiona recalcularEstado() al final
             $venta->update([
                 'vendedor_id'      => $data['vendedor_id'],
                 'cliente_id'       => $data['cliente_id'] ?? null,
@@ -199,32 +203,27 @@ class VentaController extends Controller
                 'documento_numero' => $data['documento_numero'] ?? null,
                 'fecha'            => $data['fecha'],
                 'observaciones'    => $data['observaciones'] ?? null,
-                'estado'           => $data['estado'] ?? $venta->estado ?? 'pendiente',
                 'total'            => $nuevoTotal,
                 'ajuste'           => $nuevoAjuste,
             ]);
 
-            // ── Upsert de detalles preservando IDs ────────────────────
-            $idsEnBD      = $venta->detalles()->pluck('id')->toArray();
-            $idsEnviados  = collect($data['productos'])
-                ->pluck('id')
-                ->filter()
-                ->map(fn($id) => (int) $id)
-                ->toArray();
+            // ── Upsert de detalles preservando IDs ────────────────────────
+            $idsEnBD     = $venta->detalles()->pluck('id')->toArray();
+            $idsEnviados = collect($data['productos'])
+                ->pluck('id')->filter()->map(fn($id) => (int) $id)->toArray();
 
-            // Borrar los detalles eliminados en el formulario
             $aEliminar = array_diff($idsEnBD, $idsEnviados);
             if (!empty($aEliminar)) {
                 $venta->detalles()->whereIn('id', $aEliminar)->delete();
             }
 
-            // Limpiar stock movimientos anteriores de esta venta
+            // Limpiar y recrear stock movimientos de esta venta
             StockMovimiento::where('referencia_tipo', 'venta')
                 ->where('referencia_id', $venta->id)
                 ->delete();
 
             foreach ($data['productos'] as $p) {
-                $detId   = !empty($p['id']) ? (int) $p['id'] : null;
+                $detId    = !empty($p['id']) ? (int) $p['id'] : null;
                 $producto = $this->resolverProducto($p['producto'], $p['precio_unitario']);
 
                 $detalleData = [
@@ -232,7 +231,7 @@ class VentaController extends Controller
                     'producto'        => $p['producto'],
                     'cantidad'        => $p['cantidad'],
                     'precio_unitario' => $p['precio_unitario'],
-                    'subtotal'        => round($p['cantidad'] * $p['precio_unitario'], 2),
+                    'subtotal'        => (float) bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 2),
                 ];
 
                 if ($detId && in_array($detId, $idsEnBD)) {
@@ -241,7 +240,6 @@ class VentaController extends Controller
                     $venta->detalles()->create($detalleData);
                 }
 
-                // Recrear movimiento de stock
                 StockMovimiento::create([
                     'producto_id'     => $producto->id,
                     'tipo'            => 'salida',
@@ -254,12 +252,16 @@ class VentaController extends Controller
             }
 
             $this->recalcularStockVenta($venta);
+
+            // Recalcular estado según lo pagado vs nuevo total (FIX: era solo ajuste manual)
+            $venta->refresh();
+            $venta->recalcularEstado();
         });
 
         return redirect('/casadets/ventas/' . $venta->id)->with('success', 'Venta actualizada.');
     }
 
-    /* ─── Pendientes ───────────────────────────────────────── */
+    /* ─── Pendientes ────────────────────────────────────────────── */
 
     public function pendientes(Request $request)
     {
@@ -271,7 +273,7 @@ class VentaController extends Controller
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
                      'total', 'pagado', 'ajuste', 'metodo_pago', 'documento_tipo', 'documento_numero')
             ->whereIn('estado', ['pendiente', 'parcial'])
-            ->whereDate('fecha', '<', today());
+            ->whereDate('fecha', '<=', today());
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
         if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
@@ -283,7 +285,7 @@ class VentaController extends Controller
         return view('casadets.ventas.pendientes', compact('ventas', 'vendedores'));
     }
 
-    /* ─── Verificar pago ───────────────────────────────────── */
+    /* ─── Verificar pago ─────────────────────────────────────────── */
 
     public function pago(Venta $venta)
     {
@@ -334,40 +336,96 @@ class VentaController extends Controller
         return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
     }
 
-    /* ─── Estado rápido ────────────────────────────────────── */
+    /* ─── Cambio de estado (solo anulado) ───────────────────────── */
 
+    /**
+     * BUG #4 CORREGIDO: updateEstado SOLO permite marcar como 'anulado'.
+     * Ningún estado financiero (pagado/parcial) puede setearse aquí.
+     * Esos estados solo los gestiona CobranzaService.
+     *
+     * Si la venta tenía pagos registrados, sus movimientos se marcan
+     * como 'anulado' en el ledger para mantener integridad financiera.
+     */
     public function updateEstado(Request $request, Venta $venta)
     {
-        $data = $request->validate([
-            'estado' => 'required|in:pendiente,parcial,pagado,anulado',
+        $request->validate([
+            'estado' => 'required|in:anulado',
         ]);
-        $venta->update(['estado' => $data['estado']]);
-        return back();
+
+        if ($venta->estado === 'anulado') {
+            return back()->with('info', 'La venta ya está anulada.');
+        }
+
+        DB::transaction(function () use ($venta) {
+            // Si tenía cobros, anular sus movimientos en el ledger
+            if (in_array($venta->estado, ['pagado', 'parcial'])) {
+                $pagoIds = DetallePagoFactura::where('venta_id', $venta->id)
+                    ->pluck('pago_id');
+
+                if ($pagoIds->isNotEmpty()) {
+                    Movimiento::where('referencia_tipo', 'pago')
+                        ->whereIn('referencia_id', $pagoIds)
+                        ->where('estado', 'activo')
+                        ->each(function ($m) use ($venta) {
+                            $m->update([
+                                'estado'       => 'anulado',
+                                'observaciones' => trim(($m->observaciones ?? '') . ' [Anulado: venta #' . $venta->id . ' cancelada]'),
+                            ]);
+                        });
+                }
+            }
+
+            $venta->update(['estado' => 'anulado']);
+        });
+
+        return back()->with('success', 'Venta marcada como anulada. El ledger fue actualizado.');
     }
 
-    /* ─── Eliminar (soft delete) ───────────────────────────── */
+    /* ─── Eliminar (soft delete con reversa financiera) ─────────── */
 
+    /**
+     * FIX: Los movimientos del ledger NO se borran — son inmutables.
+     * Se marcan como estado='anulado' para excluirlos del balance.
+     * Stock se limpia para mantener inventario exacto.
+     */
     public function destroy(Venta $venta)
     {
         DB::transaction(function () use ($venta) {
-            // Limpiar movimientos de stock de esta venta
+            // 1. Anular movimientos del ledger (NO borrar)
+            $pagoIds = DetallePagoFactura::where('venta_id', $venta->id)
+                ->pluck('pago_id');
+
+            if ($pagoIds->isNotEmpty()) {
+                Movimiento::where('referencia_tipo', 'pago')
+                    ->whereIn('referencia_id', $pagoIds)
+                    ->where('estado', 'activo')
+                    ->each(function ($m) use ($venta) {
+                        $m->update([
+                            'estado'       => 'anulado',
+                            'observaciones' => trim(($m->observaciones ?? '') . ' [Anulado: venta #' . $venta->id . ' eliminada]'),
+                        ]);
+                    });
+            }
+
+            // 2. Limpiar movimientos de stock (para exactitud de inventario)
+            $productoIds = $venta->detalles()->pluck('producto_id')->filter()->unique();
             StockMovimiento::where('referencia_tipo', 'venta')
                 ->where('referencia_id', $venta->id)
                 ->delete();
 
-            // Recalcular stock de los productos afectados
-            $productoIds = $venta->detalles()->pluck('producto_id')->filter()->unique();
+            // 3. Recalcular stock de productos afectados
             foreach ($productoIds as $pid) {
-                \App\Models\Producto::find($pid)?->recalcularStock();
+                Producto::find($pid)?->recalcularStock();
             }
 
-            $venta->delete(); // SoftDelete — el historial financiero se preserva
+            // 4. Soft delete — historial financiero se preserva en pagos/movimientos
+            $venta->delete();
         });
 
-        return redirect('/casadets/ventas')->with('success', 'Venta eliminada.');
+        return redirect('/casadets/ventas')->with('success', 'Venta eliminada. Los movimientos financieros fueron anulados en el ledger.');
     }
 
-    /* ─── Exportar Excel ───────────────────────────────────── */
+    /* ─── Exportar Excel ─────────────────────────────────────────── */
 
     public function export(Request $request)
     {
@@ -443,11 +501,11 @@ class VentaController extends Controller
         ])->deleteFileAfterSend(true);
     }
 
-    /* ─── Helpers privados ─────────────────────────────────── */
+    /* ─── Helpers privados ───────────────────────────────────────── */
 
     /**
      * Encuentra o crea un Producto por nombre.
-     * Actualiza precio_venta si el nuevo es mayor (conserva el máximo como referencia).
+     * Actualiza precio_venta si el nuevo es mayor.
      */
     private function resolverProducto(string $nombre, float $precioVenta): Producto
     {
@@ -463,9 +521,6 @@ class VentaController extends Controller
         return $producto;
     }
 
-    /**
-     * Recalcula stock_actual de todos los productos afectados por una venta.
-     */
     private function recalcularStockVenta(Venta $venta): void
     {
         $productoIds = $venta->detalles()->pluck('producto_id')->filter()->unique();

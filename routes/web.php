@@ -9,6 +9,7 @@ use App\Http\Controllers\VentaImportController;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\SaldoFavorController;
 
 Route::get('/', [HomeController::class, 'index']);
@@ -64,6 +65,15 @@ Route::post('/casadets/clientes', [ClienteController::class, 'store']);
 Route::get('/casadets/clientes/{cliente}/edit', [ClienteController::class, 'edit']);
 Route::put('/casadets/clientes/{cliente}', [ClienteController::class, 'update']);
 Route::delete('/casadets/clientes/{cliente}', [ClienteController::class, 'destroy']);
+
+// CASADETS — Productos (CRUD + Kardex + Ajuste)
+Route::get('/casadets/productos', [ProductoController::class, 'index']);
+Route::get('/casadets/productos/create', [ProductoController::class, 'create']);
+Route::post('/casadets/productos', [ProductoController::class, 'store']);
+Route::get('/casadets/productos/{producto}', [ProductoController::class, 'show']);
+Route::get('/casadets/productos/{producto}/edit', [ProductoController::class, 'edit']);
+Route::put('/casadets/productos/{producto}', [ProductoController::class, 'update']);
+Route::post('/casadets/productos/{producto}/ajuste', [ProductoController::class, 'storeAjuste']);
 
 // CASADETS — Compras
 Route::get('/casadets/ventas/{venta}/detalles.json', [CompraController::class, 'detallesVenta']);

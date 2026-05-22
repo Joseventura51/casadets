@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Compra;
+use App\Models\Movimiento;
 use App\Models\Producto;
 use App\Models\StockMovimiento;
 use App\Models\Venta;
@@ -84,6 +85,24 @@ class CompraController extends Controller
                 }
             }
 
+            // ── Movimiento de salida en el ledger ─────────────────────
+            // Las compras afectan el balance de caja como egresos
+            Movimiento::create([
+                'tipo'             => 'salida',
+                'subtipo'          => 'compra',
+                'origen'           => 'auto',
+                'estado'           => 'activo',
+                'empresa'          => 'casadets',
+                'categoria'        => 'Compra — ' . $compra->empresa,
+                'referencia_tipo'  => 'compra',
+                'referencia_id'    => $compra->id,
+                'documento_tipo'   => $compra->documento_tipo,
+                'documento_numero' => $compra->documento_numero,
+                'monto'            => $total,
+                'fecha'            => $data['fecha'],
+                'observaciones'    => $compra->empresa . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
+            ]);
+
             $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
         });
 
@@ -125,7 +144,6 @@ class CompraController extends Controller
                 ['monto_total' => $total]
             ));
 
-            // Limpiar stock movimientos anteriores de esta compra
             $productoIdsAntes = $compra->lineas()->pluck('producto_id')->filter()->unique();
 
             StockMovimiento::where('referencia_tipo', 'compra')
@@ -158,11 +176,44 @@ class CompraController extends Controller
                 }
             }
 
-            // Recalcular stock de todos los productos afectados (antes + después)
             $productoIdsAhora = $compra->lineas()->pluck('producto_id')->filter()->unique();
-            $todosIds = $productoIdsAntes->merge($productoIdsAhora)->unique();
-            foreach ($todosIds as $pid) {
+            foreach ($productoIdsAntes->merge($productoIdsAhora)->unique() as $pid) {
                 Producto::find($pid)?->recalcularStock();
+            }
+
+            // ── Actualizar movimiento existente del ledger ───────────────
+            // Corrección de compra = actualización del egreso registrado
+            $movExistente = Movimiento::where('referencia_tipo', 'compra')
+                ->where('referencia_id', $compra->id)
+                ->where('estado', 'activo')
+                ->first();
+
+            if ($movExistente) {
+                $movExistente->update([
+                    'monto'            => $total,
+                    'fecha'            => $data['fecha'],
+                    'documento_tipo'   => $compra->documento_tipo,
+                    'documento_numero' => $compra->documento_numero,
+                    'categoria'        => 'Compra — ' . $compra->empresa,
+                    'observaciones'    => $compra->empresa . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
+                ]);
+            } else {
+                // Crear si no existe (compatibilidad con compras previas al sistema)
+                Movimiento::create([
+                    'tipo'             => 'salida',
+                    'subtipo'          => 'compra',
+                    'origen'           => 'auto',
+                    'estado'           => 'activo',
+                    'empresa'          => 'casadets',
+                    'categoria'        => 'Compra — ' . $compra->empresa,
+                    'referencia_tipo'  => 'compra',
+                    'referencia_id'    => $compra->id,
+                    'documento_tipo'   => $compra->documento_tipo,
+                    'documento_numero' => $compra->documento_numero,
+                    'monto'            => $total,
+                    'fecha'            => $data['fecha'],
+                    'observaciones'    => $compra->empresa . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
+                ]);
             }
 
             $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
@@ -180,7 +231,18 @@ class CompraController extends Controller
                 ->where('referencia_id', $compra->id)
                 ->delete();
 
-            $compra->delete(); // SoftDelete
+            // Anular movimiento del ledger (NO borrar — ledger inmutable)
+            Movimiento::where('referencia_tipo', 'compra')
+                ->where('referencia_id', $compra->id)
+                ->where('estado', 'activo')
+                ->each(function ($m) use ($compra) {
+                    $m->update([
+                        'estado'       => 'anulado',
+                        'observaciones' => trim(($m->observaciones ?? '') . ' [Anulado: compra #' . $compra->id . ' eliminada]'),
+                    ]);
+                });
+
+            $compra->delete();
 
             foreach ($productoIds as $pid) {
                 Producto::find($pid)?->recalcularStock();
@@ -211,7 +273,7 @@ class CompraController extends Controller
         ]);
     }
 
-    /* ── Helpers ──────────────────────────────────────────────── */
+    /* ── Helpers ───────────────────────────────────────────────────── */
 
     private function buildDetallesSync(Request $request, array $lineasCreadas = []): array
     {
@@ -243,21 +305,15 @@ class CompraController extends Controller
             ->get();
     }
 
-    /**
-     * Encuentra o crea un Producto por nombre de texto libre.
-     */
     private function resolverProducto(?string $nombre, float $costoUnitario): ?Producto
     {
         if (empty(trim($nombre ?? ''))) {
             return null;
         }
-
-        $producto = Producto::firstOrCreate(
+        return Producto::firstOrCreate(
             ['nombre' => trim($nombre)],
             ['precio_costo' => $costoUnitario]
         );
-
-        return $producto;
     }
 
     private function validar(Request $request): array

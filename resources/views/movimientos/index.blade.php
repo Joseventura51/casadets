@@ -20,25 +20,35 @@
                 <label class="form-label small mb-1">Tipo</label>
                 <select name="tipo" class="form-select form-select-sm">
                     <option value="">Todos</option>
-                    <option value="ingreso" {{ request('tipo') === 'ingreso' ? 'selected' : '' }}>Ingreso</option>
-                    <option value="salida"  {{ request('tipo') === 'salida'  ? 'selected' : '' }}>Salida</option>
+                    <option value="ingreso"  {{ request('tipo') === 'ingreso'  ? 'selected' : '' }}>Ingreso</option>
+                    <option value="salida"   {{ request('tipo') === 'salida'   ? 'selected' : '' }}>Salida</option>
+                    <option value="contable" {{ request('tipo') === 'contable' ? 'selected' : '' }}>Contable</option>
                 </select>
             </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Subtipo</label>
                 <select name="subtipo" class="form-select form-select-sm">
                     <option value="">Todos</option>
-                    <option value="pago_venta"       {{ request('subtipo') === 'pago_venta'       ? 'selected' : '' }}>Pago de venta</option>
+                    <option value="pago_venta"        {{ request('subtipo') === 'pago_venta'        ? 'selected' : '' }}>Pago de venta</option>
+                    <option value="compra"            {{ request('subtipo') === 'compra'            ? 'selected' : '' }}>Compra</option>
                     <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo a favor</option>
-                    <option value="manual"           {{ request('subtipo') === 'manual'           ? 'selected' : '' }}>Manual</option>
+                    <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small mb-1">Origen</label>
-                <select name="origen" class="form-select form-select-sm">
+            <div class="col-md-1">
+                <label class="form-label small mb-1">Empresa</label>
+                <select name="empresa" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+                    <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small mb-1">Estado</label>
+                <select name="estado" class="form-select form-select-sm">
                     <option value="">Todos</option>
-                    <option value="auto"   {{ request('origen') === 'auto'   ? 'selected' : '' }}>Automático</option>
-                    <option value="manual" {{ request('origen') === 'manual' ? 'selected' : '' }}>Manual</option>
+                    <option value="activo"  {{ request('estado') === 'activo'  ? 'selected' : '' }}>Activo</option>
+                    <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -57,13 +67,13 @@
     </div>
 </div>
 
-{{-- Totales de la página actual --}}
+{{-- Totales de la página actual (solo activos afectan balance) --}}
 @if($movimientos->count())
 <div class="row g-2 mb-3">
     <div class="col-md-3">
         <div class="card border-success border-opacity-25">
             <div class="card-body py-2">
-                <div class="small text-muted">Ingresos (esta página)</div>
+                <div class="small text-muted">Ingresos activos (pág.)</div>
                 <div class="fw-bold text-success">S/ {{ number_format($totales['ingresos'], 2) }}</div>
             </div>
         </div>
@@ -71,7 +81,7 @@
     <div class="col-md-3">
         <div class="card border-danger border-opacity-25">
             <div class="card-body py-2">
-                <div class="small text-muted">Salidas (esta página)</div>
+                <div class="small text-muted">Salidas activas (pág.)</div>
                 <div class="fw-bold text-danger">S/ {{ number_format($totales['salidas'], 2) }}</div>
             </div>
         </div>
@@ -79,7 +89,7 @@
     <div class="col-md-3">
         <div class="card {{ $totales['balance'] >= 0 ? 'border-primary' : 'border-warning' }} border-opacity-25">
             <div class="card-body py-2">
-                <div class="small text-muted">Balance (esta página)</div>
+                <div class="small text-muted">Balance (pág.)</div>
                 <div class="fw-bold {{ $totales['balance'] >= 0 ? 'text-primary' : 'text-warning' }}">
                     S/ {{ number_format($totales['balance'], 2) }}
                 </div>
@@ -106,9 +116,11 @@
                     <th style="width:2rem;"></th>
                     <th>Tipo</th>
                     <th>Categoría</th>
+                    <th>Empresa</th>
                     <th>Cliente</th>
                     <th>Documento</th>
                     <th>Origen</th>
+                    <th>Estado</th>
                     <th class="text-end">Monto</th>
                     <th>Fecha</th>
                 </tr>
@@ -117,7 +129,7 @@
                 @forelse($movimientos as $m)
 
                 {{-- Fila principal: click para expandir --}}
-                <tr class="mov-row"
+                <tr class="mov-row {{ $m->estado === 'anulado' ? 'text-muted' : '' }}"
                     data-bs-toggle="collapse"
                     data-bs-target="#det-{{ $m->id }}"
                     style="cursor:pointer;"
@@ -126,18 +138,31 @@
                         <i class="bi bi-chevron-right toggle-icon small"></i>
                     </td>
                     <td>
-                        <span class="badge {{ $m->tipo === 'ingreso' ? 'bg-success' : 'bg-danger' }}">
-                            {{ ucfirst($m->tipo) }}
-                        </span>
+                        @if($m->tipo === 'ingreso')
+                            <span class="badge bg-success {{ $m->estado === 'anulado' ? 'opacity-50' : '' }}">Ingreso</span>
+                        @elseif($m->tipo === 'salida')
+                            <span class="badge bg-danger {{ $m->estado === 'anulado' ? 'opacity-50' : '' }}">Salida</span>
+                        @elseif($m->tipo === 'contable')
+                            <span class="badge bg-secondary opacity-50">Contable</span>
+                        @else
+                            <span class="badge bg-light text-dark border">{{ ucfirst($m->tipo) }}</span>
+                        @endif
                         @if($m->subtipo === 'pago_venta')
                             <br><span class="badge bg-light text-secondary" style="font-size:.62rem;">pago venta</span>
                         @elseif($m->subtipo === 'saldo_favor_usado')
                             <br><span class="badge bg-light text-info" style="font-size:.62rem;">saldo favor</span>
+                        @elseif($m->subtipo === 'compra')
+                            <br><span class="badge bg-light text-warning" style="font-size:.62rem;">compra</span>
                         @elseif($m->subtipo === 'manual')
                             <br><span class="badge bg-light text-secondary" style="font-size:.62rem;">manual</span>
                         @endif
                     </td>
                     <td>{{ $m->categoria }}</td>
+                    <td>
+                        @if($m->empresa)
+                            <span class="badge bg-light text-dark border" style="font-size:.65rem;">{{ strtoupper($m->empresa) }}</span>
+                        @endif
+                    </td>
                     <td class="small text-muted">{{ $m->cliente->nombre ?? '—' }}</td>
                     <td class="small text-muted">
                         @if($m->documento_tipo)
@@ -151,15 +176,23 @@
                             {{ ($m->origen ?? 'manual') === 'auto' ? 'automático' : 'manual' }}
                         </span>
                     </td>
-                    <td class="text-end fw-semibold {{ $m->tipo === 'ingreso' ? 'text-success' : 'text-danger' }}">
-                        {{ $m->tipo === 'ingreso' ? '+' : '−' }} S/ {{ number_format($m->monto, 2) }}
+                    <td>
+                        @if($m->estado === 'anulado')
+                            <span class="badge bg-secondary" style="font-size:.65rem;">Anulado</span>
+                        @else
+                            <span class="badge bg-success bg-opacity-10 text-success" style="font-size:.65rem;">Activo</span>
+                        @endif
+                    </td>
+                    <td class="text-end fw-semibold {{ $m->estado === 'anulado' ? 'text-decoration-line-through text-muted' : ($m->tipo === 'ingreso' ? 'text-success' : ($m->tipo === 'salida' ? 'text-danger' : 'text-secondary')) }}">
+                        @if($m->tipo === 'ingreso' && $m->estado !== 'anulado') + @elseif($m->tipo === 'salida' && $m->estado !== 'anulado') − @endif
+                        S/ {{ number_format($m->monto, 2) }}
                     </td>
                     <td class="small text-muted">{{ $m->fecha->format('d/m/Y') }}</td>
                 </tr>
 
                 {{-- Fila de detalle expandible --}}
                 <tr class="collapse-row">
-                    <td colspan="8" class="p-0 border-0">
+                    <td colspan="10" class="p-0 border-0">
                         <div class="collapse" id="det-{{ $m->id }}">
                             <div class="px-4 py-3 bg-light border-bottom">
                                 <div class="row g-3">
@@ -175,6 +208,16 @@
                                             <dt class="col-5 text-muted fw-normal">Subtipo</dt>
                                             <dd class="col-7 mb-1">{{ str_replace('_', ' ', $m->subtipo) }}</dd>
                                             @endif
+
+                                            <dt class="col-5 text-muted fw-normal">Estado</dt>
+                                            <dd class="col-7 mb-1">
+                                                <span class="badge {{ $m->estado === 'anulado' ? 'bg-secondary' : 'bg-success' }}">
+                                                    {{ ucfirst($m->estado ?? 'activo') }}
+                                                </span>
+                                            </dd>
+
+                                            <dt class="col-5 text-muted fw-normal">Empresa</dt>
+                                            <dd class="col-7 mb-1">{{ strtoupper($m->empresa ?? 'casadets') }}</dd>
 
                                             <dt class="col-5 text-muted fw-normal">Origen</dt>
                                             <dd class="col-7 mb-1">
@@ -247,7 +290,7 @@
 
                                     {{-- Columna 4: Ventas aplicadas (solo para pago_venta) --}}
                                     @if($m->pago && $m->referencia_tipo === 'pago' && $m->pago->detalles->count())
-                                    <div class="col-md-{{ $m->cliente ? '4' : '4' }}">
+                                    <div class="col-md-4">
                                         <h6 class="text-uppercase text-muted small mb-2">Ventas aplicadas</h6>
                                         @foreach($m->pago->detalles as $dpf)
                                         @php
@@ -263,11 +306,9 @@
                                                 </span>
                                             </div>
                                             <div class="text-muted mt-1">
-                                                Total venta:
-                                                <strong>S/ {{ number_format($venta?->total ?? 0, 2) }}</strong>
+                                                Total: <strong>S/ {{ number_format($venta?->total ?? 0, 2) }}</strong>
                                                 &nbsp;·&nbsp;
-                                                Saldo pendiente:
-                                                <strong class="{{ $saldoPendiente > 0 ? 'text-warning' : 'text-success' }}">
+                                                Saldo: <strong class="{{ $saldoPendiente > 0 ? 'text-warning' : 'text-success' }}">
                                                     S/ {{ number_format($saldoPendiente, 2) }}
                                                 </strong>
                                             </div>
@@ -291,7 +332,7 @@
 
                 @empty
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-5">
+                    <td colspan="10" class="text-center text-muted py-5">
                         No hay movimientos registrados.
                     </td>
                 </tr>
@@ -308,9 +349,8 @@
 @endif
 
 <script>
-// Rotar ícono chevron al expandir/colapsar
 document.querySelectorAll('.mov-row').forEach(function(row) {
-    const targetId = row.getAttribute('data-bs-target');
+    const targetId  = row.getAttribute('data-bs-target');
     const collapseEl = document.querySelector(targetId);
     if (!collapseEl) return;
 

@@ -3,8 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Movimiento;
+use App\Models\Producto;
+use App\Models\SaldoFavor;
 use App\Models\Venta;
-use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
 
 class HomeController extends Controller
@@ -15,40 +16,62 @@ class HomeController extends Controller
         $inicio = $hoy->copy()->startOfMonth();
         $fin    = $hoy->copy()->endOfMonth();
 
-        // Caché de 5 min — movimientos es la única fuente de verdad financiera
-        $cacheKey = 'dashboard_mes_' . $hoy->format('Y_m');
+        // ── KPIs financieros del mes (movimientos como fuente única, estado='activo') ──
 
-        [$cobradoMes, $otrosIngresosMes, $salidasMes] = Cache::remember(
-            $cacheKey,
-            300,
-            function () use ($inicio, $fin) {
-                // Ventas cobradas: movimientos generados por CobranzaService
-                $cobrado = (float) Movimiento::where('subtipo', 'pago_venta')
-                    ->whereBetween('fecha', [$inicio, $fin])
-                    ->sum('monto');
+        // Ventas cobradas: solo movimientos tipo=ingreso, subtipo=pago_venta, estado=activo
+        $cobradoMes = (float) Movimiento::where('subtipo', 'pago_venta')
+            ->where('estado', 'activo')
+            ->whereBetween('fecha', [$inicio, $fin])
+            ->sum('monto');
 
-                // Otros ingresos: cualquier ingreso que NO sea pago de venta
-                $otros = (float) Movimiento::where('tipo', 'ingreso')
-                    ->where(function ($q) {
-                        $q->whereNull('subtipo')
-                          ->orWhere('subtipo', '!=', 'pago_venta');
-                    })
-                    ->whereBetween('fecha', [$inicio, $fin])
-                    ->sum('monto');
+        // Otros ingresos: tipo=ingreso que NO sea pago_venta, estado=activo
+        $otrosIngresosMes = (float) Movimiento::where('tipo', 'ingreso')
+            ->where('estado', 'activo')
+            ->where(function ($q) {
+                $q->whereNull('subtipo')
+                  ->orWhere('subtipo', '!=', 'pago_venta');
+            })
+            ->whereBetween('fecha', [$inicio, $fin])
+            ->sum('monto');
 
-                // Salidas del mes
-                $salidas = (float) Movimiento::where('tipo', 'salida')
-                    ->whereBetween('fecha', [$inicio, $fin])
-                    ->sum('monto');
+        // Salidas del mes (incluye compras registradas como movimientos)
+        $salidasMes = (float) Movimiento::where('tipo', 'salida')
+            ->where('estado', 'activo')
+            ->whereBetween('fecha', [$inicio, $fin])
+            ->sum('monto');
 
-                return [$cobrado, $otros, $salidas];
-            }
-        );
-
-        // Balance real = lo que entró - lo que salió (sin doble conteo)
         $balanceMes = round($cobradoMes + $otrosIngresosMes - $salidasMes, 2);
 
-        // Últimas 5 ventas de hoy — solo columnas necesarias para la vista
+        // Compras del mes (desde movimientos subtipo='compra')
+        $comprasMes = (float) Movimiento::where('subtipo', 'compra')
+            ->where('estado', 'activo')
+            ->whereBetween('fecha', [$inicio, $fin])
+            ->sum('monto');
+
+        // ── Alertas operativas ───────────────────────────────────────────
+
+        // Deuda pendiente total (ventas sin cobrar)
+        $deudaPendiente = (float) Venta::whereIn('estado', ['pendiente', 'parcial'])
+            ->whereNull('deleted_at')
+            ->selectRaw('SUM(total - pagado) as deuda')
+            ->value('deuda') ?? 0;
+
+        // Saldos a favor disponibles
+        $saldosDisponiblesMes = (float) SaldoFavor::whereIn('estado', ['disponible', 'parcialmente_usado'])
+            ->sum('monto_disponible');
+
+        // Ventas pendientes vencidas (anteriores a hoy)
+        $pendientesVencidas = Venta::whereIn('estado', ['pendiente', 'parcial'])
+            ->whereDate('fecha', '<', $hoy)
+            ->count();
+
+        // Stock bajo (productos activos con stock ≤ 0)
+        $stockBajoCount = Producto::where('activo', true)
+            ->where('stock_actual', '<=', 0)
+            ->count();
+
+        // ── Tablas de home ────────────────────────────────────────────────
+
         $ventasHoy = Venta::with([
                 'vendedor:id,nombre',
                 'detalles:id,venta_id,producto,cantidad,subtotal',
@@ -60,9 +83,8 @@ class HomeController extends Controller
             ->limit(5)
             ->get();
 
-        // Últimos 5 movimientos — incluye subtipo para mostrar origen
         $ultimosMovimientos = Movimiento::select(
-                'id', 'tipo', 'subtipo', 'origen', 'categoria',
+                'id', 'tipo', 'subtipo', 'origen', 'estado', 'empresa', 'categoria',
                 'documento_tipo', 'documento_numero', 'monto', 'fecha'
             )
             ->orderBy('fecha', 'desc')
@@ -75,6 +97,11 @@ class HomeController extends Controller
             'otrosIngresosMes',
             'salidasMes',
             'balanceMes',
+            'comprasMes',
+            'deudaPendiente',
+            'saldosDisponiblesMes',
+            'pendientesVencidas',
+            'stockBajoCount',
             'ventasHoy',
             'ultimosMovimientos'
         ));

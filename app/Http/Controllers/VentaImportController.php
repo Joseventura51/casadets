@@ -79,9 +79,7 @@ class VentaImportController extends Controller
             $numero = trim((string) ($r[$mapa['nro']] ?? ''));
             $producto = trim((string) ($r[$mapa['producto']] ?? ''));
 
-            if ($producto === '') {
-                continue;
-            }
+            if ($producto === '') continue;
 
             if ($doc === '' && $serie === '' && $numero === '') {
                 $key = '__sinDoc__' . $sinDocContador++;
@@ -179,13 +177,13 @@ class VentaImportController extends Controller
             ?? $vendedores->first();
 
         return view('casadets.ventas.import_preview', [
-            'grupos'              => $gruposNuevos,
-            'vendedores'          => $vendedores,
-            'vendedor_id_default' => $vendedorDefault->id,
-            'metodo_pago_default' => 'ninguno',
+            'grupos'               => $gruposNuevos,
+            'vendedores'           => $vendedores,
+            'vendedor_id_default'  => $vendedorDefault->id,
+            'metodo_pago_default'  => 'ninguno',
             'duplicadosExistentes' => [],
-            'omitidos'            => $omitidos,
-            'columnasInfo'        => $columnasInfo,
+            'omitidos'             => $omitidos,
+            'columnasInfo'         => $columnasInfo,
         ]);
     }
 
@@ -245,6 +243,7 @@ class VentaImportController extends Controller
 
         DB::transaction(function () use ($grupos, &$totalCreadas, &$totalDetalles) {
             $cobranza = app(CobranzaService::class);
+            $todosProductosAfectados = [];
 
             foreach ($grupos as $g) {
                 $detallesCalc = array_map(function ($d) {
@@ -285,7 +284,7 @@ class VentaImportController extends Controller
                     $clienteId = $cliente->id;
                 }
 
-                // Crear venta en estado pendiente — CobranzaService gestiona el estado final
+                // Crear venta en estado pendiente — CobranzaService gestiona estado final
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
                     'cliente_id'       => $clienteId,
@@ -298,6 +297,8 @@ class VentaImportController extends Controller
                 ]);
 
                 // Crear detalles con producto_id + stock_movimientos
+                // FIX: NO llamar recalcularStock() por cada línea — acumular y batch al final
+                $productosDeEstaVenta = [];
                 foreach ($detallesCalc as $d) {
                     $producto = Producto::firstOrCreate(
                         ['nombre' => trim($d['producto'])],
@@ -327,11 +328,16 @@ class VentaImportController extends Controller
                         'fecha'           => $g['fecha'],
                     ]);
 
-                    $producto->recalcularStock();
+                    $productosDeEstaVenta[] = $producto->id;
                     $totalDetalles++;
                 }
 
-                // Registrar pagos vía CobranzaService (crea Pago + PagoMetodo + Movimiento)
+                // Acumular IDs únicos para recalcular al final
+                foreach (array_unique($productosDeEstaVenta) as $pid) {
+                    $todosProductosAfectados[$pid] = true;
+                }
+
+                // Registrar pagos vía CobranzaService
                 $pagosParaService = collect($g['pagos'])
                     ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
                     ->map(fn ($p) => ['metodo' => $p['metodo'], 'monto' => (float) $p['monto']])
@@ -343,6 +349,11 @@ class VentaImportController extends Controller
                 }
 
                 $totalCreadas++;
+            }
+
+            // FIX: recalcularStock una sola vez por producto al final de la importación
+            foreach (array_keys($todosProductosAfectados) as $pid) {
+                Producto::find($pid)?->recalcularStock();
             }
         });
 
@@ -447,7 +458,7 @@ class VentaImportController extends Controller
             $palabrasExcluidas = $excluir[$campo] ?? [];
 
             foreach ($headers as $idx => $h) {
-                $hNorm   = $this->normalizarTexto($h);
+                $hNorm    = $this->normalizarTexto($h);
                 $excluido = false;
                 foreach ($palabrasExcluidas as $ex) {
                     if (str_contains($hNorm, $ex)) { $excluido = true; break; }
