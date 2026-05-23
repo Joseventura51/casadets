@@ -108,16 +108,17 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Cliente <span class="text-danger">*</span></label>
-                        <input type="text" id="nsClienteNombre" class="form-control"
-                               list="listClientesSaldo"
-                               placeholder="Escribe el nombre del cliente…"
-                               autocomplete="off" required>
-                        <datalist id="listClientesSaldo">
+                        <select name="cliente_id" id="nsClienteId" class="form-select @error('cliente_id') is-invalid @enderror" required>
+                            <option value="">— Selecciona un cliente —</option>
                             @foreach($todosClientes as $c)
-                                <option value="{{ $c->nombre }}{{ $c->documento ? ' (' . $c->documento . ')' : '' }}">
+                                <option value="{{ $c->id }}" {{ old('cliente_id') == $c->id ? 'selected' : '' }}>
+                                    {{ $c->nombre }}{{ $c->documento ? ' — ' . $c->documento : '' }}
+                                </option>
                             @endforeach
-                        </datalist>
-                        <input type="hidden" name="cliente_id" id="nsClienteId">
+                        </select>
+                        @error('cliente_id')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">
@@ -200,6 +201,16 @@
 @if(session('error'))
 <div class="alert alert-danger alert-dismissible fade show py-2" role="alert">
     <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
+    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+</div>
+@endif
+@if($errors->any())
+<div class="alert alert-danger alert-dismissible fade show py-2" role="alert">
+    <i class="bi bi-exclamation-triangle me-2"></i>
+    <strong>Corrige los siguientes errores:</strong>
+    <ul class="mb-0 mt-1 small">
+        @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
+    </ul>
     <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
 </div>
 @endif
@@ -594,47 +605,12 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
     }
 });
 
-/* ── Modal 2: Nuevo Saldo — autocompletado de clientes ─────── */
-const clienteMapSaldo = {};
-@foreach($todosClientes as $c)
-clienteMapSaldo[{{ json_encode($c->nombre . ($c->documento ? ' (' . $c->documento . ')' : '')) }}] = {{ $c->id }};
-@endforeach
-
-document.getElementById('nsClienteNombre').addEventListener('input', function () {
-    const val = this.value.trim();
-    document.getElementById('nsClienteId').value = clienteMapSaldo[val] !== undefined ? clienteMapSaldo[val] : '';
+/* ── Modal 2: Nuevo Saldo — abrir automáticamente si hay errores ── */
+@if($errors->has('cliente_id') || $errors->has('monto') || $errors->has('fecha'))
+document.addEventListener('DOMContentLoaded', function () {
+    new bootstrap.Modal(document.getElementById('modalNuevoSaldo')).show();
 });
-document.getElementById('nsClienteNombre').addEventListener('blur', function () {
-    if (!this.value.trim()) document.getElementById('nsClienteId').value = '';
-});
-
-const _nsForm = document.querySelector('#modalNuevoSaldo form');
-if (_nsForm) {
-    _nsForm.addEventListener('submit', function (e) {
-        const clienteId = document.getElementById('nsClienteId').value;
-        if (!clienteId) {
-            e.preventDefault();
-            const input = document.getElementById('nsClienteNombre');
-            input.classList.add('is-invalid');
-            input.focus();
-            let fb = document.getElementById('nsClienteFeedback');
-            if (!fb) {
-                fb = document.createElement('div');
-                fb.id = 'nsClienteFeedback';
-                fb.className = 'invalid-feedback';
-                fb.textContent = 'Selecciona un cliente válido de la lista.';
-                input.parentNode.insertBefore(fb, input.nextSibling);
-            }
-        }
-    });
-}
-
-document.getElementById('modalNuevoSaldo').addEventListener('hidden.bs.modal', function () {
-    const inp = document.getElementById('nsClienteNombre');
-    const hid = document.getElementById('nsClienteId');
-    if (inp) { inp.value = ''; inp.classList.remove('is-invalid'); }
-    if (hid) hid.value = '';
-});
+@endif
 
 /* ── Modal 3: Convertir NC ─────────────────────────────────── */
 document.getElementById('modalConvertirNC').addEventListener('shown.bs.modal', function () {
