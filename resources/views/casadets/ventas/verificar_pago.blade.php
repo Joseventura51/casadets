@@ -475,6 +475,52 @@ function showToast(msg, type = 'success') {
 
 document.getElementById('formPago').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    // Calcular total que se va a ingresar en este pago
+    let totalNuevo = 0;
+    document.querySelectorAll('.monto-pago').forEach(i => {
+        const row = i.closest('.pago-row');
+        const metodo = row ? row.querySelector('select')?.value : '';
+        if (metodo !== 'ninguno') totalNuevo += parseFloat(i.value) || 0;
+    });
+
+    const estadoManual   = document.getElementById('estadoManual').value;
+    const acumulado      = YA_PAGADO + totalNuevo;
+    const diferencia     = acumulado - TOTAL_REAL;
+
+    // ── Confirmación 1: marcando como Pagado pero el monto es menor al total del vale
+    if (estadoManual === 'pagado' && totalNuevo > 0 && diferencia < -0.005) {
+        const faltan = Math.abs(diferencia).toFixed(2);
+        const ok = confirm(
+            `⚠️ El monto a cobrar (S/ ${acumulado.toFixed(2)}) es menor al total del vale (S/ ${TOTAL_REAL.toFixed(2)}).\n\n` +
+            `Diferencia: S/ ${faltan}\n\n` +
+            `Al confirmar, el vale se marcará como PAGADO por S/ ${acumulado.toFixed(2)} y el valor del vale se reducirá a dicho monto.\n\n` +
+            `¿Deseas continuar?`
+        );
+        if (!ok) return;
+    }
+
+    // ── Confirmación 2: el pago genera saldo a favor (excedente)
+    if (!VENTA_PAGADA && diferencia > 0.005 && totalNuevo > 0) {
+        const excedente = diferencia.toFixed(2);
+        const ok = confirm(
+            `ℹ️ El monto ingresado supera el total del vale en S/ ${excedente}.\n\n` +
+            `El excedente se registrará como SALDO A FAVOR del cliente.\n\n` +
+            `¿Confirmar saldo a favor de S/ ${excedente}?`
+        );
+        if (!ok) return;
+    }
+
+    // ── Confirmación 3: venta ya pagada, pago adicional → saldo a favor
+    if (VENTA_PAGADA && totalNuevo > 0) {
+        const ok = confirm(
+            `ℹ️ La venta ya está pagada.\n\n` +
+            `El monto adicional de S/ ${totalNuevo.toFixed(2)} se registrará como SALDO A FAVOR del cliente.\n\n` +
+            `¿Confirmar saldo a favor de S/ ${totalNuevo.toFixed(2)}?`
+        );
+        if (!ok) return;
+    }
+
     const btn = document.getElementById('btnGuardar');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando…';
@@ -535,6 +581,14 @@ document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
             alerta.textContent = 'El monto supera el saldo disponible (S/ ' + disponible.toFixed(2) + ').';
             return;
         }
+
+        // ── Confirmación antes de aplicar saldo a favor
+        const okSaldo = confirm(
+            `¿Confirmar aplicación de S/ ${monto.toFixed(2)} de saldo a favor a esta venta?\n\n` +
+            `Saldo disponible: S/ ${disponible.toFixed(2)}\n` +
+            `Monto a aplicar:  S/ ${monto.toFixed(2)}`
+        );
+        if (!okSaldo) return;
 
         const orig = this.innerHTML;
         this.disabled = true;

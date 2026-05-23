@@ -147,11 +147,7 @@
                     Al convertir una NC, el monto pasa a ser un <strong>saldo a favor</strong> del cliente que puede aplicarse a futuras ventas.
                     Esta acción es <strong>manual e irreversible</strong>.
                 </div>
-                <div id="ncLista">
-                    <div class="text-center text-muted py-4">
-                        <div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de crédito…
-                    </div>
-                </div>
+                <div id="ncLista"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
@@ -475,35 +471,44 @@ document.getElementById('nsClienteNombre').addEventListener('blur', function () 
 });
 
 // Validar que se seleccionó un cliente válido antes de enviar
-document.querySelector('#modalNuevoSaldo form').addEventListener('submit', function (e) {
-    const clienteId = document.getElementById('nsClienteId').value;
-    if (!clienteId) {
-        e.preventDefault();
-        const input = document.getElementById('nsClienteNombre');
-        input.classList.add('is-invalid');
-        input.focus();
-        let fb = document.getElementById('nsClienteFeedback');
-        if (!fb) {
-            fb = document.createElement('div');
-            fb.id = 'nsClienteFeedback';
-            fb.className = 'invalid-feedback';
-            fb.textContent = 'Selecciona un cliente válido de la lista.';
-            input.parentNode.insertBefore(fb, input.nextSibling);
+const _nsForm = document.querySelector('#modalNuevoSaldo form');
+if (_nsForm) {
+    _nsForm.addEventListener('submit', function (e) {
+        const clienteId = document.getElementById('nsClienteId').value;
+        if (!clienteId) {
+            e.preventDefault();
+            const input = document.getElementById('nsClienteNombre');
+            input.classList.add('is-invalid');
+            input.focus();
+            let fb = document.getElementById('nsClienteFeedback');
+            if (!fb) {
+                fb = document.createElement('div');
+                fb.id = 'nsClienteFeedback';
+                fb.className = 'invalid-feedback';
+                fb.textContent = 'Selecciona un cliente válido de la lista.';
+                input.parentNode.insertBefore(fb, input.nextSibling);
+            }
+            return;
         }
-        return;
-    }
-    document.getElementById('nsClienteNombre').classList.remove('is-invalid');
-});
+        document.getElementById('nsClienteNombre').classList.remove('is-invalid');
+    });
+}
 
-document.getElementById('modalNuevoSaldo').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('nsClienteNombre').value = '';
-    document.getElementById('nsClienteId').value = '';
-    document.getElementById('nsClienteNombre').classList.remove('is-invalid');
-});
+const _nsModalEl = document.getElementById('modalNuevoSaldo');
+if (_nsModalEl) {
+    _nsModalEl.addEventListener('hidden.bs.modal', function () {
+        const inp = document.getElementById('nsClienteNombre');
+        const hid = document.getElementById('nsClienteId');
+        if (inp) { inp.value = ''; inp.classList.remove('is-invalid'); }
+        if (hid) hid.value = '';
+    });
+}
 
 /* ── Modal 3: Convertir NC — cargar lista ────────────────────── */
-document.getElementById('modalConvertirNC').addEventListener('show.bs.modal', function () {
+const _ncModalEl = document.getElementById('modalConvertirNC');
+if (_ncModalEl) _ncModalEl.addEventListener('shown.bs.modal', function () {
     const contenedor = document.getElementById('ncLista');
+    if (!contenedor) return;
     contenedor.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de crédito…</div>';
 
     fetch('/casadets/saldos-favor/notas-credito.json')
