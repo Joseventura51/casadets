@@ -7,12 +7,59 @@
     $badgeMetodo = ['efectivo'=>'success','tarjeta'=>'primary','yape'=>'purple','plin'=>'info','transferencia'=>'warning'];
 @endphp
 
+@php
+    $esCanjeadaFiscal = $venta->estado === 'canjeada';
+    // Extraer proformas vinculadas desde observaciones
+    $proformasVinculadas = '';
+    if ($esCanjeadaFiscal && $venta->observaciones && str_contains($venta->observaciones, 'Cubre proformas:')) {
+        preg_match('/Cubre proformas:\s*(.+?)(?:\s*—|$)/i', $venta->observaciones, $m);
+        $proformasVinculadas = trim($m[1] ?? '');
+    }
+    // Extraer factura emitida desde observaciones (para proformas)
+    $facturaEmitida = '';
+    if (!$esCanjeadaFiscal && $venta->observaciones && str_contains($venta->observaciones, 'Factura emitida:')) {
+        preg_match('/Factura emitida:\s*(.+?)(?:\s*—|$)/i', $venta->observaciones, $m2);
+        $facturaEmitida = trim($m2[1] ?? '');
+    }
+@endphp
+
+@if($esCanjeadaFiscal)
+<div class="alert alert-secondary d-flex gap-2 align-items-start mb-3">
+    <i class="bi bi-file-earmark-check fs-5 mt-1"></i>
+    <div>
+        <strong>Referencia fiscal de canje</strong> — Este documento fue emitido como comprobante fiscal pero
+        <strong>no genera deuda de cobranza</strong>. La cobranza se gestiona sobre las proformas vinculadas.
+        @if($proformasVinculadas)
+            <div class="mt-1">
+                <span class="text-muted small">Proformas cubiertas:</span>
+                @foreach(explode(',', $proformasVinculadas) as $pref)
+                    <span class="badge bg-warning text-dark ms-1">{{ trim($pref) }}</span>
+                @endforeach
+            </div>
+        @endif
+    </div>
+</div>
+@elseif($facturaEmitida)
+<div class="alert alert-warning d-flex gap-2 align-items-start mb-3" style="border-left: 4px solid #ffc107;">
+    <i class="bi bi-receipt fs-5 mt-1"></i>
+    <div>
+        <strong>Proforma con factura emitida</strong> — Este es el documento de cobranza principal.
+        Se emitió la siguiente factura/boleta fiscal:
+        @foreach(explode(',', $facturaEmitida) as $fref)
+            <span class="badge bg-secondary ms-1">{{ trim($fref) }}</span>
+        @endforeach
+    </div>
+</div>
+@endif
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Venta #{{ $venta->id }}</h3>
     <div class="d-flex gap-2">
+        @if(!$esCanjeadaFiscal)
         <a href="/casadets/ventas/{{ $venta->id }}/pago" class="btn btn-outline-success btn-sm">
             <i class="bi bi-cash-stack me-1"></i>Verificar pago
         </a>
+        @endif
         <a href="/casadets/ventas/{{ $venta->id }}/edit" class="btn btn-primary btn-sm">
             <i class="bi bi-pencil me-1"></i>Editar
         </a>

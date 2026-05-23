@@ -2,14 +2,16 @@
 
 @section('content')
 <style>
-.fila-pagado  { background: #d1e7dd !important; }
-.fila-parcial { background: #fff3cd !important; }
-.fila-anulado { background: #f8d7da !important; opacity:.85; }
+.fila-pagado   { background: #d1e7dd !important; }
+.fila-parcial  { background: #fff3cd !important; }
+.fila-anulado  { background: #f8d7da !important; opacity:.85; }
+.fila-canjeada { background: #e9ecef !important; opacity:.9; }
 .select-estado { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; font-weight:600; cursor:pointer; border:1.5px solid; appearance:none; -webkit-appearance:none; text-align:center; min-width:110px; }
 .select-estado.est-pendiente { border-color:#adb5bd; background:#f8f9fa; color:#495057; }
 .select-estado.est-parcial   { border-color:#fd7e14; background:#fff3cd; color:#7c4a00; }
 .select-estado.est-pagado    { border-color:#198754; background:#d1e7dd; color:#155724; }
 .select-estado.est-anulado   { border-color:#dc3545; background:#f8d7da; color:#842029; }
+.select-estado.est-canjeada  { border-color:#6c757d; background:#e9ecef; color:#495057; }
 .filter-input { font-size:.78rem; border-radius:5px; border:1px solid #ced4da; padding:.2rem .4rem; background:#fff; width:100%; min-width:0; transition:border-color .15s,box-shadow .15s; }
 .filter-input:focus { outline:none; border-color:#86b7fe; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
 .thead-filter td { background:#e9f0fb; padding:.3rem .5rem; border-bottom:2px solid #c8d8f5; }
@@ -108,8 +110,10 @@
                         <select id="fEstado" class="filter-input">
                             <option value="">Todos</option>
                             <option value="pendiente">Pendiente</option>
+                            <option value="parcial">Parcial</option>
                             <option value="pagado">Pagado</option>
                             <option value="anulado">Anulado</option>
+                            <option value="canjeada">Ref. fiscal</option>
                         </select>
                     </td>
                     <td><input type="date" id="fFecha" class="filter-input" style="font-size:.76rem;"></td>
@@ -137,7 +141,7 @@
                 @php
                     $metodosArr  = array_filter(explode(',', $v->metodo_pago ?? ''));
                     $estado      = $v->estado ?? 'pendiente';
-                    $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado',default=>'' };
+                    $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
@@ -149,6 +153,12 @@
                     data-documento="{{ strtolower(($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '')) }}"
                     data-total="{{ number_format($v->total_cobrado, 2) }}">
                     <td>
+                        @if($estado === 'canjeada')
+                            <span class="select-estado est-canjeada" style="display:inline-block;cursor:default;"
+                                  title="Referencia fiscal — no genera deuda">
+                                📋 Ref. fiscal
+                            </span>
+                        @else
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
                             @csrf
                             <select name="estado" class="select-estado est-{{ $estado }}" onchange="this.form.submit()">
@@ -158,6 +168,7 @@
                                 <option value="anulado"   {{ $estado==='anulado'  ?'selected':'' }}>✕ Anulado</option>
                             </select>
                         </form>
+                        @endif
                     </td>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
                     <td>{{ $v->vendedor->nombre ?? '—' }}</td>

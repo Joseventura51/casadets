@@ -98,17 +98,18 @@ class VentaImportController extends Controller
                 $ruc         = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
                 $canjeRaw    = trim((string) ($mapa['canje'] !== null ? ($r[$mapa['canje']] ?? '') : ''));
                 $grupos[$key] = [
-                    'fecha'        => $this->parseFecha($r[$mapa['fecha']] ?? null),
-                    'doc'          => $doc,
-                    'serie'        => $serie,
-                    'numero'       => $numero,
-                    'razon_social' => $razonSocial,
-                    'ruc'          => $ruc,
-                    'canje_raw'    => $canjeRaw,
-                    'canjeada'     => false,
-                    'canjes'       => [],
-                    'detalles'     => [],
-                    'total'        => 0,
+                    'fecha'           => $this->parseFecha($r[$mapa['fecha']] ?? null),
+                    'doc'             => $doc,
+                    'serie'           => $serie,
+                    'numero'          => $numero,
+                    'razon_social'    => $razonSocial,
+                    'ruc'             => $ruc,
+                    'canje_raw'       => $canjeRaw,
+                    'canjeada'        => false,
+                    'canjes'          => [],
+                    'reemplazada_por' => [],
+                    'detalles'        => [],
+                    'total'           => 0,
                 ];
             }
 
@@ -292,14 +293,17 @@ class VentaImportController extends Controller
                 $numero = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
 
                 // Construir observaciones con info de canje
-                $observaciones = 'Importado desde Excel';
+                $reemplazadaPor = $g['reemplazada_por'] ?? [];
+                $observaciones  = 'Importado desde Excel';
                 if ($esCanjeada) {
-                    $observaciones .= ' — Proforma canjeada';
+                    // Factura/boleta que cubre proformas — referencia fiscal sin deuda adicional
+                    $observaciones .= ' — Factura/boleta de canje';
                     if (!empty($g['canjes'])) {
-                        $observaciones .= ' por: ' . implode(', ', $g['canjes']);
+                        $observaciones .= ' — Cubre proformas: ' . implode(', ', $g['canjes']);
                     }
-                } elseif (!empty($g['canjes'])) {
-                    $observaciones .= ' — Canjea proformas: ' . implode(', ', $g['canjes']);
+                } elseif (!empty($reemplazadaPor)) {
+                    // Proforma que tiene factura/boleta emitida (pero sigue siendo el doc de cobro)
+                    $observaciones .= ' — Factura emitida: ' . implode(', ', $reemplazadaPor);
                 }
                 if ($esNC) {
                     $observaciones .= ' — Nota de crédito';
@@ -324,10 +328,13 @@ class VentaImportController extends Controller
                 }
 
                 // Estado inicial según tipo de documento
+                // - Facturas/boletas canjeadas: referencia fiscal, sin deuda
+                // - Proformas: siempre pendiente (son el documento de cobranza principal)
+                // - NC: se registra como pagado (no genera deuda pendiente)
                 if ($esCanjeada) {
                     $estadoInicial = 'canjeada';
                 } elseif ($esNC) {
-                    $estadoInicial = 'pagado'; // NC no genera deuda pendiente
+                    $estadoInicial = 'pagado';
                 } else {
                     $estadoInicial = 'pendiente';
                 }
@@ -344,9 +351,10 @@ class VentaImportController extends Controller
                 ]);
 
                 // Crear detalles
-                // Proformas canjeadas y NC usan 'entrada' (devolucion/anulacion), ventas normales 'salida'
+                // NC usa 'entrada' (devolución), ventas normales y proformas usan 'salida'
                 $tipoMovStock = ($esNC) ? 'entrada' : 'salida';
-                // Proformas canjeadas no mueven stock (la factura resultante ya lo hace)
+                // Facturas/boletas canjeadas (referencia fiscal) NO mueven stock.
+                // Las proformas SÍ mueven stock: son el documento principal de cobranza.
                 $moverStock = !$esCanjeada;
 
                 $productosDeEstaVenta = [];
@@ -423,7 +431,7 @@ class VentaImportController extends Controller
 
         $partes = [];
         if ($totalCreadas > 0)      $partes[] = "$totalCreadas venta(s) con $totalDetalles producto(s)";
-        if ($totalCanjeadas > 0)    $partes[] = "$totalCanjeadas proforma(s) canjeada(s)";
+        if ($totalCanjeadas > 0)    $partes[] = "$totalCanjeadas factura(s)/boleta(s) de canje (referencia fiscal)";
         if ($totalNotasCredito > 0) $partes[] = "$totalNotasCredito nota(s) de crédito";
 
         return redirect('/casadets/ventas')->with('success',
@@ -432,13 +440,21 @@ class VentaImportController extends Controller
     }
 
     /**
-     * Detecta y marca las proformas canjeadas usando el campo Proforma_Canjeada.
+     * Detecta canjes entre facturas/boletas y proformas.
      *
-     * Lógica:
-     * - Si una FACTURA/BOLETA tiene canje = "|PR-0006-65513|PR-0006-65543", esas proformas fueron
-     *   reemplazadas por esta factura → marcar esas proformas como canjeadas.
-     * - Si una PROFORMA tiene canje = "F-F006-43957", fue reemplazada por esa factura
-     *   → marcarla como canjeada directamente.
+     * LÓGICA DE NEGOCIO:
+     * Las proformas son el documento principal de cobranza. Cuando una factura/boleta
+     * reemplaza (canjea) a una proforma, la factura es solo una referencia fiscal —
+     * NO genera deuda adicional. La cobranza se sigue haciendo contra la proforma.
+     *
+     * - FACTURA/BOLETA con canje = "|PR-0006-65513|PR-0006-65543":
+     *     → La factura/boleta se marca como CANJEADA (referencia fiscal, sin deuda nueva).
+     *     → Las proformas quedan como pendientes para cobranza.
+     *     → Se anota en cada proforma qué factura la cubre (solo informativo).
+     *
+     * - PROFORMA con canje = "F-F006-43957":
+     *     → La proforma NO se marca como canjeada; sigue siendo el documento de cobro.
+     *     → Solo se anota qué factura la cubre (para mostrar en observaciones).
      */
     private function resolverCanjes(array $grupos): array
     {
@@ -457,8 +473,11 @@ class VentaImportController extends Controller
 
             $docLetra = strtoupper(trim($g['doc'] ?? ''));
 
-            // Facturas/Boletas: el campo lista las proformas que canjean
+            // ── FACTURAS / BOLETAS ──────────────────────────────────────────────
+            // El campo canje lista las proformas que esta factura/boleta reemplaza.
             // Formato: "|PR-0006-65513|PR-0006-65543" o "PR-0006-65513"
+            // → La FACTURA se marca como canjeada (referencia fiscal, sin nueva deuda).
+            // → Las PROFORMAS quedan pendientes para cobranza.
             if (in_array($docLetra, ['F', 'B'])) {
                 $refs = array_filter(explode('|', $canjeRaw));
                 $canjesResueltos = [];
@@ -472,25 +491,31 @@ class VentaImportController extends Controller
                         $refSerie = $partes[1] ?? '';
                         $refNro   = $partes[2] ?? '';
                         $refKey   = $refDoc . '|' . $refSerie . '|' . $refNro;
+
+                        // Anotar en la proforma qué factura la cubre (solo info, no cambia su estado)
                         if (isset($indice[$refKey])) {
-                            $grupos[$indice[$refKey]]['canjeada'] = true;
-                            $grupos[$indice[$refKey]]['canjes'][] = $docLetra . '-' . $g['serie'] . '-' . $g['numero'];
+                            $facturaLabel = $docLetra . '-' . $g['serie'] . '-' . $g['numero'];
+                            $grupos[$indice[$refKey]]['reemplazada_por'][] = $facturaLabel;
                         }
                         $canjesResueltos[] = $ref;
                     }
                 }
                 if (!empty($canjesResueltos)) {
-                    $grupos[$key]['canjes'] = $canjesResueltos;
+                    // Marcar la FACTURA/BOLETA como canjeada (no la proforma)
+                    $grupos[$key]['canjeada'] = true;
+                    $grupos[$key]['canjes']   = $canjesResueltos;
                 }
             }
 
-            // Proformas: el campo indica la factura/boleta por la que fue reemplazada
+            // ── PROFORMAS ───────────────────────────────────────────────────────
+            // El campo indica la factura/boleta por la que fue reemplazada.
             // Formato: "F-F006-43957"
+            // → La proforma NO se marca como canjeada; sigue siendo el documento de cobro.
+            // → Solo se registra el reemplazo para mostrar en observaciones.
             if (in_array($docLetra, ['PR', 'P'])) {
                 $partes = explode('-', $canjeRaw, 3);
-                if (count($partes) >= 2) {
-                    $grupos[$key]['canjeada'] = true;
-                    $grupos[$key]['canjes'][] = $canjeRaw;
+                if (count($partes) >= 2 && trim($canjeRaw) !== '') {
+                    $grupos[$key]['reemplazada_por'][] = $canjeRaw;
                 }
             }
         }

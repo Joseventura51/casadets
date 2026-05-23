@@ -57,18 +57,27 @@
     Si aún no se cobró, deja <strong>Ninguno</strong> y quedará como <em>pendiente</em>.
 </div>
 @php
-    $cntCanjeadas = count(array_filter($grupos, fn($g) => !empty($g['canjeada'])));
-    $cntNC        = count(array_filter($grupos, fn($g) => strtoupper($g['doc'] ?? '') === 'NC'));
+    $cntCanjeadas    = count(array_filter($grupos, fn($g) => !empty($g['canjeada'])));
+    $cntNC           = count(array_filter($grupos, fn($g) => strtoupper($g['doc'] ?? '') === 'NC'));
+    $cntConFactura   = count(array_filter($grupos, fn($g) => !empty($g['reemplazada_por']) && empty($g['canjeada'])));
 @endphp
-@if($cntCanjeadas > 0 || $cntNC > 0)
+@if($cntCanjeadas > 0 || $cntNC > 0 || $cntConFactura > 0)
 <div class="alert alert-info border small mb-3 py-2">
     <i class="bi bi-info-circle-fill text-info me-1"></i>
     <strong>Este archivo contiene documentos especiales:</strong>
     <ul class="mb-0 mt-1">
         @if($cntCanjeadas > 0)
         <li>
-            <span class="badge bg-warning text-dark me-1">{{ $cntCanjeadas }} Proforma(s) canjeada(s)</span>
-            Se importarán como <strong>canjeadas</strong> — sin movimiento de stock ni cobro pendiente, ya que la factura/boleta correspondiente los cubre.
+            <span class="badge bg-secondary me-1">{{ $cntCanjeadas }} Factura(s)/Boleta(s) de canje</span>
+            Se importarán como <strong>referencia fiscal</strong> — sin generar deuda adicional ni mover stock.
+            La cobranza se gestiona sobre las <strong>proformas</strong> que cubren.
+        </li>
+        @endif
+        @if($cntConFactura > 0)
+        <li>
+            <span class="badge bg-warning text-dark me-1">{{ $cntConFactura }} Proforma(s) con factura emitida</span>
+            Se importarán como <strong>pendientes de cobro</strong> — son el documento principal de cobranza.
+            Se muestra qué factura/boleta fue emitida, solo como referencia.
         </li>
         @endif
         @if($cntNC > 0)
@@ -95,18 +104,20 @@
     <div id="ventasContainer">
         @foreach($grupos as $i => $g)
         @php
-            $numFmt   = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
-            $docLetra = strtoupper($g['doc'] ?? '');
-            $esNC      = $docLetra === 'NC';
-            $esCanjeada = !empty($g['canjeada']);
+            $numFmt          = trim(($g['serie'] ?? '') . '-' . ($g['numero'] ?? ''), '-');
+            $docLetra        = strtoupper($g['doc'] ?? '');
+            $esNC            = $docLetra === 'NC';
+            $esCanjeada      = !empty($g['canjeada']);
+            $reemplazadaPor  = $g['reemplazada_por'] ?? [];
+            $tieneFactura    = !empty($reemplazadaPor) && !$esCanjeada;
             $badgeCls = match($docLetra) {
                 'B'  => 'bg-secondary',
-                'F'  => 'bg-primary',
+                'F'  => $esCanjeada ? 'bg-secondary' : 'bg-primary',
                 'NC' => 'bg-danger',
                 default => 'bg-warning text-dark',
             };
-            $cardBorder = $esNC ? 'border-danger' : ($esCanjeada ? 'border-warning' : 'border-0');
-            $cardBg     = $esNC ? 'bg-danger bg-opacity-10' : ($esCanjeada ? 'bg-warning bg-opacity-10' : 'bg-white');
+            $cardBorder = $esNC ? 'border-danger' : ($esCanjeada ? 'border-secondary' : 'border-0');
+            $cardBg     = $esNC ? 'bg-danger bg-opacity-10' : ($esCanjeada ? 'bg-secondary bg-opacity-10' : 'bg-white');
         @endphp
         <div class="card mb-2 venta-card shadow-sm {{ $cardBorder }}"
              data-idx="{{ $i }}"
@@ -128,15 +139,22 @@
                         </span>
                     @endif
                     @if($esCanjeada)
-                        <span class="badge bg-warning text-dark" style="font-size:.75rem;">
-                            <i class="bi bi-arrow-left-right me-1"></i>Proforma canjeada
+                        {{-- Factura/boleta que cubre proformas: referencia fiscal --}}
+                        <span class="badge bg-secondary" style="font-size:.75rem;">
+                            <i class="bi bi-file-earmark-check me-1"></i>Ref. fiscal (canje)
                         </span>
                         @if(!empty($g['canjes']))
-                            <span class="text-muted small">→ {{ implode(', ', $g['canjes']) }}</span>
+                            <span class="text-muted small">Cubre: {{ implode(', ', $g['canjes']) }}</span>
                         @endif
-                    @elseif(!empty($g['canjes']) && !$esNC)
-                        <span class="badge bg-info text-dark" style="font-size:.75rem;">
-                            <i class="bi bi-link-45deg me-1"></i>Canjea: {{ implode(', ', $g['canjes']) }}
+                    @elseif($tieneFactura)
+                        {{-- Proforma con factura emitida: sigue siendo el doc de cobro --}}
+                        <span class="badge bg-warning text-dark" style="font-size:.75rem;">
+                            <i class="bi bi-receipt me-1"></i>Proforma (cobro pendiente)
+                        </span>
+                        <span class="text-muted small">Factura emitida: {{ implode(', ', $reemplazadaPor) }}</span>
+                    @elseif(!$esNC && in_array($docLetra, ['PR', 'P']))
+                        <span class="badge bg-warning text-dark" style="font-size:.75rem;">
+                            <i class="bi bi-receipt me-1"></i>Proforma
                         </span>
                     @endif
                     @if(!empty($g['razon_social']))
@@ -148,7 +166,7 @@
                         {{ $g['detalles'] ? count($g['detalles']).' producto(s)' : '' }}
                         · S/ {{ number_format(abs($g['total']), 2) }}
                         @if($esNC) <span class="text-danger fw-semibold">(crédito)</span> @endif
-                        @if($esCanjeada) <span class="text-warning fw-semibold">(sin stock / sin cobro)</span> @endif
+                        @if($esCanjeada) <span class="text-muted fst-italic">(sin stock · sin deuda)</span> @endif
                     </span>
                 </div>
                 <button type="button" class="btn btn-sm btn-outline-danger btn-eliminar-venta">
