@@ -15,8 +15,6 @@ return new class extends Migration
                   ->after('pago_id')
                   ->constrained('ventas')
                   ->nullOnDelete();
-
-            $table->index('venta_origen_id');
         });
 
         // ── Backfill histórico: parsear "NC #X (…)" → venta_origen_id ──
@@ -50,7 +48,6 @@ return new class extends Migration
     {
         Schema::table('saldos_favor', function (Blueprint $table) {
             $table->dropForeign(['venta_origen_id']);
-            $table->dropIndex(['venta_origen_id']);
             $table->dropColumn('venta_origen_id');
         });
     }
