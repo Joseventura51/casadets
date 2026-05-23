@@ -29,12 +29,18 @@
 
                 <div class="col-md-4">
                     <label class="form-label">Cliente <small class="text-muted">(opcional)</small></label>
-                    <select name="cliente_id" class="form-select">
-                        <option value="">— Sin cliente —</option>
+                    <input type="text" id="clienteSearch" class="form-control"
+                           list="listClientes"
+                           placeholder="Escribe el nombre del cliente…"
+                           autocomplete="off"
+                           value="{{ old('_cliente_nombre', '') }}">
+                    <datalist id="listClientes">
                         @foreach($clientes as $c)
-                            <option value="{{ $c->id }}" {{ old('cliente_id') == $c->id ? 'selected' : '' }}>{{ $c->nombre }}{{ $c->documento ? ' · '.$c->documento : '' }}</option>
+                            <option value="{{ $c->nombre }}{{ $c->documento ? ' (' . $c->documento . ')' : '' }}">
                         @endforeach
-                    </select>
+                    </datalist>
+                    <input type="hidden" name="cliente_id" id="clienteIdHidden" value="{{ old('cliente_id') }}">
+                    <div class="form-text">Escribe para buscar, o déjalo vacío si no hay cliente.</div>
                 </div>
 
                 <div class="col-md-3">
@@ -167,6 +173,24 @@
 
     // Empieza con una fila
     nuevaFila();
+
+    // ── Autocompletado de cliente ──────────────────────────────────
+    const clienteMap = {};
+    @foreach($clientes as $c)
+    clienteMap[{{ json_encode($c->nombre . ($c->documento ? ' (' . $c->documento . ')' : '')) }}] = {{ $c->id }};
+    @endforeach
+
+    const searchEl  = document.getElementById('clienteSearch');
+    const hiddenEl  = document.getElementById('clienteIdHidden');
+
+    searchEl.addEventListener('input', function () {
+        const val = this.value.trim();
+        hiddenEl.value = clienteMap[val] !== undefined ? clienteMap[val] : '';
+    });
+    // Si el usuario borra el campo, limpia el id oculto
+    searchEl.addEventListener('blur', function () {
+        if (!this.value.trim()) hiddenEl.value = '';
+    });
 })();
 </script>
 @endsection

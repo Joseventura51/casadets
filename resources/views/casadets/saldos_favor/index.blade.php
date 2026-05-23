@@ -90,9 +90,17 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Cliente <span class="text-danger">*</span></label>
-                        <select name="cliente_id" id="nsCliente" class="form-select" required>
-                            <option value="">Cargando clientes…</option>
-                        </select>
+                        <input type="text" id="nsClienteNombre" class="form-control"
+                               list="listClientesSaldo"
+                               placeholder="Escribe el nombre del cliente…"
+                               autocomplete="off" required>
+                        <datalist id="listClientesSaldo">
+                            @foreach($todosClientes as $c)
+                                <option value="{{ $c->nombre }}{{ $c->documento ? ' (' . $c->documento . ')' : '' }}">
+                            @endforeach
+                        </datalist>
+                        <input type="hidden" name="cliente_id" id="nsClienteId">
+                        <div class="form-text">Escribe para buscar entre los clientes registrados.</div>
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">
@@ -165,7 +173,7 @@
         </button>
         <button type="button" class="btn btn-success btn-sm"
                 data-bs-toggle="modal" data-bs-target="#modalNuevoSaldo">
-            <i class="bi bi-plus-lg me-1"></i>Nuevo saldo manual
+            <i class="bi bi-plus-lg me-1"></i>Nuevo Saldo
         </button>
     </div>
 </div>
@@ -218,7 +226,7 @@
         <p class="text-muted small">Los saldos se generan automáticamente cuando un pago excede el total de una venta,<br>o puedes crear uno manualmente con el botón de arriba.</p>
         <button type="button" class="btn btn-success mt-2"
                 data-bs-toggle="modal" data-bs-target="#modalNuevoSaldo">
-            <i class="bi bi-plus-lg me-1"></i>Crear saldo a favor manual
+            <i class="bi bi-plus-lg me-1"></i>Nuevo Saldo
         </button>
     </div>
 </div>
@@ -452,19 +460,45 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
     }
 });
 
-/* ── Modal 2: Nuevo saldo manual — cargar clientes ─────────── */
-document.getElementById('modalNuevoSaldo').addEventListener('show.bs.modal', function () {
-    const sel = document.getElementById('nsCliente');
-    if (sel.options.length > 1) return; // ya cargados
-    fetch('/casadets/saldos-favor/clientes.json')
-        .then(r => r.json())
-        .then(clientes => {
-            sel.innerHTML = '<option value="">— Selecciona un cliente —</option>'
-                + clientes.map(c => `<option value="${c.id}">${c.nombre}${c.documento ? ' (' + c.documento + ')' : ''}</option>`).join('');
-        })
-        .catch(() => {
-            sel.innerHTML = '<option value="">Error al cargar clientes</option>';
-        });
+/* ── Modal 2: Nuevo Saldo — autocompletado de clientes ─────── */
+const clienteMapSaldo = {};
+@foreach($todosClientes as $c)
+clienteMapSaldo[{{ json_encode($c->nombre . ($c->documento ? ' (' . $c->documento . ')' : '')) }}] = {{ $c->id }};
+@endforeach
+
+document.getElementById('nsClienteNombre').addEventListener('input', function () {
+    const val = this.value.trim();
+    document.getElementById('nsClienteId').value = clienteMapSaldo[val] !== undefined ? clienteMapSaldo[val] : '';
+});
+document.getElementById('nsClienteNombre').addEventListener('blur', function () {
+    if (!this.value.trim()) document.getElementById('nsClienteId').value = '';
+});
+
+// Validar que se seleccionó un cliente válido antes de enviar
+document.querySelector('#modalNuevoSaldo form').addEventListener('submit', function (e) {
+    const clienteId = document.getElementById('nsClienteId').value;
+    if (!clienteId) {
+        e.preventDefault();
+        const input = document.getElementById('nsClienteNombre');
+        input.classList.add('is-invalid');
+        input.focus();
+        let fb = document.getElementById('nsClienteFeedback');
+        if (!fb) {
+            fb = document.createElement('div');
+            fb.id = 'nsClienteFeedback';
+            fb.className = 'invalid-feedback';
+            fb.textContent = 'Selecciona un cliente válido de la lista.';
+            input.parentNode.insertBefore(fb, input.nextSibling);
+        }
+        return;
+    }
+    document.getElementById('nsClienteNombre').classList.remove('is-invalid');
+});
+
+document.getElementById('modalNuevoSaldo').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('nsClienteNombre').value = '';
+    document.getElementById('nsClienteId').value = '';
+    document.getElementById('nsClienteNombre').classList.remove('is-invalid');
 });
 
 /* ── Modal 3: Convertir NC — cargar lista ────────────────────── */

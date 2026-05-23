@@ -42,8 +42,10 @@ class SaldoFavorController extends Controller
         $totalClientes      = $clientesIds->count();
         $totalRegistros     = SaldoFavor::whereIn('estado', ['disponible', 'parcialmente_usado'])->count();
 
+        $todosClientes = Cliente::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'documento']);
+
         return view('casadets.saldos_favor.index', compact(
-            'clientes', 'totalDisponible', 'totalClientes', 'totalRegistros'
+            'clientes', 'totalDisponible', 'totalClientes', 'totalRegistros', 'todosClientes'
         ));
     }
 
