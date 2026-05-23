@@ -7,23 +7,27 @@
 .badge-disponible     { background:#d1ecf1; color:#0c5460; border:1px solid #bee5eb; }
 .badge-parcial        { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
 .badge-usado          { background:#e2e3e5; color:#383d41; border:1px solid #c8c9ca; }
+.badge-manual         { background:#e8d5f5; color:#5a2d82; border:1px solid #c9a0dc; }
 .saldo-row-highlight  { background:#f0fbff !important; }
 .kpi-box { border-radius:12px; padding:1.1rem 1.4rem; }
+.nc-row { transition: background .15s; }
+.nc-row:hover { background: #fff8f0 !important; }
 </style>
 
-{{-- Modal: aplicar saldo ──────────────────────────────────── --}}
-<div class="modal fade" id="modalAplicar" tabindex="-1" aria-labelledby="modalAplicarLabel" aria-hidden="true">
+{{-- ══════════════════════════════════════════════════════════
+     Modal 1: Aplicar saldo existente a una venta
+     ══════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalAplicar" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modalAplicarLabel">
+                <h5 class="modal-title">
                     <i class="bi bi-wallet2 me-2 text-info"></i>Aplicar saldo a venta
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div id="modalAlerta" class="alert d-none mb-3"></div>
-
                 <div class="mb-3 p-3 bg-light rounded">
                     <div class="row text-center">
                         <div class="col-6">
@@ -36,7 +40,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Venta a cobrar</label>
                     <select id="mVentaId" class="form-select">
@@ -44,7 +47,6 @@
                     </select>
                     <div class="text-muted small mt-1" id="mVentaInfo"></div>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label fw-semibold">Monto a aplicar</label>
                     <div class="input-group">
@@ -60,8 +62,91 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-info text-white" id="btnConfirmarAplicar">
-                    <i class="bi bi-check-lg me-1"></i> Confirmar aplicación
+                    <i class="bi bi-check-lg me-1"></i>Confirmar aplicación
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════
+     Modal 2: Crear saldo a favor manualmente
+     ══════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalNuevoSaldo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle me-2 text-success"></i>Nuevo saldo a favor manual
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="/casadets/saldos-favor/crear" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <div class="alert alert-info small py-2 mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Usa esta opción para registrar un saldo a favor de forma manual, por ejemplo por un adelanto o ajuste comercial.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Cliente <span class="text-danger">*</span></label>
+                        <select name="cliente_id" id="nsCliente" class="form-select" required>
+                            <option value="">Cargando clientes…</option>
+                        </select>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Monto (S/) <span class="text-danger">*</span></label>
+                            <input type="number" name="monto" class="form-control text-end" step="0.01" min="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Fecha <span class="text-danger">*</span></label>
+                            <input type="date" name="fecha" class="form-control" value="{{ date('Y-m-d') }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Descripción / Motivo</label>
+                        <input type="text" name="descripcion" class="form-control" placeholder="Ej: Adelanto de pago, ajuste comercial…" maxlength="255">
+                        <div class="form-text">Si lo dejas vacío se registrará como "Ingreso manual".</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-plus-lg me-1"></i>Crear saldo a favor
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{-- ══════════════════════════════════════════════════════════
+     Modal 3: Convertir notas de crédito a saldo a favor
+     ══════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalConvertirNC" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-arrow-repeat me-2 text-warning"></i>Convertir nota de crédito a saldo a favor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning small py-2 mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Al convertir una NC, el monto pasa a ser un <strong>saldo a favor</strong> del cliente que puede aplicarse a futuras ventas.
+                    Esta acción es <strong>manual e irreversible</strong>.
+                </div>
+                <div id="ncLista">
+                    <div class="text-center text-muted py-4">
+                        <div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de crédito…
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -73,7 +158,31 @@
         <h3 class="mb-0"><i class="bi bi-wallet2 me-2 text-info"></i>Saldos a favor</h3>
         <p class="text-muted mb-0 small">Excedentes de pago disponibles por cliente</p>
     </div>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-outline-warning btn-sm" id="btnAbrirNC"
+                data-bs-toggle="modal" data-bs-target="#modalConvertirNC">
+            <i class="bi bi-arrow-repeat me-1"></i>Desde nota de crédito
+        </button>
+        <button type="button" class="btn btn-success btn-sm"
+                data-bs-toggle="modal" data-bs-target="#modalNuevoSaldo">
+            <i class="bi bi-plus-lg me-1"></i>Nuevo saldo manual
+        </button>
+    </div>
 </div>
+
+{{-- Flash messages --}}
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show py-2" role="alert">
+    <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+</div>
+@endif
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show py-2" role="alert">
+    <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
+    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+</div>
+@endif
 
 {{-- KPIs ──────────────────────────────────────────────────── --}}
 <div class="row g-3 mb-4">
@@ -106,7 +215,11 @@
     <div class="card-body text-center py-5">
         <i class="bi bi-wallet2 text-muted fs-1 d-block mb-3"></i>
         <h5 class="text-muted">No hay saldos a favor activos</h5>
-        <p class="text-muted small">Los saldos se generan automáticamente cuando un pago excede el total de una venta.</p>
+        <p class="text-muted small">Los saldos se generan automáticamente cuando un pago excede el total de una venta,<br>o puedes crear uno manualmente con el botón de arriba.</p>
+        <button type="button" class="btn btn-success mt-2"
+                data-bs-toggle="modal" data-bs-target="#modalNuevoSaldo">
+            <i class="bi bi-plus-lg me-1"></i>Crear saldo a favor manual
+        </button>
     </div>
 </div>
 @else
@@ -163,7 +276,14 @@
             <tbody>
                 @foreach($saldosActivos as $s)
                 <tr class="saldo-row-highlight">
-                    <td class="ps-3 small">{{ $s->descripcion ?? '—' }}</td>
+                    <td class="ps-3 small">
+                        @if(!$s->pago_id && str_contains($s->descripcion ?? '', 'Ingreso manual') || (!$s->pago_id && !str_contains($s->descripcion ?? '', 'NC #')))
+                            <span class="badge badge-manual me-1" title="Creado manualmente"><i class="bi bi-pencil-square"></i></span>
+                        @elseif(!$s->pago_id && str_contains($s->descripcion ?? '', 'NC #'))
+                            <span class="badge bg-warning text-dark me-1" title="Convertido desde nota de crédito"><i class="bi bi-arrow-repeat"></i></span>
+                        @endif
+                        {{ $s->descripcion ?? '—' }}
+                    </td>
                     <td class="small text-muted">{{ $s->fecha->format('d/m/Y') }}</td>
                     <td class="text-end text-muted small">S/ {{ number_format($s->monto_original, 2) }}</td>
                     <td class="text-end fw-semibold text-info">S/ {{ number_format($s->monto_disponible, 2) }}</td>
@@ -177,7 +297,7 @@
                     <td class="text-end pe-3">
                         @if($cliente->ventas_pendientes_count > 0)
                         <button type="button" class="btn btn-sm btn-outline-info"
-                            onclick="abrirModal({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, {{ $venta_id ?? 'null' }}, {{ $s->id }}, {{ (float)$s->monto_disponible }})">
+                            onclick="abrirModal({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, null, {{ $s->id }}, {{ (float)$s->monto_disponible }})">
                             <i class="bi bi-lightning-fill me-1"></i>Usar
                         </button>
                         @else
@@ -224,6 +344,7 @@
 @endif
 
 <script>
+/* ── Modal 1: Aplicar saldo ────────────────────────────────── */
 let modalSaldoId    = null;
 let modalClienteId  = null;
 let modalDisponible = 0;
@@ -269,7 +390,6 @@ document.getElementById('mVentaId').addEventListener('change', function() {
     if (modalDeuda > 0) {
         document.getElementById('mVentaInfo').textContent =
             'Saldo pendiente de esta venta: S/ ' + modalDeuda.toFixed(2);
-        // Sugerir el mínimo entre saldo disponible y deuda
         document.getElementById('mMonto').value = Math.min(modalDisponible, modalDeuda).toFixed(2);
     } else {
         document.getElementById('mVentaInfo').textContent = '';
@@ -309,8 +429,7 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
         const form = new FormData();
         form.append('venta_id', ventaId);
         form.append('monto', monto.toFixed(2));
-        form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content
-            || '{{ csrf_token() }}');
+        form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
 
         const res  = await fetch(`/casadets/saldos-favor/${modalSaldoId}/aplicar`, {
             method: 'POST',
@@ -322,7 +441,6 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
         if (!res.ok) throw new Error(data.message || 'Error al aplicar el saldo.');
 
         modalInst.hide();
-        // Recargar página para reflejar cambios
         window.location.reload();
 
     } catch (err) {
@@ -332,6 +450,109 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Confirmar aplicación';
     }
+});
+
+/* ── Modal 2: Nuevo saldo manual — cargar clientes ─────────── */
+document.getElementById('modalNuevoSaldo').addEventListener('show.bs.modal', function () {
+    const sel = document.getElementById('nsCliente');
+    if (sel.options.length > 1) return; // ya cargados
+    fetch('/casadets/saldos-favor/clientes.json')
+        .then(r => r.json())
+        .then(clientes => {
+            sel.innerHTML = '<option value="">— Selecciona un cliente —</option>'
+                + clientes.map(c => `<option value="${c.id}">${c.nombre}${c.documento ? ' (' + c.documento + ')' : ''}</option>`).join('');
+        })
+        .catch(() => {
+            sel.innerHTML = '<option value="">Error al cargar clientes</option>';
+        });
+});
+
+/* ── Modal 3: Convertir NC — cargar lista ────────────────────── */
+document.getElementById('modalConvertirNC').addEventListener('show.bs.modal', function () {
+    const contenedor = document.getElementById('ncLista');
+    contenedor.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de crédito…</div>';
+
+    fetch('/casadets/saldos-favor/notas-credito.json')
+        .then(r => r.json())
+        .then(ncs => {
+            if (!ncs.length) {
+                contenedor.innerHTML = `
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-check-circle text-success fs-1 d-block mb-2"></i>
+                        <div>No hay notas de crédito pendientes de convertir.</div>
+                        <div class="small text-muted mt-1">Todas las notas de crédito ya fueron procesadas, o no tienen cliente asignado.</div>
+                    </div>`;
+                return;
+            }
+
+            let html = `<div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Documento</th>
+                            <th>Cliente</th>
+                            <th>Fecha</th>
+                            <th class="text-end">Monto</th>
+                            <th class="text-end pe-3">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+            ncs.forEach(nc => {
+                html += `<tr class="nc-row">
+                    <td class="ps-3">
+                        <span class="badge bg-danger me-1">NC</span>
+                        <span class="fw-semibold">${nc.numero}</span>
+                    </td>
+                    <td class="small">${nc.cliente}</td>
+                    <td class="small text-muted">${nc.fecha}</td>
+                    <td class="text-end fw-semibold text-danger">S/ ${nc.monto.toFixed(2)}</td>
+                    <td class="text-end pe-3">
+                        <button type="button" class="btn btn-sm btn-warning text-dark btn-convertir-nc"
+                                data-id="${nc.id}" data-monto="${nc.monto.toFixed(2)}" data-doc="${nc.numero}" data-cliente="${nc.cliente}">
+                            <i class="bi bi-arrow-repeat me-1"></i>Convertir
+                        </button>
+                    </td>
+                </tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+            contenedor.innerHTML = html;
+
+            // Eventos de botones de conversión
+            document.querySelectorAll('.btn-convertir-nc').forEach(btn => {
+                btn.addEventListener('click', async function () {
+                    const id      = this.dataset.id;
+                    const monto   = this.dataset.monto;
+                    const doc     = this.dataset.doc;
+                    const cliente = this.dataset.cliente;
+
+                    if (!confirm(`¿Convertir "${doc}" de ${cliente} por S/ ${monto} a saldo a favor?\n\nEsta acción no se puede deshacer.`)) return;
+
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                    const form = new FormData();
+                    form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
+
+                    try {
+                        const res = await fetch(`/casadets/saldos-favor/nc/${id}/convertir`, {
+                            method: 'POST',
+                            body: form,
+                        });
+                        // El servidor redirige, recargamos la página
+                        window.location.href = '/casadets/saldos-favor';
+                    } catch (err) {
+                        alert('Error al convertir: ' + err.message);
+                        this.disabled = false;
+                        this.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Convertir';
+                    }
+                });
+            });
+        })
+        .catch(() => {
+            contenedor.innerHTML = '<div class="alert alert-danger">Error al cargar notas de crédito.</div>';
+        });
 });
 </script>
 @endsection

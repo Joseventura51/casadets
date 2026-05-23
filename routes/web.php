@@ -54,6 +54,10 @@ Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
 
 // CASADETS — Saldos a favor
 Route::get('/casadets/saldos-favor', [SaldoFavorController::class, 'index']);
+Route::get('/casadets/saldos-favor/clientes.json', [SaldoFavorController::class, 'clientesJson']);
+Route::get('/casadets/saldos-favor/notas-credito.json', [SaldoFavorController::class, 'notasCreditoDisponibles']);
+Route::post('/casadets/saldos-favor/crear', [SaldoFavorController::class, 'crear']);
+Route::post('/casadets/saldos-favor/nc/{venta}/convertir', [SaldoFavorController::class, 'convertirNC']);
 Route::get('/casadets/saldos-favor/cliente/{clienteId}/saldos.json', [SaldoFavorController::class, 'saldosCliente']);
 Route::get('/casadets/saldos-favor/cliente/{clienteId}/ventas.json', [SaldoFavorController::class, 'ventasPendientesCliente']);
 Route::post('/casadets/saldos-favor/{saldo}/aplicar', [SaldoFavorController::class, 'aplicar']);

@@ -7,6 +7,7 @@ use App\Models\SaldoFavor;
 use App\Models\Venta;
 use App\Services\CobranzaService;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class SaldoFavorController extends Controller
 {
@@ -44,6 +45,107 @@ class SaldoFavorController extends Controller
         return view('casadets.saldos_favor.index', compact(
             'clientes', 'totalDisponible', 'totalClientes', 'totalRegistros'
         ));
+    }
+
+    /* ── JSON: lista de todos los clientes activos ─────────────────── */
+    public function clientesJson()
+    {
+        $clientes = Cliente::where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'documento']);
+        return response()->json($clientes);
+    }
+
+    /* ── JSON: notas de crédito disponibles para convertir ──────────── */
+    public function notasCreditoDisponibles()
+    {
+        $ventas = Venta::where('documento_tipo', 'nota_credito')
+            ->whereNotNull('cliente_id')
+            ->with('cliente')
+            ->orderBy('fecha', 'desc')
+            ->get()
+            ->filter(function ($v) {
+                // Excluir las que ya fueron convertidas a saldo
+                return !SaldoFavor::where('descripcion', 'like', '%NC #' . $v->id . '%')->exists();
+            })
+            ->values();
+
+        return response()->json($ventas->map(fn ($v) => [
+            'id'      => $v->id,
+            'numero'  => $v->documento_numero ?? ('NC #' . $v->id),
+            'cliente' => $v->cliente->nombre ?? '—',
+            'fecha'   => $v->fecha->format('d/m/Y'),
+            'monto'   => abs((float) $v->total),
+        ]));
+    }
+
+    /* ── Crear saldo a favor manualmente ───────────────────────────── */
+    public function crear(Request $request)
+    {
+        $data = $request->validate([
+            'cliente_id'  => 'required|exists:clientes,id',
+            'monto'       => 'required|numeric|min:0.01',
+            'descripcion' => 'nullable|string|max:255',
+            'fecha'       => 'required|date',
+        ]);
+
+        SaldoFavor::create([
+            'cliente_id'       => $data['cliente_id'],
+            'pago_id'          => null,
+            'monto_original'   => $data['monto'],
+            'monto_disponible' => $data['monto'],
+            'estado'           => 'disponible',
+            'descripcion'      => $data['descripcion'] ?: 'Ingreso manual',
+            'fecha'            => $data['fecha'],
+        ]);
+
+        $cliente = Cliente::find($data['cliente_id']);
+        return redirect('/casadets/saldos-favor')->with(
+            'success',
+            'Saldo a favor de S/ ' . number_format($data['monto'], 2) . ' creado para ' . ($cliente->nombre ?? '') . '.'
+        );
+    }
+
+    /* ── Convertir nota de crédito a saldo a favor ─────────────────── */
+    public function convertirNC(Request $request, Venta $venta)
+    {
+        if ($venta->documento_tipo !== 'nota_credito') {
+            return back()->with('error', 'Este documento no es una nota de crédito.');
+        }
+        if (!$venta->cliente_id) {
+            return back()->with('error', 'La nota de crédito no tiene cliente asignado. Asigna un cliente primero.');
+        }
+
+        // Verificar que no fue ya convertida
+        $yaConvertida = SaldoFavor::where('descripcion', 'like', '%NC #' . $venta->id . '%')->exists();
+        if ($yaConvertida) {
+            return back()->with('error', 'Esta nota de crédito ya fue convertida a saldo a favor anteriormente.');
+        }
+
+        $monto = abs((float) $venta->total);
+        if ($monto <= 0) {
+            return back()->with('error', 'El monto de la nota de crédito debe ser mayor a cero.');
+        }
+
+        SaldoFavor::create([
+            'cliente_id'       => $venta->cliente_id,
+            'pago_id'          => null,
+            'monto_original'   => $monto,
+            'monto_disponible' => $monto,
+            'estado'           => 'disponible',
+            'descripcion'      => 'NC #' . $venta->id . ($venta->documento_numero ? ' (' . $venta->documento_numero . ')' : '') . ' — Convertida a saldo a favor',
+            'fecha'            => $venta->fecha->format('Y-m-d'),
+        ]);
+
+        // Anotar en la venta que ya fue convertida
+        $venta->update([
+            'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' — ' : '') . 'Convertida a saldo a favor'),
+        ]);
+
+        return redirect('/casadets/saldos-favor')->with(
+            'success',
+            'Nota de crédito ' . ($venta->documento_numero ?? '#' . $venta->id) . ' convertida a saldo a favor por S/ ' . number_format($monto, 2) . '.'
+        );
     }
 
     /* ── JSON: saldos disponibles de un cliente (para verificar_pago) ── */
