@@ -4,6 +4,28 @@
 @php
     $metodos = ['ninguno','efectivo','tarjeta','yape','plin','transferencia'];
     $metodoLabels = ['ninguno'=>'Ninguno (pendiente)','efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'];
+
+    // Helper: normalizar texto (igual que el controller) para buscar en $vendedoresMap
+    $normVendedor = fn(string $s) => str_replace(
+        ['á','é','í','ó','ú','ü','ñ','à','è','ì','ò','ù'],
+        ['a','e','i','o','u','u','n','a','e','i','o','u'],
+        mb_strtolower(trim($s), 'UTF-8')
+    );
+
+    // También hacer un mapa por sub-string para nombres parciales (ej "ALM PIMPOM" puede coincidir con "ALMACEN PIMPOM")
+    $resolverVendedorId = function(string $nombre) use ($vendedoresMap, $vendedores, $vendedor_id_default, $normVendedor): array {
+        if ($nombre === '') return ['id' => $vendedor_id_default, 'matched' => false, 'from_excel' => false];
+        $norm = $normVendedor($nombre);
+        // Exact match
+        if (isset($vendedoresMap[$norm])) return ['id' => $vendedoresMap[$norm], 'matched' => true, 'from_excel' => true];
+        // Partial match: alguno empieza o contiene el texto
+        foreach ($vendedoresMap as $key => $id) {
+            if (str_contains($key, $norm) || str_contains($norm, $key)) {
+                return ['id' => $id, 'matched' => true, 'from_excel' => true];
+        }
+        }
+        return ['id' => $vendedor_id_default, 'matched' => false, 'from_excel' => true];
+    };
 @endphp
 
 <style>
@@ -118,10 +140,16 @@
             };
             $cardBorder = $esNC ? 'border-danger' : ($esCanjeada ? 'border-secondary' : 'border-0');
             $cardBg     = $esNC ? 'bg-danger bg-opacity-10' : ($esCanjeada ? 'bg-secondary bg-opacity-10' : 'bg-white');
+
+            $vNombre    = $g['vendedor_nombre'] ?? '';
+            $vResuelto  = $resolverVendedorId($vNombre);
+            $vId        = $vResuelto['id'];
+            $vMatched   = $vResuelto['matched'];
+            $vFromExcel = $vResuelto['from_excel'];
         @endphp
         <div class="card mb-2 venta-card shadow-sm {{ $cardBorder }}"
              data-idx="{{ $i }}"
-             data-vendedor-id="{{ $vendedor_id_default }}"
+             data-vendedor-id="{{ $vId }}"
              data-total-real="{{ $g['total'] }}"
              data-es-canjeada="{{ $esCanjeada ? '1' : '0' }}">
 
@@ -218,6 +246,33 @@
                             </table>
                         </div>
                     </details>
+                </div>
+
+                {{-- VENDEDOR --}}
+                <div class="mb-3 d-flex align-items-center gap-2 flex-wrap">
+                    <label class="form-label small fw-semibold mb-0 text-nowrap">
+                        <i class="bi bi-person-badge me-1 text-secondary"></i>Vendedor
+                    </label>
+                    <div style="min-width:180px;max-width:260px;">
+                        <select class="form-select form-select-sm vendedor-sel">
+                            @foreach($vendedores as $vv)
+                                <option value="{{ $vv->id }}" {{ $vv->id == $vId ? 'selected' : '' }}>
+                                    {{ $vv->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @if($vFromExcel && $vNombre !== '')
+                        @if($vMatched)
+                            <span class="badge bg-success bg-opacity-75" title="Detectado automáticamente desde el Excel">
+                                <i class="bi bi-check-lg me-1"></i>Excel: {{ $vNombre }}
+                            </span>
+                        @else
+                            <span class="badge bg-warning text-dark" title="El nombre del Excel no coincidió con ningún vendedor registrado. Se asignó el vendedor por defecto.">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Excel: "{{ $vNombre }}" — sin coincidencia
+                            </span>
+                        @endif
+                    @endif
                 </div>
 
                 <div class="row g-3 align-items-end">
@@ -354,8 +409,9 @@ function crearPagoRow() {
 function serializarTodo() {
     const ventas = [];
     document.querySelectorAll('.venta-card').forEach(card => {
-        const idx       = parseInt(card.dataset.idx);
-        const vendedorId = card.dataset.vendedorId;
+        const idx        = parseInt(card.dataset.idx);
+        const vendedorSel = card.querySelector('.vendedor-sel');
+        const vendedorId  = vendedorSel ? vendedorSel.value : card.dataset.vendedorId;
 
         // Detalles desde la tabla
         const detalles = [];

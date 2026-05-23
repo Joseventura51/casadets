@@ -94,22 +94,24 @@ class VentaImportController extends Controller
             }
 
             if (!isset($grupos[$key])) {
-                $razonSocial = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
-                $ruc         = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
-                $canjeRaw    = trim((string) ($mapa['canje'] !== null ? ($r[$mapa['canje']] ?? '') : ''));
+                $razonSocial    = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
+                $ruc            = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
+                $canjeRaw       = trim((string) ($mapa['canje'] !== null ? ($r[$mapa['canje']] ?? '') : ''));
+                $vendedorNombre = trim((string) ($mapa['vendedor'] !== null ? ($r[$mapa['vendedor']] ?? '') : ''));
                 $grupos[$key] = [
-                    'fecha'           => $this->parseFecha($r[$mapa['fecha']] ?? null),
-                    'doc'             => $doc,
-                    'serie'           => $serie,
-                    'numero'          => $numero,
-                    'razon_social'    => $razonSocial,
-                    'ruc'             => $ruc,
-                    'canje_raw'       => $canjeRaw,
-                    'canjeada'        => false,
-                    'canjes'          => [],
-                    'reemplazada_por' => [],
-                    'detalles'        => [],
-                    'total'           => 0,
+                    'fecha'            => $this->parseFecha($r[$mapa['fecha']] ?? null),
+                    'doc'              => $doc,
+                    'serie'            => $serie,
+                    'numero'           => $numero,
+                    'razon_social'     => $razonSocial,
+                    'ruc'              => $ruc,
+                    'canje_raw'        => $canjeRaw,
+                    'vendedor_nombre'  => $vendedorNombre,
+                    'canjeada'         => false,
+                    'canjes'           => [],
+                    'reemplazada_por'  => [],
+                    'detalles'         => [],
+                    'total'            => 0,
                 ];
             }
 
@@ -171,6 +173,7 @@ class VentaImportController extends Controller
             'ruc'          => 'RUC',
             'codigo'       => 'Código producto',
             'canje'        => 'Canje',
+            'vendedor'     => 'Vendedor',
         ];
         $columnasInfo = [];
         foreach ($mapa as $campo => $idx) {
@@ -191,10 +194,16 @@ class VentaImportController extends Controller
         $vendedorDefault = $vendedores->first(fn ($v) => stripos($v->nombre, 'jovi') !== false)
             ?? $vendedores->first();
 
+        // Mapa normalizado nombre→id para pre-matching desde el Excel
+        $vendedoresMap = $vendedores->mapWithKeys(fn ($v) => [
+            $this->normalizarTexto($v->nombre) => $v->id,
+        ])->toArray();
+
         return view('casadets.ventas.import_preview', [
             'grupos'               => $gruposNuevos,
             'vendedores'           => $vendedores,
             'vendedor_id_default'  => $vendedorDefault->id,
+            'vendedoresMap'        => $vendedoresMap,
             'metodo_pago_default'  => 'ninguno',
             'duplicadosExistentes' => [],
             'omitidos'             => $omitidos,
@@ -609,6 +618,7 @@ class VentaImportController extends Controller
                                'clave', 'referencia', 'ref', 'item', 'part', 'codbarr', 'codbien',
                                'codprod', 'id_producto', 'idproducto', 'numero_parte', 'nroparte'],
             'canje'        => ['proforma_canjeada', 'canje', 'canjeada', 'canje_proforma', 'canjeado'],
+            'vendedor'     => ['vendedor', 'vendedor_nombre', 'nombre_vendedor', 'vendedor_name', 'seller'],
         ];
 
         $excluir = [

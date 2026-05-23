@@ -70,11 +70,17 @@
                         <span class="col-badge col-badge-green"><i class="bi bi-upc" style="font-size:.7rem;"></i> Codigo</span>
                     </div>
 
+                    <div class="mb-1 small text-muted" style="font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; font-weight:600;">Opcional — vendedor</div>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="col-badge col-badge-green"><i class="bi bi-person-badge" style="font-size:.7rem;"></i> vendedor</span>
+                    </div>
+
                     <ul class="mb-0 small text-muted" style="padding-left:1.1rem;">
                         <li>Filas con mismo <strong>Doc + Serie + Número</strong> se agrupan en <strong>una sola venta</strong>.</li>
                         <li><strong>B</strong> = Boleta · <strong>F</strong> = Factura · <strong>P</strong> = Proforma.</li>
                         <li><strong>NombreRazonSocial</strong> y <strong>Ruc</strong> crean o vinculan el cliente automáticamente.</li>
                         <li><strong>Codigo</strong> se importa por producto y se puede editar en la vista previa.</li>
+                        <li><strong>vendedor</strong> se detecta automáticamente por nombre y se puede cambiar en la vista previa.</li>
                     </ul>
                 </div>
             </div>
