@@ -7,40 +7,57 @@ use App\Models\SaldoFavor;
 use App\Models\Venta;
 use App\Services\CobranzaService;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
 
 class SaldoFavorController extends Controller
 {
     public function __construct(private CobranzaService $cobranza) {}
 
-    /* ── Listado general agrupado por cliente ─── */
+    /* ── Listado general agrupado por cliente ─────────────────────── */
     public function index(Request $request)
     {
-        // Clientes con saldo activo
-        $clientesIds = SaldoFavor::whereIn('estado', ['disponible', 'parcialmente_usado'])
+        // Una sola query: todos los saldos activos con relaciones precargadas
+        $saldosActivos = SaldoFavor::with(['cliente', 'pago', 'ventaOrigen'])
+            ->whereIn('estado', ['disponible', 'parcialmente_usado'])
             ->where('monto_disponible', '>', 0)
-            ->pluck('cliente_id')
-            ->unique();
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-        $clientes = Cliente::whereIn('id', $clientesIds)
-            ->withCount(['ventas as ventas_pendientes_count' => function ($q) {
-                $q->whereIn('estado', ['pendiente', 'parcial']);
-            }])
+        // Agrupar por cliente (en memoria, sin N+1)
+        $saldosPorCliente = $saldosActivos->groupBy('cliente_id');
+
+        // Saldos históricos (estado=usado) en una sola query
+        $clienteIds    = $saldosActivos->pluck('cliente_id')->unique()->toArray();
+        $saldosUsados  = SaldoFavor::with(['ventaOrigen'])
+            ->whereIn('cliente_id', $clienteIds)
+            ->where('estado', 'usado')
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy('cliente_id');
+
+        // Conteo de ventas pendientes por cliente (una query con GROUP BY)
+        $pendientesPorCliente = Venta::whereIn('cliente_id', $clienteIds)
+            ->whereIn('estado', ['pendiente', 'parcial'])
+            ->selectRaw('cliente_id, count(*) as total')
+            ->groupBy('cliente_id')
+            ->pluck('total', 'cliente_id');
+
+        // Construir colección de clientes con sus datos precalculados
+        $clientes = Cliente::whereIn('id', $clienteIds)
             ->orderBy('nombre')
             ->get()
-            ->map(function ($c) {
-                $c->saldo_total = $this->cobranza->saldoFavorDisponible($c->id);
-                $c->saldos      = SaldoFavor::with('pago')
-                    ->where('cliente_id', $c->id)
-                    ->orderBy('created_at', 'desc')
-                    ->get();
+            ->map(function ($c) use ($saldosPorCliente, $saldosUsados, $pendientesPorCliente) {
+                $activos               = $saldosPorCliente->get($c->id, collect());
+                $c->saldo_total        = round($activos->sum('monto_disponible'), 2);
+                $c->saldos             = $activos;
+                $c->saldos_historial   = $saldosUsados->get($c->id, collect());
+                $c->ventas_pendientes_count = $pendientesPorCliente->get($c->id, 0);
                 return $c;
             });
 
         // KPIs
-        $totalDisponible    = SaldoFavor::whereIn('estado', ['disponible', 'parcialmente_usado'])->sum('monto_disponible');
-        $totalClientes      = $clientesIds->count();
-        $totalRegistros     = SaldoFavor::whereIn('estado', ['disponible', 'parcialmente_usado'])->count();
+        $totalDisponible = round($saldosActivos->sum('monto_disponible'), 2);
+        $totalClientes   = $saldosActivos->pluck('cliente_id')->unique()->count();
+        $totalRegistros  = $saldosActivos->count();
 
         $todosClientes = Cliente::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'documento']);
 
@@ -52,25 +69,27 @@ class SaldoFavorController extends Controller
     /* ── JSON: lista de todos los clientes activos ─────────────────── */
     public function clientesJson()
     {
-        $clientes = Cliente::where('activo', true)
-            ->orderBy('nombre')
-            ->get(['id', 'nombre', 'documento']);
-        return response()->json($clientes);
+        return response()->json(
+            Cliente::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'documento'])
+        );
     }
 
-    /* ── JSON: notas de crédito disponibles para convertir ──────────── */
+    /* ── JSON: notas de crédito disponibles para convertir ─────────── */
     public function notasCreditoDisponibles()
     {
+        // Usando FK real (venta_origen_id) — O(1), sin N+1, sin string matching
+        $idsYaConvertidos = SaldoFavor::whereNotNull('venta_origen_id')
+            ->pluck('venta_origen_id')
+            ->unique()
+            ->toArray();
+
         $ventas = Venta::where('documento_tipo', 'nota_credito')
             ->whereNotNull('cliente_id')
+            ->whereNotIn('id', $idsYaConvertidos)
+            ->where('total', '<', 0)
             ->with('cliente')
             ->orderBy('fecha', 'desc')
-            ->get()
-            ->filter(function ($v) {
-                // Excluir las que ya fueron convertidas a saldo
-                return !SaldoFavor::where('descripcion', 'like', '%NC #' . $v->id . '%')->exists();
-            })
-            ->values();
+            ->get();
 
         return response()->json($ventas->map(fn ($v) => [
             'id'      => $v->id,
@@ -81,7 +100,7 @@ class SaldoFavorController extends Controller
         ]));
     }
 
-    /* ── Crear saldo a favor manualmente ───────────────────────────── */
+    /* ── Crear saldo a favor manualmente ────────────────────────────── */
     public function crear(Request $request)
     {
         $data = $request->validate([
@@ -94,6 +113,7 @@ class SaldoFavorController extends Controller
         SaldoFavor::create([
             'cliente_id'       => $data['cliente_id'],
             'pago_id'          => null,
+            'venta_origen_id'  => null,
             'monto_original'   => $data['monto'],
             'monto_disponible' => $data['monto'],
             'estado'           => 'disponible',
@@ -108,7 +128,7 @@ class SaldoFavorController extends Controller
         );
     }
 
-    /* ── Convertir nota de crédito a saldo a favor ─────────────────── */
+    /* ── Convertir nota de crédito a saldo a favor ──────────────────── */
     public function convertirNC(Request $request, Venta $venta)
     {
         if ($venta->documento_tipo !== 'nota_credito') {
@@ -118,8 +138,8 @@ class SaldoFavorController extends Controller
             return back()->with('error', 'La nota de crédito no tiene cliente asignado. Asigna un cliente primero.');
         }
 
-        // Verificar que no fue ya convertida
-        $yaConvertida = SaldoFavor::where('descripcion', 'like', '%NC #' . $venta->id . '%')->exists();
+        // Verificar duplicado usando FK — determinístico y O(1)
+        $yaConvertida = SaldoFavor::where('venta_origen_id', $venta->id)->exists();
         if ($yaConvertida) {
             return back()->with('error', 'Esta nota de crédito ya fue convertida a saldo a favor anteriormente.');
         }
@@ -132,14 +152,15 @@ class SaldoFavorController extends Controller
         SaldoFavor::create([
             'cliente_id'       => $venta->cliente_id,
             'pago_id'          => null,
+            'venta_origen_id'  => $venta->id,
             'monto_original'   => $monto,
             'monto_disponible' => $monto,
             'estado'           => 'disponible',
-            'descripcion'      => 'NC #' . $venta->id . ($venta->documento_numero ? ' (' . $venta->documento_numero . ')' : '') . ' — Convertida a saldo a favor',
+            'descripcion'      => 'NC ' . ($venta->documento_numero ? $venta->documento_numero : '#' . $venta->id) . ' — Convertida a saldo a favor',
             'fecha'            => $venta->fecha->format('Y-m-d'),
         ]);
 
-        // Anotar en la venta que ya fue convertida
+        // Marcar NC como convertida
         $venta->update([
             'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' — ' : '') . 'Convertida a saldo a favor'),
         ]);
@@ -150,7 +171,7 @@ class SaldoFavorController extends Controller
         );
     }
 
-    /* ── JSON: saldos disponibles de un cliente (para verificar_pago) ── */
+    /* ── JSON: saldos disponibles de un cliente ─────────────────────── */
     public function saldosCliente(int $clienteId)
     {
         $saldos = $this->cobranza->saldosDisponibles($clienteId);
@@ -161,10 +182,13 @@ class SaldoFavorController extends Controller
             'descripcion'      => $s->descripcion,
             'fecha'            => $s->fecha->format('d/m/Y'),
             'estado'           => $s->estado,
+            'tipo_origen'      => $s->venta_origen_id
+                                    ? (optional($s->ventaOrigen)->documento_tipo === 'nota_credito' ? 'nc' : 'excedente')
+                                    : ($s->pago_id ? 'excedente' : 'manual'),
         ]));
     }
 
-    /* ── JSON: ventas pendientes/parciales de un cliente ── */
+    /* ── JSON: ventas pendientes/parciales de un cliente ─────────────── */
     public function ventasPendientesCliente(int $clienteId)
     {
         $ventas = $this->cobranza->ventasPendientesCliente($clienteId);
@@ -178,7 +202,7 @@ class SaldoFavorController extends Controller
         ]));
     }
 
-    /* ── Aplicar saldo a una venta (POST) ── */
+    /* ── Aplicar saldo a una venta (POST) ────────────────────────────── */
     public function aplicar(Request $request, SaldoFavor $saldo)
     {
         $data = $request->validate([
@@ -193,12 +217,12 @@ class SaldoFavorController extends Controller
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'success'       => true,
-                    'aplicado'      => $result['aplicado'],
-                    'saldo_restante'=> $result['saldo_restante'],
-                    'estado_venta'  => $result['estado_venta'],
-                    'saldo_estado'  => $result['saldo_estado'],
-                    'message'       => 'Saldo aplicado correctamente. Se cobró S/ ' . number_format($result['aplicado'], 2),
+                    'success'        => true,
+                    'aplicado'       => $result['aplicado'],
+                    'saldo_restante' => $result['saldo_restante'],
+                    'estado_venta'   => $result['estado_venta'],
+                    'saldo_estado'   => $result['saldo_estado'],
+                    'message'        => 'Saldo aplicado correctamente. Se cobró S/ ' . number_format($result['aplicado'], 2),
                 ]);
             }
 

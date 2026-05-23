@@ -128,13 +128,15 @@ class CobranzaService
             $hayExcedente = $excedente > 0;
 
             if ($hayExcedente && $venta->cliente_id) {
+                $docStr      = trim(($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
                 $descripcion = $ventaYaPagada
-                    ? "Pago sobre venta ya cobrada #{$venta->id} ({$venta->documento_tipo} {$venta->documento_numero})"
-                    : "Excedente de pago en venta #{$venta->id} ({$venta->documento_tipo} {$venta->documento_numero})";
+                    ? "Excedente sobre venta ya cobrada — {$docStr}"
+                    : "Excedente de pago — {$docStr}";
 
                 SaldoFavor::create([
                     'cliente_id'       => $venta->cliente_id,
                     'pago_id'          => $pago->id,
+                    'venta_origen_id'  => $venta->id,
                     'monto_original'   => $excedente,
                     'monto_disponible' => $excedente,
                     'estado'           => 'disponible',
@@ -263,7 +265,7 @@ class CobranzaService
 
             // Actualizar venta (bcmath)
             $nuevoPagado = (float) bcadd((string) $venta->pagado, (string) $aplicar, 2);
-            $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $venta->metodo_pago]);
+            $venta->update(['pagado' => $nuevoPagado]);
             $venta->refresh();
             $venta->recalcularEstado();
 
@@ -310,11 +312,11 @@ class CobranzaService
     }
 
     /**
-     * Saldos a favor disponibles de un cliente (colección con pago precargado).
+     * Saldos a favor disponibles de un cliente.
      */
     public function saldosDisponibles(int $clienteId): \Illuminate\Support\Collection
     {
-        return SaldoFavor::with('pago')
+        return SaldoFavor::with(['pago', 'ventaOrigen'])
             ->where('cliente_id', $clienteId)
             ->whereIn('estado', ['disponible', 'parcialmente_usado'])
             ->where('monto_disponible', '>', 0)

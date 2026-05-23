@@ -16,7 +16,6 @@ class Venta extends Model
         'cliente_id',
         'total',
         'pagado',
-        'ajuste',
         'metodo_pago',
         'documento_tipo',
         'documento_numero',
@@ -29,7 +28,6 @@ class Venta extends Model
         'fecha'  => 'date',
         'total'  => 'decimal:2',
         'pagado' => 'decimal:2',
-        'ajuste' => 'decimal:2',
     ];
 
     public function vendedor(): BelongsTo
@@ -88,6 +86,13 @@ class Venta extends Model
     public function recalcularEstado(): void
     {
         if ($this->estado === 'anulado') {
+            return;
+        }
+
+        // Las notas de crédito siempre están en estado 'pagado':
+        // representan una devolución/crédito, no una deuda pendiente.
+        if ($this->documento_tipo === 'nota_credito') {
+            $this->update(['estado' => 'pagado']);
             return;
         }
 

@@ -3,12 +3,16 @@
 @section('content')
 <style>
 .saldo-card { border-left: 4px solid #0dcaf0; }
-.saldo-card.sin-saldo { border-left-color: #dee2e6; opacity: .7; }
 .badge-disponible     { background:#d1ecf1; color:#0c5460; border:1px solid #bee5eb; }
 .badge-parcial        { background:#fff3cd; color:#856404; border:1px solid #ffc107; }
 .badge-usado          { background:#e2e3e5; color:#383d41; border:1px solid #c8c9ca; }
 .badge-manual         { background:#e8d5f5; color:#5a2d82; border:1px solid #c9a0dc; }
+.badge-nc             { background:#ffecd2; color:#7c3a00; border:1px solid #f5b97e; }
+.badge-excedente      { background:#d4edda; color:#155724; border:1px solid #c3e6cb; }
 .saldo-row-highlight  { background:#f0fbff !important; }
+.saldo-item-selectable { cursor:pointer; transition: background .15s; border:2px solid transparent; border-radius:8px; }
+.saldo-item-selectable:hover { background:#f0f9ff; border-color:#0dcaf0; }
+.saldo-item-selectable.selected { background:#e0f5fc; border-color:#0dcaf0; }
 .kpi-box { border-radius:12px; padding:1.1rem 1.4rem; }
 .nc-row { transition: background .15s; }
 .nc-row:hover { background: #fff8f0 !important; }
@@ -18,7 +22,7 @@
      Modal 1: Aplicar saldo existente a una venta
      ══════════════════════════════════════════════════════════ --}}
 <div class="modal fade" id="modalAplicar" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -28,40 +32,54 @@
             </div>
             <div class="modal-body">
                 <div id="modalAlerta" class="alert d-none mb-3"></div>
+
+                {{-- Info del cliente --}}
                 <div class="mb-3 p-3 bg-light rounded">
-                    <div class="row text-center">
-                        <div class="col-6">
-                            <div class="text-muted small">Cliente</div>
-                            <div class="fw-semibold" id="mClienteNombre">—</div>
-                        </div>
-                        <div class="col-6">
-                            <div class="text-muted small">Saldo disponible</div>
-                            <div class="fw-bold text-info" id="mSaldoDisponible">S/ 0.00</div>
+                    <div class="fw-semibold mb-1" id="mClienteNombre">—</div>
+                    <div class="text-muted small">Saldo total disponible:
+                        <span class="fw-bold text-info" id="mSaldoTotalDisponible">S/ 0.00</span>
+                    </div>
+                </div>
+
+                {{-- Paso 1: elegir saldo --}}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">1. Saldo a usar</label>
+                    <div id="mSaldosLista" class="d-flex flex-column gap-2">
+                        <div class="text-muted small text-center py-2">
+                            <div class="spinner-border spinner-border-sm me-1"></div>Cargando…
                         </div>
                     </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Venta a cobrar</label>
+
+                {{-- Paso 2: elegir venta --}}
+                <div class="mb-3" id="mVentaBloque" style="display:none">
+                    <label class="form-label fw-semibold">2. Venta a cobrar</label>
                     <select id="mVentaId" class="form-select">
                         <option value="">Cargando…</option>
                     </select>
                     <div class="text-muted small mt-1" id="mVentaInfo"></div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Monto a aplicar</label>
+
+                {{-- Paso 3: monto --}}
+                <div class="mb-3" id="mMontoBloque" style="display:none">
+                    <label class="form-label fw-semibold">3. Monto a aplicar</label>
                     <div class="input-group">
                         <span class="input-group-text">S/</span>
-                        <input type="number" id="mMonto" class="form-control text-end" step="0.01" min="0.01" value="">
+                        <input type="number" id="mMonto" class="form-control text-end" step="0.01" min="0.01">
                     </div>
                     <div class="d-flex gap-2 mt-1">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnUsarTodoSaldo">Usar todo el saldo</button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnCubrirDeuda">Cubrir deuda exacta</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnUsarTodoSaldo">
+                            Usar todo el saldo seleccionado
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnCubrirDeuda">
+                            Cubrir deuda exacta
+                        </button>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-info text-white" id="btnConfirmarAplicar">
+                <button type="button" class="btn btn-info text-white" id="btnConfirmarAplicar" disabled>
                     <i class="bi bi-check-lg me-1"></i>Confirmar aplicación
                 </button>
             </div>
@@ -100,7 +118,6 @@
                             @endforeach
                         </datalist>
                         <input type="hidden" name="cliente_id" id="nsClienteId">
-                        <div class="form-text">Escribe para buscar entre los clientes registrados.</div>
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-6">
@@ -115,7 +132,6 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Descripción / Motivo</label>
                         <input type="text" name="descripcion" class="form-control" placeholder="Ej: Adelanto de pago, ajuste comercial…" maxlength="255">
-                        <div class="form-text">Si lo dejas vacío se registrará como "Ingreso manual".</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -160,10 +176,10 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0"><i class="bi bi-wallet2 me-2 text-info"></i>Saldos a favor</h3>
-        <p class="text-muted mb-0 small">Excedentes de pago disponibles por cliente</p>
+        <p class="text-muted mb-0 small">Excedentes de pago y notas de crédito disponibles por cliente</p>
     </div>
     <div class="d-flex gap-2">
-        <button type="button" class="btn btn-outline-warning btn-sm" id="btnAbrirNC"
+        <button type="button" class="btn btn-outline-warning btn-sm"
                 data-bs-toggle="modal" data-bs-target="#modalConvertirNC">
             <i class="bi bi-arrow-repeat me-1"></i>Desde nota de crédito
         </button>
@@ -231,21 +247,16 @@
 {{-- Una card por cliente ─────────────────────────────────── --}}
 @foreach($clientes as $cliente)
 @php
-    $saldosActivos = $cliente->saldos->whereIn('estado', ['disponible','parcialmente_usado'])->where('monto_disponible', '>', 0);
-    $saldosHistorial = $cliente->saldos->where('estado', 'usado');
+    $saldosActivos   = $cliente->saldos;
+    $saldosHistorial = $cliente->saldos_historial;
 @endphp
 <div class="card border-0 shadow-sm mb-3 saldo-card" id="card-cliente-{{ $cliente->id }}">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
-        <div class="d-flex align-items-center gap-3">
-            <div>
-                <span class="fw-bold">{{ $cliente->nombre }}</span>
-                @if($cliente->documento)
-                    <span class="text-muted small ms-2">{{ $cliente->documento }}</span>
-                @endif
-                @if($cliente->telefono)
-                    <span class="text-muted small ms-2"><i class="bi bi-telephone me-1"></i>{{ $cliente->telefono }}</span>
-                @endif
-            </div>
+        <div>
+            <span class="fw-bold">{{ $cliente->nombre }}</span>
+            @if($cliente->documento)
+                <span class="text-muted small ms-2">{{ $cliente->documento }}</span>
+            @endif
         </div>
         <div class="d-flex align-items-center gap-3">
             <div class="text-end">
@@ -254,7 +265,7 @@
             </div>
             @if($cliente->ventas_pendientes_count > 0)
             <button type="button" class="btn btn-info btn-sm text-white"
-                onclick="abrirModal({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, null, {{ $saldosActivos->first()?->id ?? 'null' }}, {{ (float)($saldosActivos->first()?->monto_disponible ?? 0) }})">
+                    onclick="abrirModalCliente({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }})">
                 <i class="bi bi-lightning-fill me-1"></i>Aplicar saldo
             </button>
             @else
@@ -263,7 +274,7 @@
         </div>
     </div>
 
-    {{-- Saldos activos ──────────────────────────── --}}
+    {{-- Tabla de saldos activos --}}
     @if($saldosActivos->count())
     <div class="table-responsive">
         <table class="table table-sm mb-0 align-middle">
@@ -279,12 +290,25 @@
             </thead>
             <tbody>
                 @foreach($saldosActivos as $s)
+                @php
+                    $esNC = $s->venta_origen_id && optional($s->ventaOrigen)->documento_tipo === 'nota_credito';
+                    $esExcedente = $s->pago_id && !$esNC;
+                    $esManual = !$s->pago_id && !$s->venta_origen_id;
+                @endphp
                 <tr class="saldo-row-highlight">
                     <td class="ps-3 small">
-                        @if(!$s->pago_id && str_contains($s->descripcion ?? '', 'Ingreso manual') || (!$s->pago_id && !str_contains($s->descripcion ?? '', 'NC #')))
-                            <span class="badge badge-manual me-1" title="Creado manualmente"><i class="bi bi-pencil-square"></i></span>
-                        @elseif(!$s->pago_id && str_contains($s->descripcion ?? '', 'NC #'))
-                            <span class="badge bg-warning text-dark me-1" title="Convertido desde nota de crédito"><i class="bi bi-arrow-repeat"></i></span>
+                        @if($esNC)
+                            <span class="badge badge-nc me-1" title="Convertido desde nota de crédito">
+                                <i class="bi bi-arrow-repeat"></i> NC
+                            </span>
+                        @elseif($esExcedente)
+                            <span class="badge badge-excedente me-1" title="Excedente de pago">
+                                <i class="bi bi-arrow-up-circle"></i> Excedente
+                            </span>
+                        @else
+                            <span class="badge badge-manual me-1" title="Creado manualmente">
+                                <i class="bi bi-pencil-square"></i> Manual
+                            </span>
                         @endif
                         {{ $s->descripcion ?? '—' }}
                     </td>
@@ -301,8 +325,8 @@
                     <td class="text-end pe-3">
                         @if($cliente->ventas_pendientes_count > 0)
                         <button type="button" class="btn btn-sm btn-outline-info"
-                            onclick="abrirModal({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, null, {{ $s->id }}, {{ (float)$s->monto_disponible }})">
-                            <i class="bi bi-lightning-fill me-1"></i>Usar
+                                onclick="abrirModalSaldoEspecifico({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, {{ $s->id }})">
+                            <i class="bi bi-lightning-fill me-1"></i>Usar este
                         </button>
                         @else
                         <span class="text-muted small">Sin ventas pendientes</span>
@@ -315,7 +339,7 @@
     </div>
     @endif
 
-    {{-- Historial usado (colapsable) ──────────── --}}
+    {{-- Historial usado (colapsable) --}}
     @if($saldosHistorial->count())
     <div class="card-footer bg-white p-0">
         <button class="btn btn-link btn-sm text-muted w-100 text-start py-2 px-3"
@@ -348,64 +372,175 @@
 @endif
 
 <script>
-/* ── Modal 1: Aplicar saldo ────────────────────────────────── */
-let modalSaldoId    = null;
-let modalClienteId  = null;
-let modalDisponible = 0;
-let modalDeuda      = 0;
-let modalInst       = null;
+/* ══════════════════════════════════════════════════════════════
+   Modal 1 — Aplicar saldo
+   Estado interno del modal
+═══════════════════════════════════════════════════════════════ */
+let _modalClienteId   = null;
+let _modalSaldoId     = null;   // saldo actualmente seleccionado en la UI
+let _modalSaldoDisp   = 0;      // monto disponible del saldo seleccionado
+let _modalDeuda       = 0;
+let _modalInst        = null;
+let _todosLosSaldos   = [];     // todos los saldos del cliente cargados desde el servidor
 
-function abrirModal(clienteId, clienteNombre, saldoTotal, ventaId, saldoId, saldoDisponible) {
-    modalClienteId  = clienteId;
-    modalSaldoId    = saldoId;
-    modalDisponible = saldoDisponible;
-
-    document.getElementById('mClienteNombre').textContent  = clienteNombre;
-    document.getElementById('mSaldoDisponible').textContent = 'S/ ' + saldoDisponible.toFixed(2);
-    document.getElementById('mMonto').value  = '';
-    document.getElementById('mVentaInfo').textContent = '';
+function _resetModal() {
     document.getElementById('modalAlerta').classList.add('d-none');
+    document.getElementById('mSaldosLista').innerHTML = '<div class="text-muted small text-center py-2"><div class="spinner-border spinner-border-sm me-1"></div>Cargando…</div>';
+    document.getElementById('mVentaId').innerHTML = '<option value="">— Selecciona primero un saldo —</option>';
+    document.getElementById('mVentaInfo').textContent = '';
+    document.getElementById('mMonto').value = '';
+    document.getElementById('mVentaBloque').style.display  = 'none';
+    document.getElementById('mMontoBloque').style.display  = 'none';
+    document.getElementById('btnConfirmarAplicar').disabled = true;
+    _modalSaldoId   = null;
+    _modalSaldoDisp = 0;
+    _modalDeuda     = 0;
+}
+
+function _origenLabel(s) {
+    if (s.tipo_origen === 'nc') return '<span class="badge badge-nc me-1"><i class="bi bi-arrow-repeat"></i> NC</span>';
+    if (s.tipo_origen === 'excedente') return '<span class="badge badge-excedente me-1"><i class="bi bi-arrow-up-circle"></i> Excedente</span>';
+    return '<span class="badge badge-manual me-1"><i class="bi bi-pencil-square"></i> Manual</span>';
+}
+
+function _renderSaldos(saldos, preselectId) {
+    const contenedor = document.getElementById('mSaldosLista');
+    if (!saldos.length) {
+        contenedor.innerHTML = '<div class="text-muted small">Este cliente no tiene saldos disponibles.</div>';
+        return;
+    }
+
+    contenedor.innerHTML = saldos.map(s => `
+        <div class="saldo-item-selectable p-2 ${preselectId === s.id ? 'selected' : ''}"
+             data-saldo-id="${s.id}" data-disponible="${s.monto_disponible}"
+             onclick="seleccionarSaldo(${s.id}, ${s.monto_disponible})">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    ${_origenLabel(s)}
+                    <span class="small">${s.descripcion || '—'}</span>
+                    <span class="text-muted small ms-2">${s.fecha}</span>
+                </div>
+                <div class="text-end">
+                    <div class="fw-bold text-info">S/ ${s.monto_disponible.toFixed(2)}</div>
+                    <div class="text-muted" style="font-size:.75rem">de S/ ${s.monto_original.toFixed(2)}</div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    // Auto-seleccionar si hay preselección o solo hay uno
+    if (preselectId) {
+        const s = saldos.find(x => x.id === preselectId);
+        if (s) seleccionarSaldo(s.id, s.monto_disponible);
+    } else if (saldos.length === 1) {
+        seleccionarSaldo(saldos[0].id, saldos[0].monto_disponible);
+    }
+}
+
+function seleccionarSaldo(saldoId, disponible) {
+    _modalSaldoId   = saldoId;
+    _modalSaldoDisp = disponible;
+
+    // Resaltar seleccionado
+    document.querySelectorAll('.saldo-item-selectable').forEach(el => {
+        el.classList.toggle('selected', parseInt(el.dataset.saldoId) === saldoId);
+    });
+
+    // Mostrar bloque de ventas
+    const ventaBloque = document.getElementById('mVentaBloque');
+    ventaBloque.style.display = '';
+    ventaBloque.style.removeProperty('display');
 
     const sel = document.getElementById('mVentaId');
-    sel.innerHTML = '<option value="">Cargando ventas pendientes…</option>';
+    if (sel.options.length <= 1 && sel.options[0]?.value === '') {
+        // Cargar ventas pendientes si no están cargadas aún
+        sel.innerHTML = '<option value="">Cargando ventas pendientes…</option>';
+        fetch(`/casadets/saldos-favor/cliente/${_modalClienteId}/ventas.json`)
+            .then(r => r.json())
+            .then(ventas => {
+                if (!ventas.length) {
+                    sel.innerHTML = '<option value="">Sin ventas pendientes</option>';
+                    return;
+                }
+                sel.innerHTML = '<option value="">— Selecciona una venta —</option>'
+                    + ventas.map(v => `<option value="${v.id}" data-deuda="${v.saldo_pendiente}">${v.label}</option>`).join('');
+            });
+    }
 
-    if (!modalInst) modalInst = new bootstrap.Modal(document.getElementById('modalAplicar'));
-    modalInst.show();
+    // Limpiar monto si cambia el saldo
+    document.getElementById('mMonto').value = '';
+    document.getElementById('mVentaInfo').textContent = '';
+    document.getElementById('mMontoBloque').style.display = 'none';
+    document.getElementById('btnConfirmarAplicar').disabled = true;
+}
 
-    fetch(`/casadets/saldos-favor/cliente/${clienteId}/ventas.json`)
+function abrirModalCliente(clienteId, clienteNombre, saldoTotal) {
+    _modalClienteId = clienteId;
+    _resetModal();
+
+    document.getElementById('mClienteNombre').textContent      = clienteNombre;
+    document.getElementById('mSaldoTotalDisponible').textContent = 'S/ ' + saldoTotal.toFixed(2);
+
+    if (!_modalInst) _modalInst = new bootstrap.Modal(document.getElementById('modalAplicar'));
+    _modalInst.show();
+
+    // Cargar todos los saldos del cliente
+    fetch(`/casadets/saldos-favor/cliente/${clienteId}/saldos.json`)
         .then(r => r.json())
-        .then(ventas => {
-            if (!ventas.length) {
-                sel.innerHTML = '<option value="">Sin ventas pendientes para este cliente</option>';
-                return;
-            }
-            sel.innerHTML = '<option value="">— Selecciona una venta —</option>'
-                + ventas.map(v => `<option value="${v.id}" data-deuda="${v.saldo_pendiente}">${v.label}</option>`).join('');
-            if (ventaId) {
-                sel.value = ventaId;
-                sel.dispatchEvent(new Event('change'));
-            }
+        .then(saldos => {
+            _todosLosSaldos = saldos;
+            _renderSaldos(saldos, null);
+        })
+        .catch(() => {
+            document.getElementById('mSaldosLista').innerHTML = '<div class="alert alert-danger small">Error al cargar saldos.</div>';
         });
 }
 
+function abrirModalSaldoEspecifico(clienteId, clienteNombre, saldoTotal, preselectSaldoId) {
+    _modalClienteId = clienteId;
+    _resetModal();
+
+    document.getElementById('mClienteNombre').textContent       = clienteNombre;
+    document.getElementById('mSaldoTotalDisponible').textContent = 'S/ ' + saldoTotal.toFixed(2);
+
+    if (!_modalInst) _modalInst = new bootstrap.Modal(document.getElementById('modalAplicar'));
+    _modalInst.show();
+
+    fetch(`/casadets/saldos-favor/cliente/${clienteId}/saldos.json`)
+        .then(r => r.json())
+        .then(saldos => {
+            _todosLosSaldos = saldos;
+            _renderSaldos(saldos, preselectSaldoId);
+        })
+        .catch(() => {
+            document.getElementById('mSaldosLista').innerHTML = '<div class="alert alert-danger small">Error al cargar saldos.</div>';
+        });
+}
+
+// Cambio de venta: mostrar bloque de monto
 document.getElementById('mVentaId').addEventListener('change', function() {
     const opt = this.options[this.selectedIndex];
-    modalDeuda = parseFloat(opt.dataset.deuda || 0);
-    if (modalDeuda > 0) {
+    _modalDeuda = parseFloat(opt.dataset.deuda || 0);
+
+    const montoBloque = document.getElementById('mMontoBloque');
+    if (this.value && _modalSaldoId) {
+        montoBloque.style.display = '';
+        montoBloque.style.removeProperty('display');
         document.getElementById('mVentaInfo').textContent =
-            'Saldo pendiente de esta venta: S/ ' + modalDeuda.toFixed(2);
-        document.getElementById('mMonto').value = Math.min(modalDisponible, modalDeuda).toFixed(2);
+            'Pendiente: S/ ' + _modalDeuda.toFixed(2) + ' — Saldo disponible: S/ ' + _modalSaldoDisp.toFixed(2);
+        document.getElementById('mMonto').value = Math.min(_modalSaldoDisp, _modalDeuda).toFixed(2);
+        document.getElementById('btnConfirmarAplicar').disabled = false;
     } else {
-        document.getElementById('mVentaInfo').textContent = '';
-        document.getElementById('mMonto').value = '';
+        montoBloque.style.display = 'none';
+        document.getElementById('btnConfirmarAplicar').disabled = true;
     }
 });
 
 document.getElementById('btnUsarTodoSaldo').addEventListener('click', () => {
-    document.getElementById('mMonto').value = modalDisponible.toFixed(2);
+    document.getElementById('mMonto').value = _modalSaldoDisp.toFixed(2);
 });
 document.getElementById('btnCubrirDeuda').addEventListener('click', () => {
-    document.getElementById('mMonto').value = Math.min(modalDisponible, modalDeuda).toFixed(2);
+    document.getElementById('mMonto').value = Math.min(_modalSaldoDisp, _modalDeuda).toFixed(2);
 });
 
 document.getElementById('btnConfirmarAplicar').addEventListener('click', async () => {
@@ -415,14 +550,17 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
 
     alerta.classList.add('d-none');
 
+    if (!_modalSaldoId) {
+        alerta.className = 'alert alert-warning'; alerta.textContent = 'Selecciona un saldo a usar.'; alerta.classList.remove('d-none'); return;
+    }
     if (!ventaId) {
         alerta.className = 'alert alert-warning'; alerta.textContent = 'Selecciona una venta.'; alerta.classList.remove('d-none'); return;
     }
     if (!monto || monto <= 0) {
         alerta.className = 'alert alert-warning'; alerta.textContent = 'Ingresa un monto válido.'; alerta.classList.remove('d-none'); return;
     }
-    if (monto > modalDisponible + 0.005) {
-        alerta.className = 'alert alert-danger'; alerta.textContent = 'El monto supera el saldo disponible (S/ ' + modalDisponible.toFixed(2) + ').'; alerta.classList.remove('d-none'); return;
+    if (monto > _modalSaldoDisp + 0.005) {
+        alerta.className = 'alert alert-danger'; alerta.textContent = 'El monto supera el saldo disponible (S/ ' + _modalSaldoDisp.toFixed(2) + ').'; alerta.classList.remove('d-none'); return;
     }
 
     const btn = document.getElementById('btnConfirmarAplicar');
@@ -435,7 +573,7 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
         form.append('monto', monto.toFixed(2));
         form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
 
-        const res  = await fetch(`/casadets/saldos-favor/${modalSaldoId}/aplicar`, {
+        const res  = await fetch(`/casadets/saldos-favor/${_modalSaldoId}/aplicar`, {
             method: 'POST',
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             body: form,
@@ -444,7 +582,7 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
 
         if (!res.ok) throw new Error(data.message || 'Error al aplicar el saldo.');
 
-        modalInst.hide();
+        _modalInst.hide();
         window.location.reload();
 
     } catch (err) {
@@ -452,7 +590,7 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
         alerta.textContent = err.message;
         alerta.classList.remove('d-none');
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Confirmar aplicación';
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Confirmar aplicación';
     }
 });
 
@@ -470,7 +608,6 @@ document.getElementById('nsClienteNombre').addEventListener('blur', function () 
     if (!this.value.trim()) document.getElementById('nsClienteId').value = '';
 });
 
-// Validar que se seleccionó un cliente válido antes de enviar
 const _nsForm = document.querySelector('#modalNuevoSaldo form');
 if (_nsForm) {
     _nsForm.addEventListener('submit', function (e) {
@@ -488,25 +625,19 @@ if (_nsForm) {
                 fb.textContent = 'Selecciona un cliente válido de la lista.';
                 input.parentNode.insertBefore(fb, input.nextSibling);
             }
-            return;
         }
-        document.getElementById('nsClienteNombre').classList.remove('is-invalid');
     });
 }
 
-const _nsModalEl = document.getElementById('modalNuevoSaldo');
-if (_nsModalEl) {
-    _nsModalEl.addEventListener('hidden.bs.modal', function () {
-        const inp = document.getElementById('nsClienteNombre');
-        const hid = document.getElementById('nsClienteId');
-        if (inp) { inp.value = ''; inp.classList.remove('is-invalid'); }
-        if (hid) hid.value = '';
-    });
-}
+document.getElementById('modalNuevoSaldo').addEventListener('hidden.bs.modal', function () {
+    const inp = document.getElementById('nsClienteNombre');
+    const hid = document.getElementById('nsClienteId');
+    if (inp) { inp.value = ''; inp.classList.remove('is-invalid'); }
+    if (hid) hid.value = '';
+});
 
-/* ── Modal 3: Convertir NC — cargar lista ────────────────────── */
-const _ncModalEl = document.getElementById('modalConvertirNC');
-if (_ncModalEl) _ncModalEl.addEventListener('shown.bs.modal', function () {
+/* ── Modal 3: Convertir NC ─────────────────────────────────── */
+document.getElementById('modalConvertirNC').addEventListener('shown.bs.modal', function () {
     const contenedor = document.getElementById('ncLista');
     if (!contenedor) return;
     contenedor.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de crédito…</div>';
@@ -519,7 +650,7 @@ if (_ncModalEl) _ncModalEl.addEventListener('shown.bs.modal', function () {
                     <div class="text-center text-muted py-5">
                         <i class="bi bi-check-circle text-success fs-1 d-block mb-2"></i>
                         <div>No hay notas de crédito pendientes de convertir.</div>
-                        <div class="small text-muted mt-1">Todas las notas de crédito ya fueron procesadas, o no tienen cliente asignado.</div>
+                        <div class="small text-muted mt-1">Todas las NC ya fueron procesadas o no tienen cliente asignado.</div>
                     </div>`;
                 return;
             }
@@ -548,7 +679,8 @@ if (_ncModalEl) _ncModalEl.addEventListener('shown.bs.modal', function () {
                     <td class="text-end fw-semibold text-danger">S/ ${nc.monto.toFixed(2)}</td>
                     <td class="text-end pe-3">
                         <button type="button" class="btn btn-sm btn-warning text-dark btn-convertir-nc"
-                                data-id="${nc.id}" data-monto="${nc.monto.toFixed(2)}" data-doc="${nc.numero}" data-cliente="${nc.cliente}">
+                                data-id="${nc.id}" data-monto="${nc.monto.toFixed(2)}"
+                                data-doc="${nc.numero}" data-cliente="${nc.cliente}">
                             <i class="bi bi-arrow-repeat me-1"></i>Convertir
                         </button>
                     </td>
@@ -558,7 +690,6 @@ if (_ncModalEl) _ncModalEl.addEventListener('shown.bs.modal', function () {
             html += `</tbody></table></div>`;
             contenedor.innerHTML = html;
 
-            // Eventos de botones de conversión
             document.querySelectorAll('.btn-convertir-nc').forEach(btn => {
                 btn.addEventListener('click', async function () {
                     const id      = this.dataset.id;
@@ -575,11 +706,10 @@ if (_ncModalEl) _ncModalEl.addEventListener('shown.bs.modal', function () {
                     form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
 
                     try {
-                        const res = await fetch(`/casadets/saldos-favor/nc/${id}/convertir`, {
+                        await fetch(`/casadets/saldos-favor/nc/${id}/convertir`, {
                             method: 'POST',
                             body: form,
                         });
-                        // El servidor redirige, recargamos la página
                         window.location.href = '/casadets/saldos-favor';
                     } catch (err) {
                         alert('Error al convertir: ' + err.message);

@@ -1,0 +1,165 @@
+Sí, implementa la refactorización completa del sistema de SaldoFavor y Notas de Crédito usando FK real.
+
+Objetivo:
+Eliminar completamente la detección por texto tipo:
+LIKE '%NC #5%'
+y reemplazarla por integridad relacional real.
+
+Cambios requeridos:
+
+1. Nueva columna estructural
+   Agregar:
+
+saldos_favor.venta_origen_id nullable
+FK → ventas.id
+ON DELETE SET NULL
+
+Esta columna representa:
+“qué venta/documento originó este saldo”.
+
+Puede ser:
+
+* una nota de crédito
+* un excedente de pago
+* ajustes futuros
+
+Nunca más depender de descripcion para lógica.
+
+---
+
+2. Migración de datos históricos
+   Crear script/migración segura que:
+
+* busque saldos con descripcion tipo "NC #X"
+* extraiga X
+* rellene venta_origen_id correctamente
+
+Luego validar:
+
+* no duplicados
+* no referencias inválidas
+* no múltiples saldos activos para la misma NC
+
+---
+
+3. Reescribir notasCreditoDisponibles()
+   Eliminar completamente:
+
+SaldoFavor::where('descripcion', 'like', ...)
+
+Reemplazar por:
+whereDoesntHave / whereNull usando venta_origen_id
+
+Debe quedar:
+
+* O(1)
+* sin N+1
+* sin parsing de strings
+* deterministicamente correcto
+
+---
+
+4. Corregir el modal de “Aplicar saldo”
+   Problema actual:
+   muestra saldo total combinado pero aplica solo el primer saldo.
+
+Nueva arquitectura:
+
+* mostrar TODOS los saldos disponibles del cliente
+* permitir elegir cuál aplicar
+* mostrar:
+
+  * origen
+  * monto disponible
+  * fecha
+  * si proviene de NC o excedente
+
+Opcional:
+permitir aplicar múltiples saldos en una sola operación.
+
+Prioridad:
+primero dejar consistente UX vs datos reales.
+
+---
+
+5. Optimizar SaldoFavorController@index
+   Eliminar N+1 actuales.
+
+Objetivo:
+
+* máximo 3-4 queries totales
+* usar eager loading
+* usar agregaciones SQL
+* no queries por cliente dentro de map()
+
+---
+
+6. Limpiar código muerto
+   Eliminar completamente:
+
+* ajuste de Venta si ya no se usa
+* writes redundantes de metodo_pago
+* comentarios legacy
+* lógica basada en descripcion
+
+---
+
+7. recalcularEstado()
+   Las notas de crédito NO deben depender de casualidad matemática.
+
+Agregar manejo explícito:
+
+if ($this->documento_tipo === 'nota_credito') {
+$this->estado = 'pagado';
+return;
+}
+
+o equivalente arquitecturalmente correcto.
+
+---
+
+8. Validaciones nuevas
+   Impedir:
+
+* convertir la misma NC dos veces
+* crear saldo duplicado para misma NC
+* aplicar saldo de otro cliente
+* aplicar saldo agotado o anulado
+
+Agregar índices:
+
+* saldos_favor(cliente_id, estado)
+* saldos_favor(venta_origen_id)
+
+---
+
+9. Auditoría
+   Quiero trazabilidad clara:
+
+* origen exacto del saldo
+* quién lo creó
+* cuándo se aplicó
+* a qué venta terminó aplicado
+
+Preparar estructura para historial futuro.
+
+---
+
+10. Verificaciones obligatorias
+    Antes de terminar:
+
+php artisan optimize:clear
+composer dump-autoload
+php artisan migrate:fresh --seed
+
+Luego probar manualmente:
+
+* NC → saldo favor
+* aplicar saldo parcial
+* aplicar saldo total
+* múltiples saldos mismo cliente
+* eliminar/anular NC
+* caja no debe duplicar dinero
+* balance no debe cambiar al aplicar saldo favor
+
+El ledger financiero debe permanecer exacto.
