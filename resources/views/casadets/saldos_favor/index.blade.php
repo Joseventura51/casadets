@@ -16,6 +16,14 @@
 .kpi-box { border-radius:12px; padding:1.1rem 1.4rem; }
 .nc-row { transition: background .15s; }
 .nc-row:hover { background: #fff8f0 !important; }
+
+/* ── Autocomplete cliente ── */
+.ns-sugerencias .list-group-item { cursor:pointer; padding:.45rem .75rem; font-size:.9rem; border-radius:0; }
+.ns-sugerencias .list-group-item:hover,
+.ns-sugerencias .list-group-item.active { background:#e8f4fd; color:#0c5460; }
+.ns-sugerencias .list-group-item .doc-tag { font-size:.75rem; color:#6c757d; margin-left:.4rem; }
+#nsClienteTexto.is-valid  { border-color:#198754; }
+#nsClienteTexto.no-match  { border-color:#dc3545; }
 </style>
 
 {{-- ══════════════════════════════════════════════════════════
@@ -108,16 +116,22 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Cliente <span class="text-danger">*</span></label>
-                        <select name="cliente_id" id="nsClienteId" class="form-select @error('cliente_id') is-invalid @enderror" required>
-                            <option value="">— Selecciona un cliente —</option>
-                            @foreach($todosClientes as $c)
-                                <option value="{{ $c->id }}" {{ old('cliente_id') == $c->id ? 'selected' : '' }}>
-                                    {{ $c->nombre }}{{ $c->documento ? ' — ' . $c->documento : '' }}
-                                </option>
-                            @endforeach
-                        </select>
+                        <div class="ns-autocomplete-wrap position-relative">
+                            <input type="text"
+                                   id="nsClienteTexto"
+                                   class="form-control @error('cliente_id') is-invalid @enderror"
+                                   placeholder="Escribe nombre o documento…"
+                                   autocomplete="off"
+                                   value="{{ old('cliente_id') ? ($todosClientes->firstWhere('id', old('cliente_id'))->nombre ?? '') : '' }}">
+                            <input type="hidden" name="cliente_id" id="nsClienteId"
+                                   value="{{ old('cliente_id') }}">
+                            <div id="nsClienteSugerencias"
+                                 class="ns-sugerencias list-group shadow-sm position-absolute w-100 d-none"
+                                 style="z-index:9999;max-height:220px;overflow-y:auto;top:100%;left:0"></div>
+                            <div id="nsClienteEstado" class="form-text d-none"></div>
+                        </div>
                         @error('cliente_id')
-                            <div class="invalid-feedback">{{ $message }}</div>
+                            <div class="text-danger small mt-1">{{ $message }}</div>
                         @enderror
                     </div>
                     <div class="row g-3 mb-3">
@@ -382,6 +396,14 @@
 @endforeach
 @endif
 
+@php
+$clientesJsonAc = $todosClientes->map(fn($c) => [
+    'id'     => $c->id,
+    'nombre' => $c->nombre,
+    'doc'    => $c->documento ?? '',
+])->values()->toJson(JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+@endphp
+
 <script>
 /* ══════════════════════════════════════════════════════════════
    Modal 1 — Aplicar saldo
@@ -604,6 +626,140 @@ document.getElementById('btnConfirmarAplicar').addEventListener('click', async (
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Confirmar aplicación';
     }
 });
+
+/* ── Modal 2: Nuevo Saldo — autocomplete de cliente ── */
+(function () {
+    const CLIENTES = {!! $clientesJsonAc !!};
+
+    const inpTexto      = document.getElementById('nsClienteTexto');
+    const inpHidden     = document.getElementById('nsClienteId');
+    const sugerencias   = document.getElementById('nsClienteSugerencias');
+    const estadoDiv     = document.getElementById('nsClienteEstado');
+    let   seleccionado  = false;   // true cuando el usuario eligió un ítem válido
+    let   activeIdx     = -1;
+
+    function normalize(s) {
+        return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
+    function mostrar(items) {
+        activeIdx = -1;
+        if (!items.length) {
+            sugerencias.innerHTML = '<div class="list-group-item text-muted">Sin resultados</div>';
+            sugerencias.classList.remove('d-none');
+            return;
+        }
+        sugerencias.innerHTML = items.slice(0, 12).map(c =>
+            `<div class="list-group-item" data-id="${c.id}" data-nombre="${c.nombre}">
+                ${c.nombre}<span class="doc-tag">${c.doc}</span>
+             </div>`
+        ).join('');
+        sugerencias.classList.remove('d-none');
+
+        sugerencias.querySelectorAll('.list-group-item[data-id]').forEach(el => {
+            el.addEventListener('mousedown', e => {
+                e.preventDefault();
+                elegir(parseInt(el.dataset.id), el.dataset.nombre);
+            });
+        });
+    }
+
+    function ocultar() {
+        sugerencias.classList.add('d-none');
+        activeIdx = -1;
+    }
+
+    function elegir(id, nombre) {
+        inpHidden.value  = id;
+        inpTexto.value   = nombre;
+        seleccionado     = true;
+        ocultar();
+        inpTexto.classList.remove('no-match');
+        inpTexto.classList.add('is-valid');
+        estadoDiv.classList.add('d-none');
+    }
+
+    function invalidar() {
+        inpHidden.value = '';
+        seleccionado    = false;
+        inpTexto.classList.remove('is-valid');
+        inpTexto.classList.add('no-match');
+        estadoDiv.textContent = 'Selecciona un cliente de la lista.';
+        estadoDiv.className   = 'form-text text-danger';
+    }
+
+    inpTexto.addEventListener('input', function () {
+        seleccionado    = false;
+        inpHidden.value = '';
+        inpTexto.classList.remove('is-valid', 'no-match');
+        estadoDiv.classList.add('d-none');
+
+        const q = normalize(this.value.trim());
+        if (!q) { ocultar(); return; }
+
+        const resultados = CLIENTES.filter(c =>
+            normalize(c.nombre).includes(q) || normalize(c.doc).includes(q)
+        );
+        mostrar(resultados);
+    });
+
+    inpTexto.addEventListener('keydown', function (e) {
+        const items = sugerencias.querySelectorAll('.list-group-item[data-id]');
+        if (!items.length) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            activeIdx = Math.min(activeIdx + 1, items.length - 1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            activeIdx = Math.max(activeIdx - 1, 0);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (activeIdx >= 0 && items[activeIdx]) {
+                const el = items[activeIdx];
+                elegir(parseInt(el.dataset.id), el.dataset.nombre);
+            }
+            return;
+        } else if (e.key === 'Escape') {
+            ocultar(); return;
+        } else { return; }
+
+        items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+        if (items[activeIdx]) items[activeIdx].scrollIntoView({ block: 'nearest' });
+    });
+
+    inpTexto.addEventListener('blur', function () {
+        setTimeout(() => {
+            ocultar();
+            if (this.value.trim() && !seleccionado) invalidar();
+            if (!this.value.trim()) {
+                inpTexto.classList.remove('is-valid', 'no-match');
+                estadoDiv.classList.add('d-none');
+            }
+        }, 150);
+    });
+
+    // Bloquear submit si no hay cliente seleccionado
+    document.getElementById('modalNuevoSaldo')
+        .querySelector('form')
+        .addEventListener('submit', function (e) {
+            if (!inpHidden.value) {
+                e.preventDefault();
+                inpTexto.focus();
+                invalidar();
+            }
+        });
+
+    // Limpiar al cerrar el modal
+    document.getElementById('modalNuevoSaldo').addEventListener('hidden.bs.modal', function () {
+        inpTexto.value  = '';
+        inpHidden.value = '';
+        seleccionado    = false;
+        inpTexto.classList.remove('is-valid', 'no-match');
+        estadoDiv.classList.add('d-none');
+        ocultar();
+    });
+})();
 
 /* ── Modal 2: Nuevo Saldo — abrir automáticamente si hay errores ── */
 @if($errors->has('cliente_id') || $errors->has('monto') || $errors->has('fecha'))
