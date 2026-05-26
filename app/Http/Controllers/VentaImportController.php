@@ -623,12 +623,18 @@ class VentaImportController extends Controller
 
         $excluir = [
             'codigo' => ['sunat', 'aduanero', 'arancelario', 'catalogo'],
+            'total'  => ['anticipo', 'exonerado', 'inafecto', 'gratuito', 'gravado', 'igv', 'bruto', 'neto', 'descuento'],
         ];
+
+        // Para estos campos se elige la última columna que coincida (no la primera),
+        // evitando que totales a nivel de documento tapen el total por línea.
+        $preferirUltimo = ['total'];
 
         $mapa = [];
         foreach ($alias as $campo => $posibles) {
             $mapa[$campo] = null;
             $palabrasExcluidas = $excluir[$campo] ?? [];
+            $usarUltimo = in_array($campo, $preferirUltimo, true);
 
             foreach ($headers as $idx => $h) {
                 $hNorm    = $this->normalizarTexto($h);
@@ -641,6 +647,9 @@ class VentaImportController extends Controller
                 foreach ($posibles as $p) {
                     if ($hNorm === $p || str_starts_with($hNorm, $p)) {
                         $mapa[$campo] = $idx;
+                        if ($usarUltimo) {
+                            break; // seguir buscando en el resto de columnas
+                        }
                         break 2;
                     }
                 }
