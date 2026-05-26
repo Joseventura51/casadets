@@ -143,6 +143,7 @@
                     $estado      = $v->estado ?? 'pendiente';
                     $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
+                    $esRefFiscal = $estado === 'canjeada';
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
@@ -197,8 +198,12 @@
                         @endif
                     </td>
                     <td class="text-end fw-semibold">
-                        S/ {{ number_format($v->total, 2) }}
-                        @if((float)$v->pagado > 0 && $estado !== 'pagado')
+                        @if($esRefFiscal)
+                            <span class="text-muted small">Referencia fiscal</span>
+                        @else
+                            S/ {{ number_format($v->total, 2) }}
+                        @endif
+                        @if(!$esRefFiscal && (float)$v->pagado > 0 && $estado !== 'pagado')
                             <br><small class="text-success">Cobrado: S/ {{ number_format($v->pagado, 2) }}</small>
                             @php $saldoV = max(0, (float)$v->total - (float)$v->pagado); @endphp
                             @if($saldoV > 0)

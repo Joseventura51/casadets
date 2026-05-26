@@ -462,6 +462,7 @@ class VentaController extends Controller
 
         $row = 2;
         foreach ($ventas as $v) {
+            $esRefFiscal = ($v->estado ?? '') === 'canjeada';
             $productos = $v->detalles->map(fn($d) => $d->producto . ' x' . rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.'))->implode(', ');
             $sheet->setCellValue("A{$row}", $v->fecha->format('d/m/Y'));
             $sheet->setCellValue("B{$row}", ucfirst($v->documento_tipo ?? ''));
@@ -470,14 +471,16 @@ class VentaController extends Controller
             $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '');
             $sheet->setCellValue("F{$row}", $productos);
             $sheet->setCellValue("G{$row}", $v->metodo_pago ?? '');
-            $sheet->setCellValue("H{$row}", (float) $v->total);
-            $sheet->setCellValue("I{$row}", (float) $v->total_cobrado);
-            $sheet->setCellValue("J{$row}", ucfirst($v->estado ?? 'pendiente'));
+            $sheet->setCellValue("H{$row}", $esRefFiscal ? '' : (float) $v->total);
+            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total_cobrado);
+            $sheet->setCellValue("J{$row}", $esRefFiscal ? 'Ref. fiscal' : ucfirst($v->estado ?? 'pendiente'));
 
             $metodos   = array_map('trim', explode(',', strtolower($v->metodo_pago ?? '')));
             $esEfectivo = in_array('efectivo', $metodos);
 
-            if (($v->estado ?? '') === 'anulado') {
+            if ($esRefFiscal) {
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9ECEF');
+            } elseif (($v->estado ?? '') === 'anulado') {
                 $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
             } elseif ($esEfectivo) {
                 $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF08A');
