@@ -13,7 +13,7 @@
 
 <div class="card mb-3">
     <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-end">
+        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter>
             <div class="col-md-5">
                 <label class="form-label small mb-1">Buscar por nombre o documento</label>
                 <input type="text" name="buscar" value="{{ request('buscar') }}"

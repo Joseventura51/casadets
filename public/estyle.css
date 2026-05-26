@@ -71,6 +71,46 @@ body {
 .content-area {
     background: #f4f6f9;
     min-height: 100vh;
+    position: relative;
+    transition: opacity .16s ease, transform .16s ease;
+}
+
+.content-area.is-loading {
+    opacity: .55;
+    transform: translateY(4px);
+    pointer-events: none;
+}
+
+.content-area.is-ready {
+    animation: contentReady .18s ease-out;
+}
+
+@keyframes contentReady {
+    from { opacity: .65; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.page-loader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 0;
+    z-index: 2000;
+    background: #2563eb;
+    box-shadow: 0 0 10px rgba(37, 99, 235, .4);
+    opacity: 0;
+    transition: width .2s ease, opacity .12s ease;
+}
+
+.page-loader.is-active {
+    width: 72%;
+    opacity: 1;
+}
+
+.page-loader.is-done {
+    width: 100%;
+    opacity: 0;
 }
 
 /* KPI */

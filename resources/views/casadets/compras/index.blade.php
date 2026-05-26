@@ -13,7 +13,7 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        <form method="GET" class="row g-2 align-items-end">
+        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter>
             <div class="col-md-4">
                 <label class="form-label small mb-1">Empresa / Proveedor</label>
                 <input type="text" name="empresa" value="{{ request('empresa') }}" class="form-control form-control-sm" placeholder="Buscar...">

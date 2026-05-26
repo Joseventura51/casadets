@@ -15,7 +15,7 @@
 {{-- Filtros server-side --}}
 <div class="card mb-3">
     <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-end">
+        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Tipo</label>
                 <select name="tipo" class="form-select form-select-sm">

@@ -37,7 +37,7 @@
 </div>
 
 {{-- ── RANGO DE FECHAS (server-side) ──────────────────────────── --}}
-<form method="GET" action="/casadets/ventas" id="formFechas" class="mb-3">
+<form method="GET" action="/casadets/ventas" id="formFechas" class="mb-3" data-dynamic-filter>
     <div class="d-flex align-items-end gap-3 flex-wrap">
 
         <div class="d-flex align-items-center gap-2">

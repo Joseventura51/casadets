@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Mi Sistema</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
@@ -27,7 +28,7 @@
         <h5 class="text-white fw-bold mb-0"><i class="bi bi-layers me-2"></i>Sistema</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
-    <div class="offcanvas-body p-3">
+    <div class="offcanvas-body p-3" id="sidebarMobileNav">
         @include('layouts._sidebar_nav')
     </div>
 </div>
@@ -38,11 +39,13 @@
         {{-- SIDEBAR ESCRITORIO (oculto en móvil) --}}
         <div class="col-md-2 sidebar p-3 d-none d-md-block">
             <h5 class="text-center fw-bold mb-4 text-white">Sistema</h5>
-            @include('layouts._sidebar_nav')
+            <div id="sidebarDesktopNav">
+                @include('layouts._sidebar_nav')
+            </div>
         </div>
 
         {{-- CONTENIDO --}}
-        <div class="col-12 col-md-10 content-area p-3 p-md-4">
+        <main class="col-12 col-md-10 content-area p-3 p-md-4" id="appContent" aria-live="polite">
 
             @if(session('success'))
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
@@ -59,12 +62,13 @@
             @endif
 
             @yield('content')
-        </div>
+        </main>
 
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/app-navigation.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el, { trigger: 'hover' }));
