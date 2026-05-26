@@ -1,7 +1,6 @@
 (function () {
     const contentSelector = '#appContent';
     const sameOrigin = (url) => url.origin === window.location.origin;
-    const cache = new Map();
     let controller = null;
     let filterTimer = null;
 
@@ -63,11 +62,26 @@
         return true;
     }
 
+    function localToday() {
+        const date = new Date();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${date.getFullYear()}-${month}-${day}`;
+    }
+
     function formUrl(form) {
         const action = form.getAttribute('action') || window.location.pathname;
         const url = new URL(action, window.location.href);
-        const data = new FormData(form);
         url.search = '';
+
+        if (form.dataset.defaultToday !== undefined) {
+            const today = localToday();
+            form.querySelectorAll('input[type="date"][name="desde"], input[type="date"][name="hasta"]').forEach((input) => {
+                if (!input.value) input.value = today;
+            });
+        }
+
+        const data = new FormData(form);
         for (const [key, value] of data.entries()) {
             if (value !== null && String(value).trim() !== '') {
                 url.searchParams.append(key, value);
@@ -159,11 +173,6 @@
         setLoading(true);
 
         try {
-            if (cache.has(key)) {
-                render(cache.get(key), url, push);
-                return;
-            }
-
             const res = await fetch(url.href, {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -178,8 +187,6 @@
             }
 
             const html = await res.text();
-            cache.set(key, html);
-            if (cache.size > 15) cache.delete(cache.keys().next().value);
             render(html, url, push);
         } catch (error) {
             if (error.name !== 'AbortError') window.location.href = url.href;
@@ -203,8 +210,9 @@
     document.addEventListener('input', (event) => {
         const form = event.target.closest('form[data-dynamic-filter]');
         if (!shouldHandleForm(form)) return;
+        if (event.target.matches('input[type="date"], select, input[type="checkbox"], input[type="radio"]')) return;
         window.clearTimeout(filterTimer);
-        filterTimer = window.setTimeout(() => navigate(formUrl(form)), 420);
+        filterTimer = window.setTimeout(() => navigate(formUrl(form)), 520);
     });
 
     document.addEventListener('change', (event) => {

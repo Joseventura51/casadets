@@ -15,28 +15,28 @@ class CompraController extends Controller
 {
     public function index(Request $request)
     {
+        $desde = $request->input('desde', today()->toDateString());
+        $hasta = $request->input('hasta', $desde);
+        if ($hasta < $desde) $hasta = $desde;
+
         $query = Compra::with([
                 'lineas:id,compra_id,producto,cantidad,monto_total',
                 'detalles:id,venta_id',
                 'detalles.venta:id,documento_tipo,documento_numero',
             ])
-            ->select('id', 'empresa', 'documento_tipo', 'documento_numero', 'fecha', 'monto_total', 'observaciones')
+            ->select('id', 'empresa', 'documento_tipo', 'documento_numero', 'fecha', 'metodo_pago', 'monto_total', 'observaciones')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
 
         if ($request->filled('empresa')) {
             $query->where('empresa', 'like', '%' . $request->empresa . '%');
         }
-        if ($request->filled('desde')) {
-            $query->whereDate('fecha', '>=', $request->desde);
-        }
-        if ($request->filled('hasta')) {
-            $query->whereDate('fecha', '<=', $request->hasta);
-        }
+        $query->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta);
 
         $compras = $query->paginate(50)->withQueryString();
 
-        return view('casadets.compras.index', compact('compras'));
+        return view('casadets.compras.index', compact('compras', 'desde', 'hasta'));
     }
 
     public function create()

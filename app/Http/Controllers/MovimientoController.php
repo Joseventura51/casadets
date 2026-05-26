@@ -9,6 +9,10 @@ class MovimientoController extends Controller
 {
     public function index(Request $request)
     {
+        $desde = $request->input('desde', today()->toDateString());
+        $hasta = $request->input('hasta', $desde);
+        if ($hasta < $desde) $hasta = $desde;
+
         $query = Movimiento::with([
                 'cliente:id,nombre,documento',
                 'pago.metodos',
@@ -22,8 +26,8 @@ class MovimientoController extends Controller
         if ($request->filled('origen'))  $query->where('origen', $request->origen);
         if ($request->filled('empresa')) $query->where('empresa', $request->empresa);
         if ($request->filled('estado'))  $query->where('estado', $request->estado);
-        if ($request->filled('desde'))   $query->whereDate('fecha', '>=', $request->desde);
-        if ($request->filled('hasta'))   $query->whereDate('fecha', '<=', $request->hasta);
+        $query->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta);
 
         $movimientos = $query->paginate(50)->withQueryString();
 
@@ -46,7 +50,7 @@ class MovimientoController extends Controller
             ),
         ];
 
-        return view('movimientos.index', compact('movimientos', 'totales'));
+        return view('movimientos.index', compact('movimientos', 'totales', 'desde', 'hasta'));
     }
 
     public function create(string $tipo)

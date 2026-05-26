@@ -13,18 +13,18 @@
 
 <div class="card mb-3">
     <div class="card-body">
-        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter>
+        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter data-default-today>
             <div class="col-md-4">
                 <label class="form-label small mb-1">Empresa / Proveedor</label>
                 <input type="text" name="empresa" value="{{ request('empresa') }}" class="form-control form-control-sm" placeholder="Buscar...">
             </div>
             <div class="col-md-3">
                 <label class="form-label small mb-1">Desde</label>
-                <input type="date" name="desde" value="{{ request('desde') }}" class="form-control form-control-sm">
+                <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
             </div>
             <div class="col-md-3">
                 <label class="form-label small mb-1">Hasta</label>
-                <input type="date" name="hasta" value="{{ request('hasta') }}" class="form-control form-control-sm">
+                <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
             </div>
             <div class="col-md-2 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary">Filtrar</button>

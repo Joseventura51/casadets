@@ -25,7 +25,7 @@
 </div>
 
 {{-- ── Filtros server-side ─────────────────────────────────── --}}
-<form method="GET" action="/casadets/pendientes" class="card p-3 mb-3">
+<form method="GET" action="/casadets/pendientes" class="card p-3 mb-3" data-dynamic-filter data-default-today>
     <div class="row g-2 align-items-end">
         <div class="col-6 col-md-3">
             <label class="form-label small mb-1">Vendedor</label>
@@ -40,11 +40,11 @@
         </div>
         <div class="col-6 col-md-2">
             <label class="form-label small mb-1">Desde</label>
-            <input type="date" name="desde" value="{{ request('desde') }}" class="form-control form-control-sm">
+            <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
         </div>
         <div class="col-6 col-md-2">
             <label class="form-label small mb-1">Hasta</label>
-            <input type="date" name="hasta" value="{{ request('hasta') }}" class="form-control form-control-sm">
+            <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
         </div>
         <div class="col-6 col-md-2 d-flex gap-2">
             <button type="submit" class="btn btn-primary btn-sm w-100">Filtrar</button>

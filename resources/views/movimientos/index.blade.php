@@ -15,7 +15,7 @@
 {{-- Filtros server-side --}}
 <div class="card mb-3">
     <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter>
+        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter data-default-today>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Tipo</label>
                 <select name="tipo" class="form-select form-select-sm">
@@ -53,11 +53,11 @@
             </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Desde</label>
-                <input type="date" name="desde" value="{{ request('desde') }}" class="form-control form-control-sm">
+                <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
             </div>
             <div class="col-md-2">
                 <label class="form-label small mb-1">Hasta</label>
-                <input type="date" name="hasta" value="{{ request('hasta') }}" class="form-control form-control-sm">
+                <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
             </div>
             <div class="col-md-2 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary w-100">Filtrar</button>

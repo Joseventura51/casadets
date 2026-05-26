@@ -258,6 +258,10 @@ class VentaController extends Controller
 
     public function pendientes(Request $request)
     {
+        $hasta = $request->input('hasta', today()->toDateString());
+        $desde = $request->input('desde', $hasta);
+        if ($hasta < $desde) $hasta = $desde;
+
         $query = Venta::with([
                 'vendedor:id,nombre',
                 'cliente:id,nombre,documento',
@@ -269,13 +273,13 @@ class VentaController extends Controller
             ->whereDate('fecha', '<=', today());
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
-        if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
-        if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
+        $query->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta);
 
         $ventas     = $query->orderBy('fecha', 'asc')->get();
         $vendedores = \App\Models\Vendedor::select('id', 'nombre')->orderBy('nombre')->get();
 
-        return view('casadets.ventas.pendientes', compact('ventas', 'vendedores'));
+        return view('casadets.ventas.pendientes', compact('ventas', 'vendedores', 'desde', 'hasta'));
     }
 
     /* ─── Verificar pago ─────────────────────────────────────────── */

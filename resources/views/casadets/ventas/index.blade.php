@@ -37,7 +37,7 @@
 </div>
 
 {{-- ── RANGO DE FECHAS (server-side) ──────────────────────────── --}}
-<form method="GET" action="/casadets/ventas" id="formFechas" class="mb-3" data-dynamic-filter>
+<form method="GET" action="/casadets/ventas" id="formFechas" class="mb-3" data-dynamic-filter data-default-today>
     <div class="d-flex align-items-end gap-3 flex-wrap">
 
         <div class="d-flex align-items-center gap-2">
@@ -45,7 +45,7 @@
                 <label class="d-block" style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;margin-bottom:.2rem;">Fecha Inicio</label>
                 <div class="input-group input-group-sm" style="width:160px;">
                     <input type="date" name="desde" id="fDesde"
-                           value="{{ $todas ? '' : $desde }}"
+                           value="{{ $desde }}"
                            class="form-control form-control-sm" style="font-size:.82rem;">
                     <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
                 </div>
@@ -55,7 +55,7 @@
                 <label class="d-block" style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;margin-bottom:.2rem;">Fecha Fin</label>
                 <div class="input-group input-group-sm" style="width:160px;">
                     <input type="date" name="hasta" id="fHasta"
-                           value="{{ $todas ? '' : $hasta }}"
+                           value="{{ $hasta }}"
                            class="form-control form-control-sm" style="font-size:.82rem;">
                     <span class="input-group-text bg-white"><i class="bi bi-calendar3" style="font-size:.75rem;"></i></span>
                 </div>
@@ -264,6 +264,7 @@ const cntVisible   = document.getElementById('cntVisible');
 const contador     = document.getElementById('contadorFiltro');
 const noResultados = document.getElementById('filaNoResultados');
 const totalVisible = document.getElementById('totalVisible');
+const filtrosStorageKey = 'casadets.ventas.filtros-tabla';
 
 function normalizar(str) {
     return (str || '').toLowerCase()
@@ -311,12 +312,37 @@ function aplicarFiltros() {
     if (totalVisible) totalVisible.textContent = 'S/ ' + totalCob.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-Object.values(filtros).forEach(el => el.addEventListener('input', aplicarFiltros));
-fFecha.addEventListener('input', aplicarFiltros);
+function guardarFiltrosTabla() {
+    const data = { fecha: fFecha.value };
+    for (const [k, el] of Object.entries(filtros)) data[k] = el.value;
+    sessionStorage.setItem(filtrosStorageKey, JSON.stringify(data));
+}
+
+function restaurarFiltrosTabla() {
+    try {
+        const data = JSON.parse(sessionStorage.getItem(filtrosStorageKey) || '{}');
+        for (const [k, el] of Object.entries(filtros)) {
+            if (data[k] !== undefined) el.value = data[k];
+        }
+        if (data.fecha !== undefined) fFecha.value = data.fecha;
+    } catch (_) {}
+}
+
+function aplicarYGuardarFiltros() {
+    guardarFiltrosTabla();
+    requestAnimationFrame(aplicarFiltros);
+}
+
+restaurarFiltrosTabla();
+aplicarFiltros();
+
+Object.values(filtros).forEach(el => el.addEventListener('input', aplicarYGuardarFiltros));
+fFecha.addEventListener('input', aplicarYGuardarFiltros);
 
 document.getElementById('btnLimpiar').addEventListener('click', () => {
     Object.values(filtros).forEach(el => el.value = '');
     fFecha.value = '';
+    sessionStorage.removeItem(filtrosStorageKey);
     aplicarFiltros();
 });
 

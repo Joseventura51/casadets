@@ -10,7 +10,7 @@
             <span class="badge bg-light text-dark border" style="font-size:.75rem;">{{ strtoupper($empresa) }}</span>
         </p>
     </div>
-    <form method="GET" class="d-flex gap-2 align-items-center flex-wrap" data-dynamic-filter>
+    <form method="GET" class="d-flex gap-2 align-items-center flex-wrap" data-dynamic-filter data-default-today>
         <select name="empresa" class="form-select form-select-sm" style="width:130px;">
             <option value="casadets" {{ $empresa === 'casadets' ? 'selected' : '' }}>CASADETS</option>
             <option value="zendy"    {{ $empresa === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
