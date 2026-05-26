@@ -1,4 +1,4 @@
-modules = ["php-8.2", "bash", "web", "nodejs-22", "python-3.11"]
+modules = ["php-8.2", "bash", "web", "nodejs-20"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
@@ -33,3 +33,19 @@ waitForPort = 5000
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+APP_NAME = "casadets"
+APP_ENV = "local"
+APP_DEBUG = "true"
+APP_KEY = "base64:0FGGc02KqeOP3koux4QgNQy8e0J2yeaFv/wMVKoLxZY="
+APP_URL = "https://b4465bc0-01d2-460d-b4b1-345efa150096-00-xh0lbyzg7eef.spock.replit.dev"
+DB_CONNECTION = "sqlite"
+SESSION_DRIVER = "database"
+CACHE_STORE = "database"
+QUEUE_CONNECTION = "database"
+LOG_CHANNEL = "stack"
+LOG_STACK = "single"
+LOG_LEVEL = "debug"
