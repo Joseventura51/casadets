@@ -30,7 +30,115 @@
     </form>
 </div>
 
-{{-- KPI Cards — fuente: movimientos activos (sin doble conteo) --}}
+{{-- ── Apertura / Cierre de caja (solo visible cuando se ve el día de hoy) ── --}}
+@if(!$esRango && $desde === $hoy)
+<div class="card mb-4 border-0 shadow-sm">
+    <div class="card-body py-3">
+        @if(!$sesionHoy)
+            {{-- Sin apertura registrada --}}
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-secondary" style="font-size:.8rem;">
+                        <i class="bi bi-lock me-1"></i>Caja sin apertura
+                    </span>
+                    <span class="text-muted small">Registra el monto inicial de efectivo en caja para hoy.</span>
+                </div>
+                <button class="btn btn-success btn-sm ms-auto" data-bs-toggle="collapse" data-bs-target="#formApertura">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Abrir caja
+                </button>
+            </div>
+            <div class="collapse mt-3" id="formApertura">
+                <form action="/casadets/caja/apertura" method="POST" class="d-flex gap-2 align-items-end flex-wrap">
+                    @csrf
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    <div>
+                        <label class="form-label small mb-1">Monto de apertura (S/)</label>
+                        <input type="number" name="monto_apertura" step="0.01" min="0" value="0"
+                               class="form-control form-control-sm" style="width:160px;" required>
+                    </div>
+                    <div style="flex:1;min-width:200px;">
+                        <label class="form-label small mb-1">Observaciones</label>
+                        <input type="text" name="observaciones" class="form-control form-control-sm"
+                               placeholder="Opcional">
+                    </div>
+                    <button class="btn btn-success btn-sm">
+                        <i class="bi bi-check-lg me-1"></i>Confirmar apertura
+                    </button>
+                </form>
+            </div>
+
+        @elseif($sesionHoy->estaAbierta())
+            {{-- Caja abierta --}}
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <span class="badge bg-success" style="font-size:.8rem;">
+                    <i class="bi bi-door-open me-1"></i>Caja abierta
+                </span>
+                <span class="small text-muted">
+                    Apertura: <strong class="text-dark">S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
+                    @if($sesionHoy->observaciones)
+                        &nbsp;·&nbsp;{{ $sesionHoy->observaciones }}
+                    @endif
+                </span>
+                <button class="btn btn-danger btn-sm ms-auto" data-bs-toggle="collapse" data-bs-target="#formCierre">
+                    <i class="bi bi-box-arrow-right me-1"></i>Cerrar caja
+                </button>
+            </div>
+            <div class="collapse mt-3" id="formCierre">
+                <form action="/casadets/caja/cierre" method="POST" class="d-flex gap-2 align-items-end flex-wrap">
+                    @csrf
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    <div>
+                        <label class="form-label small mb-1">Monto de cierre contado (S/)</label>
+                        <input type="number" name="monto_cierre" step="0.01" min="0"
+                               value="{{ number_format($efectivoEnCaja, 2, '.', '') }}"
+                               class="form-control form-control-sm" style="width:160px;" required>
+                    </div>
+                    <div class="small text-muted pt-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Esperado en caja: <strong>S/ {{ number_format($efectivoEnCaja, 2) }}</strong>
+                    </div>
+                    <button class="btn btn-danger btn-sm">
+                        <i class="bi bi-check-lg me-1"></i>Confirmar cierre
+                    </button>
+                </form>
+            </div>
+
+        @else
+            {{-- Caja cerrada --}}
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <span class="badge bg-dark" style="font-size:.8rem;">
+                    <i class="bi bi-lock-fill me-1"></i>Caja cerrada
+                </span>
+                <span class="small text-muted">
+                    Apertura: <strong>S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
+                    &nbsp;·&nbsp;
+                    Cierre contado: <strong>S/ {{ number_format($sesionHoy->monto_cierre, 2) }}</strong>
+                </span>
+                @php
+                    $diferencia = round($sesionHoy->monto_cierre - $efectivoEnCaja, 2);
+                @endphp
+                @if($diferencia != 0)
+                    <span class="badge {{ $diferencia > 0 ? 'bg-success' : 'bg-danger' }} ms-1" style="font-size:.78rem;">
+                        {{ $diferencia > 0 ? '+' : '' }}S/ {{ number_format($diferencia, 2) }}
+                        {{ $diferencia > 0 ? 'sobrante' : 'faltante' }}
+                    </span>
+                @else
+                    <span class="badge bg-success" style="font-size:.78rem;"><i class="bi bi-check2 me-1"></i>Cuadrado</span>
+                @endif
+            </div>
+        @endif
+    </div>
+</div>
+@endif
+
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show py-2" role="alert">
+    {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
+{{-- KPI Cards --}}
 <div class="row g-3 mb-4">
     <div class="col-md-3">
         <div class="card kpi-card">
@@ -75,6 +183,34 @@
     </div>
 </div>
 
+{{-- Efectivo en caja --}}
+<div class="card mb-4" style="border-left: 4px solid #f59e0b;">
+    <div class="card-body py-3 d-flex align-items-center gap-4 flex-wrap">
+        <div>
+            <div class="text-muted small mb-1"><i class="bi bi-cash-coin me-1"></i>Efectivo actual en caja</div>
+            <h3 class="mb-0 {{ $efectivoEnCaja >= 0 ? 'text-warning-emphasis fw-bold' : 'text-danger fw-bold' }}">
+                S/ {{ number_format($efectivoEnCaja, 2) }}
+            </h3>
+        </div>
+        <div class="vr d-none d-md-block"></div>
+        <div class="small text-muted d-flex flex-column gap-1">
+            @if($sesionHoy && $sesionHoy->monto_apertura > 0)
+                <span><i class="bi bi-plus-circle text-success me-1"></i>
+                    Apertura: <strong>S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
+                </span>
+            @endif
+            <span><i class="bi bi-plus-circle text-primary me-1"></i>
+                Cobrado en efectivo: <strong>S/ {{ number_format($ventasPorMetodo->get('efectivo', 0), 2) }}</strong>
+            </span>
+            @if($comprasEnEfectivo > 0)
+                <span><i class="bi bi-dash-circle text-danger me-1"></i>
+                    Compras en efectivo: <strong>S/ {{ number_format($comprasEnEfectivo, 2) }}</strong>
+                </span>
+            @endif
+        </div>
+    </div>
+</div>
+
 {{-- Resúmenes --}}
 <div class="row g-3 mb-4">
     <div class="col-md-6">
@@ -85,7 +221,16 @@
                     <tbody>
                         @forelse($ventasPorMetodo as $metodo => $monto)
                         <tr>
-                            <td>{{ ucfirst($metodo) }}</td>
+                            <td>
+                                @if($metodo === 'efectivo')
+                                    <i class="bi bi-cash me-1 text-warning"></i>
+                                @elseif($metodo === 'transferencia')
+                                    <i class="bi bi-bank me-1 text-primary"></i>
+                                @elseif(in_array($metodo, ['yape','plin']))
+                                    <i class="bi bi-phone me-1 text-success"></i>
+                                @endif
+                                {{ ucfirst($metodo) }}
+                            </td>
                             <td class="text-end fw-semibold">S/ {{ number_format($monto, 2) }}</td>
                         </tr>
                         @empty
@@ -144,7 +289,6 @@
             </thead>
             <tbody>
                 @forelse($ventas as $v)
-                {{-- BUG #2 FIX: cobrada = SOLO estado 'pagado', no metodo_pago --}}
                 @php $cobrada = $v->estado === 'pagado'; @endphp
                 <tr class="{{ !$cobrada && $v->estado !== 'anulado' ? 'table-warning' : '' }}
                             {{ $v->estado === 'anulado' ? 'table-secondary text-muted' : '' }}">

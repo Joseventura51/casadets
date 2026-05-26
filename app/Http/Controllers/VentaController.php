@@ -470,10 +470,15 @@ class VentaController extends Controller
             $sheet->setCellValue("I{$row}", (float) $v->total_cobrado);
             $sheet->setCellValue("J{$row}", ucfirst($v->estado ?? 'pendiente'));
 
-            if (($v->estado ?? '') === 'pagado') {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
-            } elseif (($v->estado ?? '') === 'anulado') {
+            $metodos   = array_map('trim', explode(',', strtolower($v->metodo_pago ?? '')));
+            $esEfectivo = in_array('efectivo', $metodos);
+
+            if (($v->estado ?? '') === 'anulado') {
                 $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
+            } elseif ($esEfectivo) {
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF08A');
+            } elseif (($v->estado ?? '') === 'pagado') {
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
             }
             $row++;
         }

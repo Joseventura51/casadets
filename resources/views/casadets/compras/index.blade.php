@@ -43,6 +43,7 @@
                     <th>Empresa</th>
                     <th>Documento</th>
                     <th>Productos</th>
+                    <th>Pago</th>
                     <th class="text-end">Total</th>
                     <th>Venta vinculada</th>
                     <th class="text-end">Acciones</th>
@@ -70,6 +71,15 @@
                             @endif
                         @else
                             <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($c->metodo_pago === 'efectivo')
+                            <span class="badge bg-warning text-dark" style="font-size:.72rem;"><i class="bi bi-cash me-1"></i>Efectivo</span>
+                        @elseif($c->metodo_pago === 'transferencia')
+                            <span class="badge bg-primary" style="font-size:.72rem;"><i class="bi bi-bank me-1"></i>Transferencia</span>
+                        @else
+                            <span class="text-muted small">—</span>
                         @endif
                     </td>
                     <td class="text-end fw-semibold">S/ {{ number_format($c->monto_total, 2) }}</td>
@@ -112,7 +122,7 @@
             @if($compras->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="4" class="text-end">Total (esta página)</th>
+                    <th colspan="5" class="text-end">Total (esta página)</th>
                     <th class="text-end">S/ {{ number_format($compras->getCollection()->sum('monto_total'), 2) }}</th>
                     <th colspan="2"></th>
                 </tr>

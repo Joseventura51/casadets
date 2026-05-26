@@ -18,6 +18,7 @@ class Compra extends Model
         'documento_numero',
         'fecha',
         'monto_total',
+        'metodo_pago',
         'observaciones',
     ];
 

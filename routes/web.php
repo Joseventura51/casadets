@@ -24,6 +24,8 @@ Route::post('/movimientos', [MovimientoController::class, 'store']);
 
 // CASADETS — Caja
 Route::get('/casadets/caja', [CajaController::class, 'index']);
+Route::post('/casadets/caja/apertura', [CajaController::class, 'apertura']);
+Route::post('/casadets/caja/cierre', [CajaController::class, 'cierre']);
 
 // CASADETS — Vendedores
 Route::get('/casadets/vendedores', [VendedorController::class, 'index']);

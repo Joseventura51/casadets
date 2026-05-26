@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CajaSesion;
+use App\Models\Compra;
 use App\Models\DetallePagoFactura;
 use App\Models\Movimiento;
 use App\Models\Pago;
@@ -20,8 +22,12 @@ class CajaController extends Controller
         $empresa = $request->input('empresa', 'casadets');
         if ($hasta < $desde) $hasta = $desde;
 
+        // ── Sesión de caja del día actual ──────────────────────────────
+        $sesionHoy = CajaSesion::where('empresa', $empresa)
+            ->where('fecha', $hoy)
+            ->first();
+
         // ── Movimientos del período (fuente única financiera) ──────────
-        // Solo estado='activo' para KPIs — anulados no afectan balance
         $movimientos = Movimiento::with('cliente:id,nombre')
             ->where('empresa', $empresa)
             ->whereDate('fecha', '>=', $desde)
@@ -39,12 +45,10 @@ class CajaController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
-        // BUG #2 CORREGIDO: solo estado='pagado' determina si está cobrada
-        // Ya NO se usa !empty($v->metodo_pago) que daba falsos positivos
         $ventasCobradas   = $ventas->where('estado', 'pagado');
         $ventasPendientes = $ventas->whereIn('estado', ['pendiente', 'parcial']);
 
-        // ── KPIs desde movimientos activos (sin doble conteo) ──────────
+        // ── KPIs desde movimientos activos ──────────────────────────────
         $movActivos = $movimientos->where('estado', 'activo');
 
         $totalVentasCobradas = round(
@@ -63,10 +67,26 @@ class CajaController extends Controller
         );
         $balance = round($totalVentasCobradas + $totalOtrosIngresos - $totalSalidas, 2);
 
-        // ── Desglose por método de pago (fuente: pago_metodos) ──────────
+        // ── Desglose por método de pago ──────────────────────────────────
         $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas);
 
-        // ── Por vendedor (display informativo) ──────────────────────────
+        // ── Efectivo actual en caja ──────────────────────────────────────
+        // apertura + efectivo_cobrado − compras_pagadas_en_efectivo
+        $comprasEnEfectivo = round(
+            Compra::where('metodo_pago', 'efectivo')
+                ->whereDate('fecha', '>=', $desde)
+                ->whereDate('fecha', '<=', $hasta)
+                ->sum('monto_total'),
+            2
+        );
+        $efectivoEnCaja = round(
+            ($sesionHoy?->monto_apertura ?? 0)
+            + $ventasPorMetodo->get('efectivo', 0)
+            - $comprasEnEfectivo,
+            2
+        );
+
+        // ── Por vendedor ─────────────────────────────────────────────────
         $ventasPorVendedor = $ventasCobradas
             ->groupBy(fn ($v) => $v->vendedor->nombre ?? 'Sin vendedor')
             ->map(fn ($g) => round($g->sum(fn ($v) => $v->total_cobrado), 2));
@@ -75,17 +95,67 @@ class CajaController extends Controller
 
         return view('casadets.caja.index', compact(
             'desde', 'hasta', 'hoy', 'esRango', 'empresa',
+            'sesionHoy',
             'ventas', 'ventasCobradas', 'ventasPendientes',
             'movimientos', 'movActivos',
             'totalVentasCobradas', 'totalOtrosIngresos', 'totalCompras',
             'totalSalidas', 'balance',
-            'ventasPorMetodo', 'ventasPorVendedor'
+            'ventasPorMetodo', 'ventasPorVendedor',
+            'comprasEnEfectivo', 'efectivoEnCaja'
         ));
+    }
+
+    public function apertura(Request $request)
+    {
+        $request->validate([
+            'empresa'         => 'required|string',
+            'monto_apertura'  => 'required|numeric|min:0',
+            'observaciones'   => 'nullable|string|max:500',
+        ]);
+
+        $hoy = Carbon::today()->toDateString();
+
+        CajaSesion::updateOrCreate(
+            ['empresa' => $request->empresa, 'fecha' => $hoy],
+            [
+                'monto_apertura' => $request->monto_apertura,
+                'estado'         => 'abierta',
+                'observaciones'  => $request->observaciones,
+            ]
+        );
+
+        return redirect("/casadets/caja?empresa={$request->empresa}")
+            ->with('success', 'Apertura de caja registrada.');
+    }
+
+    public function cierre(Request $request)
+    {
+        $request->validate([
+            'empresa'       => 'required|string',
+            'monto_cierre'  => 'required|numeric|min:0',
+        ]);
+
+        $hoy = Carbon::today()->toDateString();
+
+        $sesion = CajaSesion::where('empresa', $request->empresa)
+            ->where('fecha', $hoy)
+            ->first();
+
+        if (!$sesion) {
+            return back()->withErrors(['No hay apertura registrada para hoy.']);
+        }
+
+        $sesion->update([
+            'monto_cierre' => $request->monto_cierre,
+            'estado'       => 'cerrada',
+        ]);
+
+        return redirect("/casadets/caja?empresa={$request->empresa}")
+            ->with('success', 'Caja cerrada correctamente.');
     }
 
     /**
      * Desglose exacto por método de pago para el período.
-     * Fuente: pago_metodos (exacto, desde CobranzaService).
      */
     private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas): \Illuminate\Support\Collection
     {

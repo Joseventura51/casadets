@@ -48,6 +48,14 @@
                 <label class="form-label">Número documento</label>
                 <input type="text" name="documento_numero" value="{{ old('documento_numero', $compra->documento_numero ?? '') }}" class="form-control" placeholder="Ej. F001-123">
             </div>
+            <div class="col-md-4">
+                <label class="form-label">Método de pago</label>
+                <select name="metodo_pago" class="form-select">
+                    <option value="">— Sin especificar —</option>
+                    <option value="efectivo"      {{ old('metodo_pago', $compra->metodo_pago ?? '') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
+                    <option value="transferencia" {{ old('metodo_pago', $compra->metodo_pago ?? '') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
+                </select>
+            </div>
             <div class="col-md-8">
                 <label class="form-label">Observaciones</label>
                 <textarea name="observaciones" class="form-control" rows="2">{{ old('observaciones', $compra->observaciones ?? '') }}</textarea>

@@ -86,7 +86,7 @@ class CompraController extends Controller
             }
 
             // ── Movimiento de salida en el ledger ─────────────────────
-            // Las compras afectan el balance de caja como egresos
+            $metodoLabel = $compra->metodo_pago ? ' [' . ucfirst($compra->metodo_pago) . ']' : '';
             Movimiento::create([
                 'tipo'             => 'salida',
                 'subtipo'          => 'compra',
@@ -100,7 +100,7 @@ class CompraController extends Controller
                 'documento_numero' => $compra->documento_numero,
                 'monto'            => $total,
                 'fecha'            => $data['fecha'],
-                'observaciones'    => $compra->empresa . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
+                'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
             ]);
 
             $compra->detalles()->sync($this->buildDetallesSync($request, $lineasCreadas));
@@ -188,6 +188,7 @@ class CompraController extends Controller
                 ->where('estado', 'activo')
                 ->first();
 
+            $metodoLabel = $compra->metodo_pago ? ' [' . ucfirst($compra->metodo_pago) . ']' : '';
             if ($movExistente) {
                 $movExistente->update([
                     'monto'            => $total,
@@ -195,10 +196,9 @@ class CompraController extends Controller
                     'documento_tipo'   => $compra->documento_tipo,
                     'documento_numero' => $compra->documento_numero,
                     'categoria'        => 'Compra — ' . $compra->empresa,
-                    'observaciones'    => $compra->empresa . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
+                    'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
                 ]);
             } else {
-                // Crear si no existe (compatibilidad con compras previas al sistema)
                 Movimiento::create([
                     'tipo'             => 'salida',
                     'subtipo'          => 'compra',
@@ -212,7 +212,7 @@ class CompraController extends Controller
                     'documento_numero' => $compra->documento_numero,
                     'monto'            => $total,
                     'fecha'            => $data['fecha'],
-                    'observaciones'    => $compra->empresa . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
+                    'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
                 ]);
             }
 
@@ -323,6 +323,7 @@ class CompraController extends Controller
             'documento_tipo'          => 'nullable|string|max:50',
             'documento_numero'        => 'nullable|string|max:100',
             'fecha'                   => 'required|date',
+            'metodo_pago'             => 'nullable|string|in:efectivo,transferencia',
             'observaciones'           => 'nullable|string',
             'lineas'                  => 'required|array|min:1',
             'lineas.*.producto'       => 'nullable|string|max:255',

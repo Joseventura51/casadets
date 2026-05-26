@@ -14,8 +14,22 @@
 <div class="row g-3 mb-3">
     <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Fecha</small><h6 class="mb-0">{{ $compra->fecha->format('d/m/Y') }}</h6></div></div>
     <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Empresa</small><h6 class="mb-0">{{ $compra->empresa }}</h6></div></div>
-    <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Documento</small><h6 class="mb-0">{{ $compra->documento_tipo ? ucfirst($compra->documento_tipo) : '—' }} {{ $compra->documento_numero }}</h6></div></div>
-    <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Total</small><h6 class="mb-0 text-primary">S/ {{ number_format($compra->monto_total, 2) }}</h6></div></div>
+    <div class="col-md-2"><div class="card kpi-card"><small class="text-muted">Documento</small><h6 class="mb-0">{{ $compra->documento_tipo ? ucfirst($compra->documento_tipo) : '—' }} {{ $compra->documento_numero }}</h6></div></div>
+    <div class="col-md-2">
+        <div class="card kpi-card">
+            <small class="text-muted">Método de pago</small>
+            <h6 class="mb-0">
+                @if($compra->metodo_pago === 'efectivo')
+                    <span class="badge bg-warning text-dark"><i class="bi bi-cash me-1"></i>Efectivo</span>
+                @elseif($compra->metodo_pago === 'transferencia')
+                    <span class="badge bg-primary"><i class="bi bi-bank me-1"></i>Transferencia</span>
+                @else
+                    <span class="text-muted">—</span>
+                @endif
+            </h6>
+        </div>
+    </div>
+    <div class="col-md-2"><div class="card kpi-card"><small class="text-muted">Total</small><h6 class="mb-0 text-primary">S/ {{ number_format($compra->monto_total, 2) }}</h6></div></div>
 </div>
 
 @if($compra->observaciones)
