@@ -427,13 +427,50 @@ class VentaController extends Controller
     public function export(Request $request)
     {
         $query = Venta::with(['vendedor', 'cliente', 'detalles']);
+        $todas = $request->boolean('todas');
+        $desde = $request->input('desde', today()->toDateString());
+        $hasta = $request->input('hasta', $desde);
+        if ($hasta < $desde) $hasta = $desde;
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
         if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
         if ($request->filled('estado'))      $query->where('estado', $request->estado);
-        if ($request->filled('desde'))       $query->whereDate('fecha', '>=', $request->desde);
-        if ($request->filled('hasta'))       $query->whereDate('fecha', '<=', $request->hasta);
+        if (!$todas) {
+            $query->whereDate('fecha', '>=', $desde)
+                ->whereDate('fecha', '<=', $hasta);
+        }
+        if ($request->filled('fecha'))       $query->whereDate('fecha', $request->fecha);
         if ($request->filled('cliente_id'))  $query->where('cliente_id', $request->cliente_id);
+        if ($request->filled('pago'))        $query->where('metodo_pago', 'like', '%' . $request->pago . '%');
+
+        if ($request->filled('vendedor')) {
+            $vendedor = strtolower(trim($request->vendedor));
+            $query->whereHas('vendedor', function ($q) use ($vendedor) {
+                $q->whereRaw('LOWER(nombre) LIKE ?', ['%' . $vendedor . '%']);
+            });
+        }
+
+        if ($request->filled('cliente')) {
+            $cliente = strtolower(trim($request->cliente));
+            $query->whereHas('cliente', function ($q) use ($cliente) {
+                $q->whereRaw('LOWER(nombre) LIKE ?', ['%' . $cliente . '%'])
+                  ->orWhereRaw('LOWER(COALESCE(documento, "")) LIKE ?', ['%' . $cliente . '%']);
+            });
+        }
+
+        if ($request->filled('documento')) {
+            $documento = strtolower(trim($request->documento));
+            $query->where(function ($q) use ($documento) {
+                $q->whereRaw('LOWER(COALESCE(documento_tipo, "")) LIKE ?', ['%' . $documento . '%'])
+                  ->orWhereRaw('LOWER(COALESCE(documento_numero, "")) LIKE ?', ['%' . $documento . '%']);
+            });
+        }
+
+        if ($request->filled('total')) {
+            $total = str_replace(',', '', trim($request->total));
+            $query->where('estado', '!=', 'canjeada')
+                ->where('total', 'like', '%' . $total . '%');
+        }
 
         $query->orderByRaw("CASE WHEN documento_tipo='factura' THEN 0
                                  WHEN documento_tipo='boleta'  THEN 1
@@ -490,10 +527,19 @@ class VentaController extends Controller
             $row++;
         }
 
+        if ($ventas->isEmpty()) {
+            $sheet->mergeCells('A2:J2');
+            $sheet->setCellValue('A2', 'Sin datos para los filtros seleccionados.');
+            $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('A2')->getFont()->getColor()->setRGB('6B7280');
+        }
+
         foreach (range('A', 'J') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
-        $sheet->getStyle('H2:I' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+        if ($row > 2) {
+            $sheet->getStyle('H2:I' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+        }
 
         $filename = 'ventas_' . now()->format('Y-m-d') . '.xlsx';
         $writer   = new Xlsx($spreadsheet);

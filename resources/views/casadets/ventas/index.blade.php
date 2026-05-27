@@ -27,7 +27,7 @@
         <a href="/casadets/ventas/import" class="btn btn-outline-success">
             <i class="bi bi-file-earmark-spreadsheet"></i> Importar Excel
         </a>
-        <a id="btnExportar" href="/casadets/ventas/export" class="btn btn-outline-secondary">
+        <a id="btnExportar" href="/casadets/ventas/export" class="btn btn-outline-secondary" data-todas="{{ $todas ? '1' : '0' }}">
             <i class="bi bi-download"></i> Exportar Excel
         </a>
         <a href="/casadets/ventas/create" class="btn btn-primary">
@@ -152,7 +152,8 @@
                     data-fecha="{{ $v->fecha->format('Y-m-d') }}"
                     data-pago="{{ strtolower($v->metodo_pago ?? '') }}"
                     data-documento="{{ strtolower(($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '')) }}"
-                    data-total="{{ number_format($v->total_cobrado, 2) }}">
+                    data-total="{{ $esRefFiscal ? '' : number_format($v->total, 2) }}"
+                    data-cobrado="{{ number_format($v->total_cobrado, 2) }}">
                     <td>
                         @if($estado === 'canjeada')
                             <span class="select-estado est-canjeada" style="display:inline-block;cursor:default;"
@@ -308,7 +309,7 @@ function aplicarFiltros() {
             (!fecha          || fechaFila === fecha);
 
         tr.classList.toggle('fila-oculta', !ok);
-        if (ok) { visibles++; totalCob += parseFloat(tr.dataset.total) || 0; }
+        if (ok) { visibles++; totalCob += parseFloat((tr.dataset.cobrado || '0').replace(/,/g, '')) || 0; }
     });
 
     if (contador) contador.style.display = hayFiltro ? '' : 'none';
@@ -349,6 +350,7 @@ document.getElementById('btnLimpiar').addEventListener('click', () => {
     fFecha.value = '';
     sessionStorage.removeItem(filtrosStorageKey);
     aplicarFiltros();
+    actualizarExport();
 });
 
 // Actualizar href de exportar con el rango actual
@@ -356,16 +358,40 @@ const btnExportar = document.getElementById('btnExportar');
 const fDesde = document.getElementById('fDesde');
 const fHasta = document.getElementById('fHasta');
 function actualizarExport() {
-    const d = fDesde?.value, h = fHasta?.value;
-    let url = '/casadets/ventas/export';
-    const params = [];
-    if (d) params.push('desde=' + d);
-    if (h) params.push('hasta=' + h);
-    if (params.length) url += '?' + params.join('&');
-    if (btnExportar) btnExportar.href = url;
+    if (!btnExportar) return;
+
+    const params = new URLSearchParams();
+    const exportaTodas = btnExportar.dataset.todas === '1';
+
+    if (exportaTodas) {
+        params.set('todas', '1');
+    } else {
+        if (fDesde?.value) params.set('desde', fDesde.value);
+        if (fHasta?.value) params.set('hasta', fHasta.value);
+    }
+
+    const filtrosExport = {
+        estado: filtros.estado?.value,
+        fecha: fFecha?.value,
+        vendedor: filtros.vendedor?.value,
+        cliente: filtros.cliente?.value,
+        pago: filtros.pago?.value,
+        documento: filtros.documento?.value,
+        total: filtros.total?.value,
+    };
+
+    for (const [key, value] of Object.entries(filtrosExport)) {
+        const limpio = (value || '').trim();
+        if (limpio) params.set(key, limpio);
+    }
+
+    const query = params.toString();
+    btnExportar.href = '/casadets/ventas/export' + (query ? '?' + query : '');
 }
 if (fDesde) fDesde.addEventListener('change', actualizarExport);
 if (fHasta) fHasta.addEventListener('change', actualizarExport);
+Object.values(filtros).forEach(el => el.addEventListener('input', actualizarExport));
+fFecha.addEventListener('input', actualizarExport);
 actualizarExport();
 </script>
 @endsection
