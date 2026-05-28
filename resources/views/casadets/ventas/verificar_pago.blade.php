@@ -19,19 +19,72 @@
 @endphp
 
 <style>
-.pago-row { background:#f8f9fa; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; }
-.pago-row-top { display:flex; gap:.5rem; align-items:center; }
-.pago-row-desc { padding:.3rem .75rem .1rem; display:none; }
+.pago-header-total { min-width:0; }
+.pago-header-total .total-pill { line-height:1; }
+.pago-row {
+    background:#fff;
+    border:1px solid #dee2e6;
+    border-left:4px solid #0d6efd;
+    border-radius:8px;
+    padding:.75rem;
+    margin-bottom:.55rem;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+.pago-row-top {
+    display:grid;
+    grid-template-columns:32px minmax(130px,1.25fr) minmax(108px,.85fr) 34px;
+    gap:.55rem;
+    align-items:end;
+}
+.pago-row-index {
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:#e8f0fe;
+    color:#0d6efd;
+    font-size:.76rem;
+    font-weight:700;
+    margin-bottom:.16rem;
+}
+.pago-field-label {
+    display:block;
+    margin-bottom:.18rem;
+    color:#6c757d;
+    font-size:.68rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+}
+.pago-row-desc { padding:.55rem 0 0 2.55rem; display:none; }
 .pago-row-desc.visible { display:block; }
-.btn-add-pago { border:1.5px dashed #0d6efd; border-radius:8px; font-size:.82rem; padding:.3rem .9rem; color:#0d6efd; background:transparent; cursor:pointer; width:100%; margin-top:.3rem; }
+.btn-del-pago {
+    width:30px;
+    height:30px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+}
+.btn-del-pago:hover { background:#f8d7da !important; }
+.btn-add-pago { border:1.5px dashed #0d6efd; border-radius:8px; font-size:.82rem; padding:.55rem .9rem; color:#0d6efd; background:#fff; cursor:pointer; width:100%; margin-top:.35rem; font-weight:600; }
 .btn-add-pago:hover { background:#e8f0fe; }
+.pago-resumen { border:1px solid #dee2e6; border-radius:8px; }
 .total-pill { font-size:1.3rem; font-weight:700; }
-.diferencia-pill { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; display:inline-block; }
+.diferencia-pill { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; display:inline-block; white-space:nowrap; }
 .historial-row { font-size:.85rem; }
 .banco-hint { font-size:.73rem; color:#6c757d; }
 .vale-item { cursor:default; transition:background .1s; }
 .vale-item:hover { background:#f0f4ff; }
 .vale-item.seleccionado { background:#e8f0fe; border-color:#0d6efd !important; }
+@media (max-width: 576px) {
+    .pago-row-top { grid-template-columns:32px 1fr 34px; }
+    .pago-monto-field { grid-column:2 / 3; }
+    .pago-row-desc { padding-left:0; }
+    .pago-header-total { width:100%; justify-content:flex-start !important; margin-top:.35rem; }
+}
 </style>
 
 <div id="toastContainer" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;min-width:300px;"></div>
@@ -255,12 +308,12 @@
             <div id="ventasAdicionalesHidden"></div>
 
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <span>
                         <i class="bi bi-credit-card me-1"></i>
                         {{ $ventaPagada ? 'Registrar pago adicional' : 'Registrar pago' }}
                     </span>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="pago-header-total d-flex align-items-center justify-content-end gap-2">
                         <span class="text-muted small">Total:</span>
                         <span class="total-pill text-primary" id="totalCobradoDisplay">S/ 0.00</span>
                         <span class="diferencia-pill bg-light text-muted" id="diferenciaPill">—</span>
@@ -278,25 +331,33 @@
                         @foreach($primerosMetodos as $pi => $met)
                         <div class="pago-row">
                             <div class="pago-row-top">
-                                <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1.2;">
-                                    @foreach($metodos as $m)
-                                        <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
-                                            {{ $metodoLabels[$m] ?? ucfirst($m) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="input-group input-group-sm" style="width:130px;">
-                                    <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-                                    <input type="number" name="pagos[{{ $pi }}][monto]"
-                                        value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
-                                        step="0.01" min="0"
-                                        class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                                <span class="pago-row-index">{{ $pi + 1 }}</span>
+                                <div>
+                                    <label class="pago-field-label">Método</label>
+                                    <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel">
+                                        @foreach($metodos as $m)
+                                            <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
+                                                {{ $metodoLabels[$m] ?? ucfirst($m) }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                                 </div>
-                                <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
+                                <div class="pago-monto-field">
+                                    <label class="pago-field-label">Monto</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                                        <input type="number" name="pagos[{{ $pi }}][monto]"
+                                            value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
+                                            step="0.01" min="0"
+                                            class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" title="Quitar">
                                     <i class="bi bi-x-circle-fill"></i>
                                 </button>
                             </div>
                             <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta']) ? 'visible' : '' }}">
+                                <label class="pago-field-label">Banco / referencia</label>
                                 <input type="text" name="pagos[{{ $pi }}][descripcion]"
                                     class="form-control form-control-sm desc-pago"
                                     placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
@@ -310,7 +371,7 @@
                     </button>
 
                     {{-- Resumen combinado --}}
-                    <div class="mt-3 p-2 bg-light rounded">
+                    <div class="mt-3 p-2 bg-light pago-resumen">
                         <div class="row text-center">
                             <div class="col-4">
                                 <div class="text-muted" style="font-size:.72rem;">Pendiente total</div>
@@ -545,9 +606,11 @@ function reindex() {
         const sel  = row.querySelector('select.metodo-sel');
         const inp  = row.querySelector('input.monto-pago');
         const desc = row.querySelector('input.desc-pago');
+        const idx  = row.querySelector('.pago-row-index');
         if (sel)  sel.name  = `pagos[${i}][metodo]`;
         if (inp)  inp.name  = `pagos[${i}][monto]`;
         if (desc) desc.name = `pagos[${i}][descripcion]`;
+        if (idx)  idx.textContent = i + 1;
     });
     pagoIdx = document.querySelectorAll('#pagosContainer .pago-row').length;
 }
@@ -559,20 +622,28 @@ function crearFila(met = 'transferencia', monto = '') {
     div.className = 'pago-row';
     div.innerHTML = `
         <div class="pago-row-top">
-            <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1.2;">
-                ${opts}
-            </select>
-            <div class="input-group input-group-sm" style="width:130px;">
-                <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-                <input type="number" name="pagos[${pagoIdx}][monto]"
-                    value="${monto}" step="0.01" min="0"
-                    class="form-control form-control-sm text-end monto-pago border-start-0" required>
+            <span class="pago-row-index">${pagoIdx + 1}</span>
+            <div>
+                <label class="pago-field-label">Método</label>
+                <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel">
+                    ${opts}
+                </select>
             </div>
-            <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
+            <div class="pago-monto-field">
+                <label class="pago-field-label">Monto</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                    <input type="number" name="pagos[${pagoIdx}][monto]"
+                        value="${monto}" step="0.01" min="0"
+                        class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                </div>
+            </div>
+            <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" title="Quitar">
                 <i class="bi bi-x-circle-fill"></i>
             </button>
         </div>
         <div class="pago-row-desc ${showDesc ? 'visible' : ''}">
+            <label class="pago-field-label">Banco / referencia</label>
             <input type="text" name="pagos[${pagoIdx}][descripcion]"
                 class="form-control form-control-sm desc-pago"
                 placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
@@ -604,6 +675,7 @@ document.getElementById('btnAgregarPago').addEventListener('click', () => {
     const row = crearFila('transferencia', '');
     document.getElementById('pagosContainer').appendChild(row);
     row.querySelector('.monto-pago').focus();
+    recalc();
 });
 
 document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
