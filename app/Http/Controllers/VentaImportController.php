@@ -93,11 +93,12 @@ class VentaImportController extends Controller
                 $key = $doc . '|' . $serie . '|' . $numero;
             }
 
+            $vendedorNombre = trim((string) ($mapa['vendedor'] !== null ? ($r[$mapa['vendedor']] ?? '') : ''));
+
             if (!isset($grupos[$key])) {
                 $razonSocial    = trim((string) ($mapa['razon_social'] !== null ? ($r[$mapa['razon_social']] ?? '') : ''));
                 $ruc            = trim((string) ($mapa['ruc'] !== null ? ($r[$mapa['ruc']] ?? '') : ''));
                 $canjeRaw       = trim((string) ($mapa['canje'] !== null ? ($r[$mapa['canje']] ?? '') : ''));
-                $vendedorNombre = trim((string) ($mapa['vendedor'] !== null ? ($r[$mapa['vendedor']] ?? '') : ''));
                 $grupos[$key] = [
                     'fecha'            => $this->parseFecha($r[$mapa['fecha']] ?? null),
                     'doc'              => $doc,
@@ -113,6 +114,8 @@ class VentaImportController extends Controller
                     'detalles'         => [],
                     'total'            => 0,
                 ];
+            } elseif ($vendedorNombre !== '') {
+                $grupos[$key]['vendedor_nombre'] = $vendedorNombre;
             }
 
             $cantidad = $this->parseNumero($r[$mapa['cantidad']] ?? 0);
@@ -183,6 +186,8 @@ class VentaImportController extends Controller
                 'header_real' => $idx !== null ? ($headersOriginales[$idx] ?? '?') : null,
             ];
         }
+
+        $this->registrarVendedoresDesdeExcel($gruposNuevos);
 
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
 
@@ -598,6 +603,47 @@ class VentaImportController extends Controller
         }
 
         return $errores;
+    }
+
+    private function registrarVendedoresDesdeExcel(array $grupos): void
+    {
+        $nombres = collect($grupos)
+            ->pluck('vendedor_nombre')
+            ->map(fn ($nombre) => trim((string) $nombre))
+            ->filter()
+            ->unique(fn ($nombre) => $this->normalizarTexto($nombre))
+            ->values();
+
+        if ($nombres->isEmpty()) {
+            return;
+        }
+
+        $vendedores = Vendedor::withTrashed()->get(['id', 'nombre', 'activo', 'deleted_at']);
+        $porNombre = $vendedores->keyBy(fn ($v) => $this->normalizarTexto($v->nombre));
+
+        foreach ($nombres as $nombre) {
+            $key = $this->normalizarTexto($nombre);
+            $vendedor = $porNombre->get($key);
+
+            if ($vendedor) {
+                $cambios = [];
+                if (!$vendedor->activo) {
+                    $cambios['activo'] = true;
+                }
+                if ($vendedor->trashed()) {
+                    $vendedor->restore();
+                }
+                if (!empty($cambios)) {
+                    $vendedor->update($cambios);
+                }
+                continue;
+            }
+
+            Vendedor::create([
+                'nombre' => $nombre,
+                'activo' => true,
+            ]);
+        }
     }
 
     private function mapearColumnas(array $headers): array
