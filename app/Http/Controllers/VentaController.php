@@ -591,7 +591,7 @@ class VentaController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Ventas');
 
-        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Productos', 'Método Pago', 'Banco destino', 'Total', 'Total Cobrado', 'Estado'];
+        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Método Pago', 'Banco destino', 'Total', 'Total Cobrado', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
 
         $headerStyle = [
@@ -600,24 +600,12 @@ class VentaController extends Controller
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             'borders'   => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1D4ED8']]],
         ];
-        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
 
         $row = 2;
         foreach ($ventas as $v) {
             $esRefFiscal = ($v->estado ?? '') === 'canjeada';
-            $productos   = $v->detalles->map(fn($d) => $d->producto . ' x' . rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.'))->implode(', ');
 
-            // Recopilar banco/referencia de los pagos aplicados
-            $bancoDst = '';
-            foreach ($v->pagosAplicados as $pago) {
-                foreach ($pago->metodos as $met) {
-                    if ($met->descripcion) {
-                        $bancoDst = $met->descripcion;
-                        break 2;
-                    }
-                }
-            }
-            // Si hay varios pagos con distintos bancos, mostrarlos todos
             $bancosDst = collect();
             foreach ($v->pagosAplicados as $pago) {
                 foreach ($pago->metodos as $met) {
@@ -631,40 +619,39 @@ class VentaController extends Controller
             $sheet->setCellValue("C{$row}", $v->documento_numero ?? '');
             $sheet->setCellValue("D{$row}", $v->cliente->nombre ?? '');
             $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '');
-            $sheet->setCellValue("F{$row}", $productos);
-            $sheet->setCellValue("G{$row}", $v->metodo_pago ?? '');
-            $sheet->setCellValue("H{$row}", $bancoDst);
-            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total);
-            $sheet->setCellValue("J{$row}", $esRefFiscal ? '' : (float) $v->total_cobrado);
-            $sheet->setCellValue("K{$row}", $esRefFiscal ? 'Ref. fiscal' : ucfirst($v->estado ?? 'pendiente'));
+            $sheet->setCellValue("F{$row}", $v->metodo_pago ?? '');
+            $sheet->setCellValue("G{$row}", $bancoDst);
+            $sheet->setCellValue("H{$row}", $esRefFiscal ? '' : (float) $v->total);
+            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total_cobrado);
+            $sheet->setCellValue("J{$row}", $esRefFiscal ? 'Ref. fiscal' : ucfirst($v->estado ?? 'pendiente'));
 
             $metodos    = array_map('trim', explode(',', strtolower($v->metodo_pago ?? '')));
             $esEfectivo = in_array('efectivo', $metodos);
 
             if ($esRefFiscal) {
-                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9ECEF');
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9ECEF');
             } elseif (($v->estado ?? '') === 'anulado') {
-                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
             } elseif ($esEfectivo) {
-                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF08A');
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF08A');
             } elseif (($v->estado ?? '') === 'pagado') {
-                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
+                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
             }
             $row++;
         }
 
         if ($ventas->isEmpty()) {
-            $sheet->mergeCells('A2:K2');
+            $sheet->mergeCells('A2:J2');
             $sheet->setCellValue('A2', 'Sin datos para los filtros seleccionados.');
             $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle('A2')->getFont()->getColor()->setRGB('6B7280');
         }
 
-        foreach (range('A', 'K') as $col) {
+        foreach (range('A', 'J') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
         if ($row > 2) {
-            $sheet->getStyle('I2:J' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle('H2:I' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
         }
 
         $filename = 'ventas_' . now()->format('Y-m-d') . '.xlsx';
