@@ -15,14 +15,61 @@
 @endphp
 
 <style>
-.pago-row { background:#f8f9fa; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; }
-.pago-row-top { display:flex; gap:.5rem; align-items:center; }
-.pago-row-desc { padding:.3rem .75rem .1rem; display:none; }
+.pago-header-total { min-width:0; }
+.pago-header-total .total-pill { line-height:1; }
+.pago-row {
+    background:#fff;
+    border:1px solid #dee2e6;
+    border-left:4px solid #0d6efd;
+    border-radius:8px;
+    padding:.75rem;
+    margin-bottom:.55rem;
+    box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+.pago-row-top {
+    display:grid;
+    grid-template-columns:32px minmax(130px,1.25fr) minmax(108px,.85fr) 34px;
+    gap:.55rem;
+    align-items:end;
+}
+.pago-row-index {
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:#e8f0fe;
+    color:#0d6efd;
+    font-size:.76rem;
+    font-weight:700;
+    margin-bottom:.16rem;
+}
+.pago-field-label {
+    display:block;
+    margin-bottom:.18rem;
+    color:#6c757d;
+    font-size:.68rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+}
+.pago-row-desc { padding:.55rem 0 0 2.55rem; display:none; }
 .pago-row-desc.visible { display:block; }
-.btn-add-pago { border:1.5px dashed #0d6efd; border-radius:8px; font-size:.82rem; padding:.3rem .9rem; color:#0d6efd; background:transparent; cursor:pointer; width:100%; margin-top:.3rem; }
+.btn-del-pago {
+    width:30px;
+    height:30px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+}
+.btn-del-pago:hover { background:#f8d7da !important; }
+.btn-add-pago { border:1.5px dashed #0d6efd; border-radius:8px; font-size:.82rem; padding:.55rem .9rem; color:#0d6efd; background:#fff; cursor:pointer; width:100%; margin-top:.35rem; font-weight:600; }
 .btn-add-pago:hover { background:#e8f0fe; }
+.pago-resumen { border:1px solid #dee2e6; border-radius:8px; }
 .total-pill { font-size:1.3rem; font-weight:700; }
-.diferencia-pill { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; display:inline-block; }
+.diferencia-pill { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; display:inline-block; white-space:nowrap; }
 .historial-row { font-size:.85rem; }
 .banco-hint { font-size:.73rem; color:#6c757d; }
 .vale-adicional-card { border:1.5px solid #dee2e6; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; cursor:pointer; transition:background .1s, border-color .1s; }
@@ -603,7 +650,16 @@ function crearFila(met = 'transferencia') {
                     value="" step="0.01" min="0"
                     class="form-control form-control-sm text-end monto-pago border-start-0" required>
             </div>
-            <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
+            <div class="pago-monto-field">
+                <label class="pago-field-label">Monto</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                    <input type="number" name="pagos[${pagoIdx}][monto]"
+                        value="${monto}" step="0.01" min="0"
+                        class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                </div>
+            </div>
+            <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" title="Quitar">
                 <i class="bi bi-x-circle-fill"></i>
             </button>
         </div>
@@ -639,6 +695,7 @@ document.getElementById('btnAgregarPago').addEventListener('click', () => {
     const row = crearFila('transferencia');
     document.getElementById('pagosContainer').appendChild(row);
     row.querySelector('.monto-pago').focus();
+    recalc();
 });
 
 document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
