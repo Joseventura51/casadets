@@ -206,9 +206,12 @@ class CobranzaService
 
             $metodoStr = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
 
+            // Tomar el cliente de la primera venta (pagos múltiples siempre del mismo cliente)
+            $clienteId = $ventas->first()?->cliente_id;
+
             // Crear un único Pago para todas las ventas
             $pago = Pago::create([
-                'cliente_id'  => null, // puede ser multi-cliente
+                'cliente_id'  => $clienteId,
                 'user_id'     => $userId,
                 'monto_total' => $montoTotal,
                 'metodo_pago' => $metodoStr,
@@ -272,6 +275,7 @@ class CobranzaService
                 'metodo_pago'      => $metodoStr,
                 'referencia_tipo'  => 'pago',
                 'referencia_id'    => $pago->id,
+                'cliente_id'       => $clienteId,
                 'user_id'          => $userId,
                 'monto'            => $totalAplicado,
                 'fecha'            => now()->toDateString(),
