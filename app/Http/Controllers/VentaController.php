@@ -289,7 +289,26 @@ class VentaController extends Controller
         $historial         = $cobranza->historialPagos($venta);
         $saldoFavor        = $venta->cliente_id ? $cobranza->saldoFavorDisponible($venta->cliente_id) : 0;
         $saldosDisponibles = $venta->cliente_id ? $cobranza->saldosDisponibles($venta->cliente_id) : collect();
-        return view('casadets.ventas.verificar_pago', compact('venta', 'historial', 'saldoFavor', 'saldosDisponibles'));
+
+        $ventasPendientesCliente = collect();
+        if ($venta->cliente_id) {
+            $ventasPendientesCliente = \App\Models\Venta::with([
+                    'detalles:id,venta_id,producto',
+                ])
+                ->where('cliente_id', $venta->cliente_id)
+                ->where('id', '!=', $venta->id)
+                ->whereIn('estado', ['pendiente', 'parcial'])
+                ->orderBy('fecha', 'asc')
+                ->get()
+                ->map(function ($v) {
+                    $v->saldo_pendiente = max(0.0, (float) bcsub((string) $v->total, (string) $v->pagado, 2));
+                    return $v;
+                });
+        }
+
+        return view('casadets.ventas.verificar_pago', compact(
+            'venta', 'historial', 'saldoFavor', 'saldosDisponibles', 'ventasPendientesCliente'
+        ));
     }
 
     public function updatePago(Request $request, Venta $venta)
@@ -301,6 +320,42 @@ class VentaController extends Controller
             'pagos.*.descripcion' => 'nullable|string|max:200',
             'estado_manual'       => 'nullable|in:pendiente,pagado,anulado',
         ]);
+
+        $ventasAdicionales = array_values(array_filter(
+            array_map('intval', $request->input('ventas_adicionales', []))
+        ));
+
+        if (!empty($ventasAdicionales)) {
+            $allIds = array_merge([$venta->id], $ventasAdicionales);
+            try {
+                $result = app(CobranzaService::class)->registrarPagoMultiple($allIds, $data['pagos']);
+            } catch (\Exception $e) {
+                if ($request->expectsJson()) {
+                    return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+                }
+                return back()->withErrors(['error' => $e->getMessage()])->withInput();
+            }
+
+            $cobradas = $result['ventas_cobradas'];
+            $total    = count($result['ventas_actualizadas']);
+            $msg      = "Pago registrado: {$cobradas} de {$total} vales quedaron pagados.";
+            if ($result['sobrante'] > 0) {
+                $msg .= ' Sobrante S/ ' . number_format($result['sobrante'], 2) . ' no aplicado.';
+            }
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'success'         => true,
+                    'venta_id'        => $venta->id,
+                    'estado'          => $result['ventas_actualizadas'][0]['estado'] ?? 'pagado',
+                    'saldo_favor'     => 0,
+                    'saldo_pendiente' => 0,
+                    'msg_saldo_favor' => $msg,
+                ]);
+            }
+
+            return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
+        }
 
         $result = app(CobranzaService::class)->registrarPago(
             $venta,
@@ -476,7 +531,7 @@ class VentaController extends Controller
 
     public function export(Request $request)
     {
-        $query = Venta::with(['vendedor', 'cliente', 'detalles']);
+        $query = Venta::with(['vendedor', 'cliente', 'detalles', 'pagosAplicados.metodos']);
         $todas = $request->boolean('todas');
         $desde = $request->input('desde', today()->toDateString());
         $hasta = $request->input('hasta', $desde);
@@ -536,7 +591,7 @@ class VentaController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Ventas');
 
-        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Productos', 'Método Pago', 'Total', 'Total Cobrado', 'Estado'];
+        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Productos', 'Método Pago', 'Banco destino', 'Total', 'Total Cobrado', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
 
         $headerStyle = [
@@ -545,12 +600,32 @@ class VentaController extends Controller
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             'borders'   => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1D4ED8']]],
         ];
-        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:K1')->applyFromArray($headerStyle);
 
         $row = 2;
         foreach ($ventas as $v) {
             $esRefFiscal = ($v->estado ?? '') === 'canjeada';
-            $productos = $v->detalles->map(fn($d) => $d->producto . ' x' . rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.'))->implode(', ');
+            $productos   = $v->detalles->map(fn($d) => $d->producto . ' x' . rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.'))->implode(', ');
+
+            // Recopilar banco/referencia de los pagos aplicados
+            $bancoDst = '';
+            foreach ($v->pagosAplicados as $pago) {
+                foreach ($pago->metodos as $met) {
+                    if ($met->descripcion) {
+                        $bancoDst = $met->descripcion;
+                        break 2;
+                    }
+                }
+            }
+            // Si hay varios pagos con distintos bancos, mostrarlos todos
+            $bancosDst = collect();
+            foreach ($v->pagosAplicados as $pago) {
+                foreach ($pago->metodos as $met) {
+                    if ($met->descripcion) $bancosDst->push($met->descripcion);
+                }
+            }
+            $bancoDst = $bancosDst->unique()->implode(' / ');
+
             $sheet->setCellValue("A{$row}", $v->fecha->format('d/m/Y'));
             $sheet->setCellValue("B{$row}", ucfirst($v->documento_tipo ?? ''));
             $sheet->setCellValue("C{$row}", $v->documento_numero ?? '');
@@ -558,37 +633,38 @@ class VentaController extends Controller
             $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '');
             $sheet->setCellValue("F{$row}", $productos);
             $sheet->setCellValue("G{$row}", $v->metodo_pago ?? '');
-            $sheet->setCellValue("H{$row}", $esRefFiscal ? '' : (float) $v->total);
-            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total_cobrado);
-            $sheet->setCellValue("J{$row}", $esRefFiscal ? 'Ref. fiscal' : ucfirst($v->estado ?? 'pendiente'));
+            $sheet->setCellValue("H{$row}", $bancoDst);
+            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total);
+            $sheet->setCellValue("J{$row}", $esRefFiscal ? '' : (float) $v->total_cobrado);
+            $sheet->setCellValue("K{$row}", $esRefFiscal ? 'Ref. fiscal' : ucfirst($v->estado ?? 'pendiente'));
 
-            $metodos   = array_map('trim', explode(',', strtolower($v->metodo_pago ?? '')));
+            $metodos    = array_map('trim', explode(',', strtolower($v->metodo_pago ?? '')));
             $esEfectivo = in_array('efectivo', $metodos);
 
             if ($esRefFiscal) {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9ECEF');
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('E9ECEF');
             } elseif (($v->estado ?? '') === 'anulado') {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEE2E2');
             } elseif ($esEfectivo) {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF08A');
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF08A');
             } elseif (($v->estado ?? '') === 'pagado') {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
+                $sheet->getStyle("A{$row}:K{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D1FAE5');
             }
             $row++;
         }
 
         if ($ventas->isEmpty()) {
-            $sheet->mergeCells('A2:J2');
+            $sheet->mergeCells('A2:K2');
             $sheet->setCellValue('A2', 'Sin datos para los filtros seleccionados.');
             $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->getStyle('A2')->getFont()->getColor()->setRGB('6B7280');
         }
 
-        foreach (range('A', 'J') as $col) {
+        foreach (range('A', 'K') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
         if ($row > 2) {
-            $sheet->getStyle('H2:I' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
+            $sheet->getStyle('I2:J' . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
         }
 
         $filename = 'ventas_' . now()->format('Y-m-d') . '.xlsx';

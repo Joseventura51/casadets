@@ -5,13 +5,17 @@
     $metodos = ['ninguno','efectivo','tarjeta','yape','plin','transferencia'];
     $metodoLabels = ['ninguno'=>'Ninguno (dejar pendiente)','efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'];
 
-    $yaPagedo      = (float) $venta->pagado;
-    $totalVenta    = (float) $venta->total;
+    $yaPagedo       = (float) $venta->pagado;
+    $totalVenta     = (float) $venta->total;
     $saldoPendiente = max(0, $totalVenta - $yaPagedo);
     $ventaPagada    = $venta->estado === 'pagado';
 
     $metodosActuales = array_filter(explode(',', $venta->metodo_pago ?? ''));
     $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['ninguno'];
+
+    $tieneValesPendientes = isset($ventasPendientesCliente) && $ventasPendientesCliente->count() > 0;
+    $colIzq = $tieneValesPendientes ? 'col-md-4' : 'col-md-5';
+    $colMed = $tieneValesPendientes ? 'col-md-4' : 'col-md-7';
 @endphp
 
 <style>
@@ -21,10 +25,13 @@
 .pago-row-desc.visible { display:block; }
 .btn-add-pago { border:1.5px dashed #0d6efd; border-radius:8px; font-size:.82rem; padding:.3rem .9rem; color:#0d6efd; background:transparent; cursor:pointer; width:100%; margin-top:.3rem; }
 .btn-add-pago:hover { background:#e8f0fe; }
-.total-pill { font-size:1.4rem; font-weight:700; }
-.diferencia-pill { font-size:.82rem; padding:.2rem .6rem; border-radius:20px; display:inline-block; }
+.total-pill { font-size:1.3rem; font-weight:700; }
+.diferencia-pill { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; display:inline-block; }
 .historial-row { font-size:.85rem; }
-.banco-hint { font-size:.75rem; color:#6c757d; }
+.banco-hint { font-size:.73rem; color:#6c757d; }
+.vale-item { cursor:default; transition:background .1s; }
+.vale-item:hover { background:#f0f4ff; }
+.vale-item.seleccionado { background:#e8f0fe; border-color:#0d6efd !important; }
 </style>
 
 <div id="toastContainer" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;min-width:300px;"></div>
@@ -40,16 +47,16 @@
             · Estado:
             @php
                 $badgeClass = match($venta->estado) {
-                    'pagado'    => 'bg-success',
-                    'parcial'   => 'bg-warning text-dark',
-                    'anulado'   => 'bg-danger',
-                    default     => 'bg-secondary',
+                    'pagado'  => 'bg-success',
+                    'parcial' => 'bg-warning text-dark',
+                    'anulado' => 'bg-danger',
+                    default   => 'bg-secondary',
                 };
                 $estadoLabel = match($venta->estado) {
-                    'pagado'    => 'Pagado',
-                    'parcial'   => 'Pago parcial',
-                    'anulado'   => 'Anulado',
-                    default     => 'Pendiente',
+                    'pagado'  => 'Pagado',
+                    'parcial' => 'Pago parcial',
+                    'anulado' => 'Anulado',
+                    default   => 'Pendiente',
                 };
             @endphp
             <span class="badge {{ $badgeClass }}">{{ $estadoLabel }}</span>
@@ -141,11 +148,14 @@
 
 <div class="row g-3">
 
-    {{-- Resumen productos --}}
-    <div class="col-md-5">
+    {{-- ── Columna izquierda: productos + historial ─────────────── --}}
+    <div class="{{ $colIzq }}">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-receipt me-1"></i> Productos de la venta
+                <i class="bi bi-receipt me-1"></i> Productos
+                @if($venta->documento_numero)
+                    <span class="badge bg-primary ms-1 fw-normal">{{ $venta->documento_tipo }} {{ $venta->documento_numero }}</span>
+                @endif
             </div>
             <div class="table-responsive">
                 <table class="table table-sm mb-0 align-middle">
@@ -237,31 +247,31 @@
         @endif
     </div>
 
-    {{-- Nuevo pago --}}
-    <div class="col-md-7">
+    {{-- ── Columna central: formulario de pago ─────────────────── --}}
+    <div class="{{ $colMed }}">
         <form id="formPago" action="/casadets/ventas/{{ $venta->id }}/pago" method="POST">
             @csrf
+            {{-- Inputs ocultos para vales adicionales (se llenan por JS) --}}
+            <div id="ventasAdicionalesHidden"></div>
+
             <div class="card border-0 shadow-sm">
                 <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center">
                     <span>
                         <i class="bi bi-credit-card me-1"></i>
                         {{ $ventaPagada ? 'Registrar pago adicional' : 'Registrar pago' }}
                     </span>
-                    <div class="d-flex align-items-center gap-3">
-                        <div>
-                            <span class="text-muted small me-1">Ingresando:</span>
-                            <span class="total-pill text-primary" id="totalCobradoDisplay">S/ 0.00</span>
-                        </div>
-                        <div>
-                            <span class="diferencia-pill bg-light text-muted" id="diferenciaPill">—</span>
-                        </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted small">Total:</span>
+                        <span class="total-pill text-primary" id="totalCobradoDisplay">S/ 0.00</span>
+                        <span class="diferencia-pill bg-light text-muted" id="diferenciaPill">—</span>
                     </div>
                 </div>
                 <div class="card-body">
 
+                    {{-- Info texto --}}
                     <div class="text-muted small mb-2">
                         <i class="bi bi-info-circle me-1"></i>
-                        Para transferencias puedes indicar el banco o número de cuenta en el campo <strong>Banco / referencia</strong>.
+                        Para transferencias indica el banco o cuenta en <strong>Banco / referencia</strong>.
                     </div>
 
                     <div id="pagosContainer">
@@ -299,32 +309,31 @@
                         <i class="bi bi-plus-lg me-1"></i> Agregar método de pago
                     </button>
 
-                    <div class="mt-3 p-3 bg-light rounded">
+                    {{-- Resumen combinado --}}
+                    <div class="mt-3 p-2 bg-light rounded">
                         <div class="row text-center">
-                            <div class="col-3">
-                                <div class="text-muted small">Total venta</div>
-                                <div class="fw-semibold">S/ {{ number_format($totalVenta, 2) }}</div>
+                            <div class="col-4">
+                                <div class="text-muted" style="font-size:.72rem;">Pendiente total</div>
+                                <div class="fw-bold text-danger" id="pendienteTotalDisplay">S/ {{ number_format($saldoPendiente, 2) }}</div>
+                                <div id="labelAdicionales" class="text-primary" style="font-size:.65rem;display:none;">
+                                    +<span id="numAdicionalesLabel">0</span> vale(s) adicional(es)
+                                </div>
                             </div>
-                            <div class="col-3">
-                                <div class="text-muted small">Ya cobrado</div>
-                                <div class="fw-semibold text-success">S/ {{ number_format($yaPagedo, 2) }}</div>
-                            </div>
-                            <div class="col-3">
-                                <div class="text-muted small">Este pago</div>
+                            <div class="col-4">
+                                <div class="text-muted" style="font-size:.72rem;">Este pago</div>
                                 <div class="fw-bold text-primary" id="totalResumen">S/ 0.00</div>
                             </div>
-                            <div class="col-3">
-                                <div class="text-muted small">{{ $ventaPagada ? 'Saldo favor' : 'Diferencia' }}</div>
-                                <div id="difResumen" class="fw-semibold">—</div>
+                            <div class="col-4">
+                                <div class="text-muted" style="font-size:.72rem;">Diferencia</div>
+                                <div id="difResumen" class="fw-semibold text-muted">—</div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="card-footer bg-white">
-                    <div class="d-flex justify-content-between align-items-center gap-3">
-                        <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary">Cancelar</a>
+                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
                         <div class="d-flex align-items-center gap-2">
-                            <label class="form-label mb-0 text-muted small text-nowrap">Estado al guardar:</label>
                             <select name="estado_manual" id="estadoManual" class="form-select form-select-sm" style="width:auto;">
                                 <option value="" selected>Automático</option>
                                 <option value="pendiente">⏳ Pendiente</option>
@@ -333,7 +342,7 @@
                             </select>
                             <span id="estadoAutoLabel" class="badge bg-secondary small text-nowrap">se calculará al guardar</span>
                         </div>
-                        <button id="btnGuardar" class="btn btn-success px-4">
+                        <button id="btnGuardar" class="btn btn-success px-3">
                             <i class="bi bi-check-lg me-1"></i> Guardar pago
                         </button>
                     </div>
@@ -342,21 +351,96 @@
         </form>
     </div>
 
-</div>
+    {{-- ── Columna derecha: otros vales del mismo cliente ──────── --}}
+    @if($tieneValesPendientes)
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex align-items-center justify-content-between">
+                <div>
+                    <i class="bi bi-list-check me-1 text-primary"></i>
+                    <span class="fw-semibold small">Otros vales de {{ $venta->cliente->nombre }}</span>
+                </div>
+                <span class="badge bg-primary">{{ $ventasPendientesCliente->count() }} pendiente(s)</span>
+            </div>
+            <div class="card-body p-2">
+                <div class="text-muted small px-1 mb-2">
+                    Marca los vales que quieras cobrar junto con este pago (solo mismo cliente).
+                </div>
+                <input type="text" id="buscarVale"
+                    class="form-control form-control-sm mb-2"
+                    placeholder="Buscar: doc, fecha, producto…">
+
+                <div id="listaVales" style="max-height:380px;overflow-y:auto;">
+                    @foreach($ventasPendientesCliente as $vp)
+                    @php
+                        $docVp = ucfirst($vp->documento_tipo ?? '').' '.($vp->documento_numero ?? "#$vp->id");
+                        $productosVp = $vp->detalles->pluck('producto')->join(' ');
+                        $buscarVp = strtolower($docVp.' '.$vp->fecha->format('d/m/Y').' '.$productosVp);
+                    @endphp
+                    <div class="vale-item border rounded p-2 mb-1"
+                         data-buscar="{{ $buscarVp }}"
+                         data-id="{{ $vp->id }}">
+                        <div class="d-flex align-items-start gap-2">
+                            <input type="checkbox"
+                                class="form-check-input mt-1 flex-shrink-0 vale-adicional-check"
+                                value="{{ $vp->id }}"
+                                data-saldo="{{ $vp->saldo_pendiente }}"
+                                id="vale_{{ $vp->id }}">
+                            <label for="vale_{{ $vp->id }}" class="flex-grow-1 mb-0" style="cursor:pointer;">
+                                <div class="fw-semibold small">
+                                    {{ $docVp }}
+                                    <span class="badge {{ $vp->estado==='parcial' ? 'bg-warning text-dark' : 'bg-secondary' }} ms-1" style="font-size:.6rem;">
+                                        {{ $vp->estado==='parcial' ? 'Parcial' : 'Pendiente' }}
+                                    </span>
+                                </div>
+                                <div class="text-muted" style="font-size:.72rem;">{{ $vp->fecha->format('d/m/Y') }}</div>
+                                <div class="text-muted text-truncate" style="font-size:.72rem;max-width:140px;">
+                                    {{ $vp->detalles->take(2)->pluck('producto')->join(', ') }}
+                                    @if($vp->detalles->count() > 2)
+                                        <em>+{{ $vp->detalles->count()-2 }} más</em>
+                                    @endif
+                                </div>
+                            </label>
+                            <div class="text-end flex-shrink-0">
+                                <div class="fw-bold text-danger" style="font-size:.82rem;">S/ {{ number_format($vp->saldo_pendiente, 2) }}</div>
+                                @if((float)$vp->pagado > 0)
+                                <div class="text-muted" style="font-size:.65rem;">Total: S/ {{ number_format($vp->total, 2) }}</div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Footer con resumen de selección --}}
+            <div class="card-footer py-2 bg-light" id="resumenAdicionales" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">
+                        <strong class="text-primary" id="countAdicionales">0</strong> vale(s) adicional(es)
+                    </span>
+                    <span class="fw-bold text-primary small" id="totalAdicionalesLabel">S/ 0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+</div>{{-- /row --}}
 
 <script>
-const METODOS        = @json($metodos);
-const METODO_LABELS  = @json($metodoLabels);
-const TOTAL_REAL     = {{ (float) $totalVenta }};
-const YA_PAGADO      = {{ (float) $yaPagedo }};
+const METODOS         = @json($metodos);
+const METODO_LABELS   = @json($metodoLabels);
+const TOTAL_REAL      = {{ (float) $totalVenta }};
+const YA_PAGADO       = {{ (float) $yaPagedo }};
 const SALDO_PENDIENTE = {{ (float) $saldoPendiente }};
-const VENTA_PAGADA   = {{ $ventaPagada ? 'true' : 'false' }};
-const VENTA_ID       = {{ $venta->id }};
-let pagoIdx = {{ count($primerosMetodos) }};
-
-// Métodos que muestran el campo banco/referencia
+const VENTA_PAGADA    = {{ $ventaPagada ? 'true' : 'false' }};
+const VENTA_ID        = {{ $venta->id }};
 const METODOS_CON_DESC = ['transferencia', 'tarjeta'];
+let pagoIdx = {{ count($primerosMetodos) }};
+let saldoAdicionalSel = 0;  // saldo de vales adicionales seleccionados
 
+// ── Descripción banco (mostrar/ocultar) ────────────────────────
 function toggleDesc(row) {
     const metodo = row.querySelector('select.metodo-sel')?.value ?? '';
     const desc   = row.querySelector('.pago-row-desc');
@@ -370,21 +454,26 @@ function toggleDesc(row) {
     }
 }
 
+// ── Recalcular totales ─────────────────────────────────────────
 function recalc() {
     let total = 0;
     document.querySelectorAll('.monto-pago').forEach(i => {
         const row = i.closest('.pago-row');
-        const metodo = row ? row.querySelector('select')?.value : '';
-        if (metodo !== 'ninguno') total += parseFloat(i.value) || 0;
+        const met = row?.querySelector('select')?.value ?? '';
+        if (met !== 'ninguno') total += parseFloat(i.value) || 0;
     });
 
     document.getElementById('totalCobradoDisplay').textContent = 'S/ ' + total.toFixed(2);
     document.getElementById('totalResumen').textContent = 'S/ ' + total.toFixed(2);
 
-    const pill  = document.getElementById('diferenciaPill');
-    const dRes  = document.getElementById('difResumen');
+    const pill = document.getElementById('diferenciaPill');
+    const dRes = document.getElementById('difResumen');
 
-    if (VENTA_PAGADA) {
+    // Saldo efectivo a cubrir = venta actual + adicionales
+    const saldoCombinado = SALDO_PENDIENTE + saldoAdicionalSel;
+
+    if (VENTA_PAGADA && saldoAdicionalSel <= 0) {
+        // Venta ya pagada, sin adicionales → saldo a favor
         if (total > 0) {
             pill.className = 'diferencia-pill bg-info text-white';
             pill.textContent = 'Saldo favor +S/ ' + total.toFixed(2);
@@ -395,20 +484,20 @@ function recalc() {
             dRes.className = 'fw-semibold text-muted'; dRes.textContent = '—';
         }
     } else {
-        const nuevoTotal = YA_PAGADO + total;
-        const d = nuevoTotal - TOTAL_REAL;
+        const d = total - saldoCombinado;
         if (Math.abs(d) < 0.005) {
             pill.className = 'diferencia-pill bg-success text-white'; pill.textContent = 'Pago exacto';
             dRes.className = 'fw-semibold text-success'; dRes.textContent = 'Exacto';
         } else if (d > 0) {
             pill.className = 'diferencia-pill bg-info text-white'; pill.textContent = 'Excede S/ '+d.toFixed(2);
-            dRes.className = 'fw-semibold text-info'; dRes.textContent = '+S/ '+d.toFixed(2)+' (saldo favor)';
+            dRes.className = 'fw-semibold text-info'; dRes.textContent = '+S/ '+d.toFixed(2);
         } else {
             const falta = Math.abs(d);
             pill.className = 'diferencia-pill bg-danger text-white'; pill.textContent = 'Faltan S/ '+falta.toFixed(2);
             dRes.className = 'fw-semibold text-danger'; dRes.textContent = '-S/ '+falta.toFixed(2);
         }
     }
+
     updateAutoLabel(total);
 }
 
@@ -418,25 +507,22 @@ function updateAutoLabel(nuevoPago) {
     if (sel.value !== '') { lbl.style.display = 'none'; return; }
     lbl.style.display = '';
 
-    if (VENTA_PAGADA) {
-        if (nuevoPago > 0) {
-            lbl.className = 'badge bg-info text-white small text-nowrap';
-            lbl.textContent = '→ generará saldo a favor';
-        } else {
-            lbl.className = 'badge bg-secondary small text-nowrap';
-            lbl.textContent = '→ sin cambios';
-        }
+    const saldoCombinado = SALDO_PENDIENTE + saldoAdicionalSel;
+
+    if (VENTA_PAGADA && saldoAdicionalSel <= 0) {
+        lbl.className = nuevoPago > 0
+            ? 'badge bg-info text-white small text-nowrap'
+            : 'badge bg-secondary small text-nowrap';
+        lbl.textContent = nuevoPago > 0 ? '→ generará saldo a favor' : '→ sin cambios';
         return;
     }
 
-    const nuevoTotal = YA_PAGADO + nuevoPago;
-    if (nuevoTotal >= TOTAL_REAL - 0.005 && nuevoPago > 0) {
+    if (nuevoPago >= saldoCombinado - 0.005 && nuevoPago > 0) {
         lbl.className = 'badge bg-success small text-nowrap';
-        lbl.textContent = '→ se marcará Pagado';
+        lbl.textContent = '→ se marcarán Pagados';
     } else if (nuevoPago > 0) {
-        const falta = TOTAL_REAL - nuevoTotal;
         lbl.className = 'badge bg-warning text-dark small text-nowrap';
-        lbl.textContent = '→ quedará Pago parcial (falta S/ ' + Math.abs(falta).toFixed(2) + ')';
+        lbl.textContent = '→ pago parcial (falta S/ ' + Math.max(0, saldoCombinado - nuevoPago).toFixed(2) + ')';
     } else {
         lbl.className = 'badge bg-secondary small text-nowrap';
         lbl.textContent = '→ quedará Pendiente';
@@ -447,16 +533,17 @@ document.getElementById('estadoManual').addEventListener('change', () => {
     let total = 0;
     document.querySelectorAll('.monto-pago').forEach(i => {
         const row = i.closest('.pago-row');
-        const metodo = row ? row.querySelector('select')?.value : '';
-        if (metodo !== 'ninguno') total += parseFloat(i.value) || 0;
+        const met = row?.querySelector('select')?.value ?? '';
+        if (met !== 'ninguno') total += parseFloat(i.value) || 0;
     });
     updateAutoLabel(total);
 });
 
+// ── Reindexar filas --─────────────────────────────────────────
 function reindex() {
     document.querySelectorAll('#pagosContainer .pago-row').forEach((row, i) => {
-        const sel = row.querySelector('select.metodo-sel');
-        const inp = row.querySelector('input.monto-pago');
+        const sel  = row.querySelector('select.metodo-sel');
+        const inp  = row.querySelector('input.monto-pago');
         const desc = row.querySelector('input.desc-pago');
         if (sel)  sel.name  = `pagos[${i}][metodo]`;
         if (inp)  inp.name  = `pagos[${i}][monto]`;
@@ -465,7 +552,7 @@ function reindex() {
     pagoIdx = document.querySelectorAll('#pagosContainer .pago-row').length;
 }
 
-function crearFila(met = 'ninguno', monto = '') {
+function crearFila(met = 'transferencia', monto = '') {
     const showDesc = METODOS_CON_DESC.includes(met);
     const opts = METODOS.map(m => `<option value="${m}" ${m===met?'selected':''}>${METODO_LABELS[m]||m}</option>`).join('');
     const div = document.createElement('div');
@@ -496,7 +583,7 @@ function crearFila(met = 'ninguno', monto = '') {
 }
 
 document.getElementById('pagosContainer').addEventListener('input', e => {
-    if (e.target.classList.contains('monto-pago') || e.target.classList.contains('metodo-sel')) recalc();
+    if (e.target.classList.contains('monto-pago')) recalc();
 });
 document.getElementById('pagosContainer').addEventListener('change', e => {
     if (e.target.classList.contains('metodo-sel')) {
@@ -519,29 +606,100 @@ document.getElementById('btnAgregarPago').addEventListener('click', () => {
     row.querySelector('.monto-pago').focus();
 });
 
-// Inicializar toggleDesc en filas existentes
 document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
 
-// ── AJAX submit ────────────────────────────────────────────────
+// ── Vales adicionales del mismo cliente ───────────────────────
+@if($tieneValesPendientes)
+function actualizarValesAdicionales() {
+    const checks = document.querySelectorAll('.vale-adicional-check:checked');
+    saldoAdicionalSel = 0;
+
+    const hidden = document.getElementById('ventasAdicionalesHidden');
+    hidden.innerHTML = '';
+
+    checks.forEach(c => {
+        saldoAdicionalSel += parseFloat(c.dataset.saldo) || 0;
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'ventas_adicionales[]'; h.value = c.value;
+        hidden.appendChild(h);
+
+        c.closest('.vale-item').classList.add('seleccionado');
+    });
+
+    // Quitar seleccionado de los no marcados
+    document.querySelectorAll('.vale-adicional-check:not(:checked)').forEach(c => {
+        c.closest('.vale-item').classList.remove('seleccionado');
+    });
+
+    saldoAdicionalSel = Math.round(saldoAdicionalSel * 100) / 100;
+    const saldoCombinado = SALDO_PENDIENTE + saldoAdicionalSel;
+
+    // Actualizar "Pendiente total" en el formulario de pago
+    document.getElementById('pendienteTotalDisplay').textContent = 'S/ ' + saldoCombinado.toFixed(2);
+
+    const labelAdicionales = document.getElementById('labelAdicionales');
+    const numAdicionalesLabel = document.getElementById('numAdicionalesLabel');
+    if (checks.length > 0) {
+        labelAdicionales.style.display = '';
+        numAdicionalesLabel.textContent = checks.length;
+        document.getElementById('resumenAdicionales').style.display = '';
+        document.getElementById('countAdicionales').textContent = checks.length;
+        document.getElementById('totalAdicionalesLabel').textContent = 'S/ ' + saldoAdicionalSel.toFixed(2);
+    } else {
+        labelAdicionales.style.display = 'none';
+        document.getElementById('resumenAdicionales').style.display = 'none';
+    }
+
+    // Auto-rellenar el monto de pago con el saldo combinado
+    const primerMonto = document.querySelector('.monto-pago');
+    if (primerMonto) {
+        primerMonto.value = saldoCombinado.toFixed(2);
+    }
+
+    recalc();
+}
+
+// Click en toda la tarjeta del vale también hace toggle
+document.querySelectorAll('.vale-item').forEach(item => {
+    item.addEventListener('click', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
+        const chk = item.querySelector('.vale-adicional-check');
+        if (chk) { chk.checked = !chk.checked; actualizarValesAdicionales(); }
+    });
+});
+
+document.querySelectorAll('.vale-adicional-check').forEach(c => {
+    c.addEventListener('change', actualizarValesAdicionales);
+});
+
+// Buscador de vales
+function normalizar(s) {
+    return (s||'').toLowerCase()
+        .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
+        .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
+        .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+}
+document.getElementById('buscarVale').addEventListener('input', function() {
+    const q = normalizar(this.value.trim());
+    document.querySelectorAll('.vale-item').forEach(item => {
+        const txt = normalizar(item.dataset.buscar || '');
+        item.style.display = (!q || txt.includes(q)) ? '' : 'none';
+    });
+});
+@endif
+
+// ── Toast y envío AJAX ─────────────────────────────────────────
 function showToast(msg, type = 'success') {
     const el = document.createElement('div');
     el.className = `alert alert-${type} shadow mb-2`;
     el.style.cssText = 'animation:fadeIn .2s;';
     el.innerHTML = `<i class="bi bi-${type==='success'?'check-circle':'exclamation-circle'} me-2"></i>${msg}`;
     document.getElementById('toastContainer').appendChild(el);
-    setTimeout(() => el.remove(), 4500);
+    setTimeout(() => el.remove(), 5000);
 }
 
 document.getElementById('formPago').addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    let totalNuevo = 0;
-    document.querySelectorAll('.monto-pago').forEach(i => {
-        const row = i.closest('.pago-row');
-        const metodo = row ? row.querySelector('select')?.value : '';
-        if (metodo !== 'ninguno') totalNuevo += parseFloat(i.value) || 0;
-    });
-
     const btn = document.getElementById('btnGuardar');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
@@ -550,16 +708,22 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
         const fd  = new FormData(e.target);
         const res = await fetch(e.target.action, {
             method: 'POST',
-            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': fd.get('_token') },
+            headers: {
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': fd.get('_token'),
+            },
             body: fd,
         });
         const json = await res.json();
 
         if (json.success) {
-            showToast('Pago guardado correctamente.' + (json.msg_saldo_favor ? ' ' + json.msg_saldo_favor : ''), 'success');
-            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1500);
+            const extra = json.msg_saldo_favor ? ' ' + json.msg_saldo_favor : '';
+            showToast('Pago guardado correctamente.' + extra, 'success');
+            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1600);
         } else {
-            const errs = json.errors ? Object.values(json.errors).flat().join(' ') : (json.message || 'Error desconocido');
+            const errs = json.errors
+                ? Object.values(json.errors).flat().join(' ')
+                : (json.message || 'Error desconocido');
             showToast(errs, 'danger');
             btn.disabled = false;
             btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardar pago';
@@ -571,7 +735,7 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
     }
 });
 
-// ── Aplicar saldo a favor (AJAX) ───────────────────────────────
+// ── Aplicar saldo a favor (AJAX) ──────────────────────────────
 document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
     btn.addEventListener('click', async () => {
         const saldoId    = btn.dataset.saldoId;
@@ -595,14 +759,13 @@ document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content
-                        || document.querySelector('input[name=_token]')?.value
-                        || '',
+                        || document.querySelector('input[name=_token]')?.value || '',
                 },
                 body: JSON.stringify({ venta_id: VENTA_ID, monto }),
             });
             const json = await res.json();
             if (json.success) {
-                showToast(`Saldo a favor aplicado: S/ ${monto.toFixed(2)}. ${json.estado_venta === 'pagado' ? '¡Venta pagada!' : ''}`, 'success');
+                showToast(`Saldo aplicado: S/ ${monto.toFixed(2)}.`, 'success');
                 setTimeout(() => window.location.reload(), 1200);
             } else {
                 alerta.className = 'mx-3 mt-2 alert alert-danger';
@@ -618,5 +781,7 @@ document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
         }
     });
 });
+
+recalc();
 </script>
 @endsection
