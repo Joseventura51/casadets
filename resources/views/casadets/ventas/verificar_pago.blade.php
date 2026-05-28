@@ -300,7 +300,7 @@
                                 <input type="hidden" class="vale-saldo-hidden" value="{{ $vp->saldo_pendiente }}">
                             </div>
                             {{-- Detalle de productos (visible al seleccionar) --}}
-                            <div class="vale-productos-detalle" style="display:none;">
+                            <div class="vale-productos-detalle" style="display:none;" onclick="event.stopPropagation()">
                                 <div class="mt-2 pt-2 border-top border-primary border-opacity-25">
                                     <table class="table table-sm mb-0" style="font-size:.76rem;">
                                         <thead>
@@ -331,7 +331,7 @@
                         </div>
                         @endforeach
                     </div>
-                    <div id="resumenAdicionales" class="mt-2 px-1 d-flex justify-content-between align-items-center" style="display:none !important;">
+                    <div id="resumenAdicionales" class="mt-2 px-1 justify-content-between align-items-center" style="display:none;">
                         <span class="small text-muted"><strong class="text-primary" id="countAdicionales">0</strong> vale(s) adicional(es)</span>
                         <span class="fw-bold text-primary small" id="totalAdicionalesLabel">S/ 0.00</span>
                     </div>
@@ -547,22 +547,22 @@ function actualizarValesAdicionales() {
 
     // Actualizar panel de resumen izquierdo
     const resumen = document.getElementById('resumenAdicionales');
-    if (selCards.length > 0 && resumen) {
-        resumen.style.setProperty('display', 'flex', 'important');
-        document.getElementById('countAdicionales').textContent = selCards.length;
-        document.getElementById('totalAdicionalesLabel').textContent = 'S/ ' + saldoAdicionalSel.toFixed(2);
-    } else if (resumen) {
-        resumen.style.setProperty('display', 'none', 'important');
+    if (resumen) {
+        resumen.style.display = selCards.length > 0 ? 'flex' : 'none';
+        if (selCards.length > 0) {
+            document.getElementById('countAdicionales').textContent = selCards.length;
+            document.getElementById('totalAdicionalesLabel').textContent = 'S/ ' + saldoAdicionalSel.toFixed(2);
+        }
     }
 
     // Actualizar "Pendiente total" en resumen del formulario
-    document.getElementById('pendienteTotalDisplay').textContent = 'S/ ' + saldoCombinado.toFixed(2);
+    const pdEl = document.getElementById('pendienteTotalDisplay');
+    if (pdEl) pdEl.textContent = 'S/ ' + saldoCombinado.toFixed(2);
     const lbl = document.getElementById('labelAdicionales');
-    if (selCards.length > 0) {
-        lbl.style.display = '';
-        document.getElementById('numAdicionalesLabel').textContent = selCards.length;
-    } else {
-        lbl.style.display = 'none';
+    if (lbl) {
+        lbl.style.display = selCards.length > 0 ? '' : 'none';
+        const numLbl = document.getElementById('numAdicionalesLabel');
+        if (numLbl && selCards.length > 0) numLbl.textContent = selCards.length;
     }
 
     // Auto-rellenar el primer monto con el nuevo saldo combinado
