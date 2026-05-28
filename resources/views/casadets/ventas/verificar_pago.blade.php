@@ -299,6 +299,35 @@
                                 <input type="hidden" class="vale-id-hidden" value="{{ $vp->id }}">
                                 <input type="hidden" class="vale-saldo-hidden" value="{{ $vp->saldo_pendiente }}">
                             </div>
+                            {{-- Detalle de productos (visible al seleccionar) --}}
+                            <div class="vale-productos-detalle" style="display:none;">
+                                <div class="mt-2 pt-2 border-top border-primary border-opacity-25">
+                                    <table class="table table-sm mb-0" style="font-size:.76rem;">
+                                        <thead>
+                                            <tr class="text-muted">
+                                                <th class="fw-normal py-0 border-0">Producto</th>
+                                                <th class="fw-normal py-0 border-0 text-end">Cant.</th>
+                                                <th class="fw-normal py-0 border-0 text-end">Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($vp->detalles as $d)
+                                            <tr>
+                                                <td class="py-0 border-0">{{ $d->producto }}</td>
+                                                <td class="py-0 border-0 text-end text-muted">{{ rtrim(rtrim(number_format($d->cantidad,2),'0'),'.') }}</td>
+                                                <td class="py-0 border-0 text-end fw-semibold">S/ {{ number_format($d->subtotal,2) }}</td>
+                                            </tr>
+                                            @endforeach
+                                        </tbody>
+                                        <tfoot>
+                                            <tr>
+                                                <td colspan="2" class="py-0 border-0 text-end text-muted" style="font-size:.7rem;">Saldo pendiente:</td>
+                                                <td class="py-0 border-0 text-end fw-bold text-danger">S/ {{ number_format($vp->saldo_pendiente,2) }}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                         @endforeach
                     </div>
@@ -487,12 +516,13 @@ let saldoAdicionalSel = 0;
 // ── Toggle de tarjeta de vale ──────────────────────────────────
 function toggleVale(card) {
     card.classList.toggle('seleccionado');
-    const icon = card.querySelector('.vale-check');
-    if (card.classList.contains('seleccionado')) {
-        icon.className = 'bi bi-check-square-fill vale-check fs-5 text-primary flex-shrink-0';
-    } else {
-        icon.className = 'bi bi-square vale-check fs-5 text-muted flex-shrink-0';
-    }
+    const seleccionado = card.classList.contains('seleccionado');
+    const icon  = card.querySelector('.vale-check');
+    const detalle = card.querySelector('.vale-productos-detalle');
+    icon.className = seleccionado
+        ? 'bi bi-check-square-fill vale-check fs-5 text-primary flex-shrink-0'
+        : 'bi bi-square vale-check fs-5 text-muted flex-shrink-0';
+    if (detalle) detalle.style.display = seleccionado ? '' : 'none';
     actualizarValesAdicionales();
 }
 
