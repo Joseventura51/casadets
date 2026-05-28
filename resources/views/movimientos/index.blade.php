@@ -59,74 +59,12 @@
 </div>
 @endif
 
-{{-- Fila de filtros: entre los totales y la tabla --}}
-<div class="mb-3">
-    <div class="row g-2 align-items-end">
-        <div class="col-md-3 col-12">
-            <label class="form-label small mb-1">Buscar cliente</label>
-            <input type="text" name="cliente" value="{{ request('cliente') }}"
-                   class="form-control form-control-sm"
-                   placeholder="Nombre del cliente...">
-        </div>
-        <div class="col-md-2 col-6">
-            <label class="form-label small mb-1">Tipo</label>
-            <select name="tipo" class="form-select form-select-sm">
-                <option value="">Todos</option>
-                <option value="ingreso"  {{ request('tipo') === 'ingreso'  ? 'selected' : '' }}>Ingreso</option>
-                <option value="salida"   {{ request('tipo') === 'salida'   ? 'selected' : '' }}>Salida</option>
-            </select>
-        </div>
-        <div class="col-md-2 col-6">
-            <label class="form-label small mb-1">Subtipo</label>
-            <select name="subtipo" class="form-select form-select-sm">
-                <option value="">Todos</option>
-                <option value="pago_venta"        {{ request('subtipo') === 'pago_venta'        ? 'selected' : '' }}>Pago de venta</option>
-                <option value="compra"            {{ request('subtipo') === 'compra'            ? 'selected' : '' }}>Compra</option>
-                <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo a favor</option>
-                <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
-            </select>
-        </div>
-        <div class="col-md-2 col-6">
-            <label class="form-label small mb-1">Método de pago</label>
-            <select name="metodo_pago" class="form-select form-select-sm">
-                <option value="">Todos</option>
-                <option value="efectivo"      {{ request('metodo_pago') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
-                <option value="yape"          {{ request('metodo_pago') === 'yape'          ? 'selected' : '' }}>Yape</option>
-                <option value="plin"          {{ request('metodo_pago') === 'plin'          ? 'selected' : '' }}>Plin</option>
-                <option value="deposito"      {{ request('metodo_pago') === 'deposito'      ? 'selected' : '' }}>Depósito</option>
-                <option value="transferencia" {{ request('metodo_pago') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
-            </select>
-        </div>
-        <div class="col-md-1 col-6">
-            <label class="form-label small mb-1">Estado</label>
-            <select name="estado" class="form-select form-select-sm">
-                <option value="">Todos</option>
-                <option value="activo"  {{ request('estado') === 'activo'  ? 'selected' : '' }}>Activo</option>
-                <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
-            </select>
-        </div>
-        <div class="col-md-1 col-6">
-            <label class="form-label small mb-1">Desde</label>
-            <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-md-1 col-6">
-            <label class="form-label small mb-1">Hasta</label>
-            <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-12 d-flex gap-2">
-            <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-search me-1"></i>Filtrar
-            </button>
-            <a href="/movimientos" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-        </div>
-    </div>
-</div>
-
 {{-- Tabla ledger con filas expandibles --}}
 <div class="card shadow-sm border-0">
     <div class="table-responsive">
         <table class="table mb-0 align-middle" id="tablaMovimientos">
             <thead class="table-light">
+                {{-- Fila de títulos --}}
                 <tr>
                     <th style="width:2rem;"></th>
                     <th>Tipo</th>
@@ -138,6 +76,83 @@
                     <th>Estado</th>
                     <th class="text-end">Monto</th>
                     <th>Fecha</th>
+                </tr>
+                {{-- Fila de filtros por columna --}}
+                <tr class="align-top">
+                    <td class="p-1">
+                        <a href="/movimientos?empresa={{ request('empresa') }}" class="btn btn-outline-secondary btn-sm px-1 py-0" title="Limpiar filtros">
+                            <i class="bi bi-x-lg"></i>
+                        </a>
+                    </td>
+                    {{-- Tipo + Subtipo --}}
+                    <td class="p-1">
+                        <select name="tipo" class="form-select form-select-sm mb-1" onchange="this.form.submit()">
+                            <option value="">Todos</option>
+                            <option value="ingreso"  {{ request('tipo') === 'ingreso'  ? 'selected' : '' }}>Ingreso</option>
+                            <option value="salida"   {{ request('tipo') === 'salida'   ? 'selected' : '' }}>Salida</option>
+                        </select>
+                        <select name="subtipo" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Subtipo...</option>
+                            <option value="pago_venta"        {{ request('subtipo') === 'pago_venta'        ? 'selected' : '' }}>Pago venta</option>
+                            <option value="compra"            {{ request('subtipo') === 'compra'            ? 'selected' : '' }}>Compra</option>
+                            <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo favor</option>
+                            <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
+                        </select>
+                    </td>
+                    {{-- Categoría --}}
+                    <td class="p-1">
+                        <input type="text" name="categoria" value="{{ request('categoria') }}"
+                               class="form-control form-control-sm"
+                               placeholder="Buscar...">
+                    </td>
+                    {{-- Empresa --}}
+                    <td class="p-1">
+                        <select name="empresa" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Todas</option>
+                            <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+                            <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
+                        </select>
+                    </td>
+                    {{-- Método --}}
+                    <td class="p-1">
+                        <select name="metodo_pago" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Todos</option>
+                            <option value="efectivo"      {{ request('metodo_pago') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
+                            <option value="yape"          {{ request('metodo_pago') === 'yape'          ? 'selected' : '' }}>Yape</option>
+                            <option value="plin"          {{ request('metodo_pago') === 'plin'          ? 'selected' : '' }}>Plin</option>
+                            <option value="deposito"      {{ request('metodo_pago') === 'deposito'      ? 'selected' : '' }}>Depósito</option>
+                            <option value="transferencia" {{ request('metodo_pago') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
+                        </select>
+                    </td>
+                    {{-- Cliente --}}
+                    <td class="p-1">
+                        <input type="text" name="cliente" value="{{ request('cliente') }}"
+                               class="form-control form-control-sm"
+                               placeholder="Buscar...">
+                    </td>
+                    {{-- Documento --}}
+                    <td class="p-1">
+                        <input type="text" name="documento" value="{{ request('documento') }}"
+                               class="form-control form-control-sm"
+                               placeholder="Buscar...">
+                    </td>
+                    {{-- Estado --}}
+                    <td class="p-1">
+                        <select name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Todos</option>
+                            <option value="activo"  {{ request('estado') === 'activo'  ? 'selected' : '' }}>Activo</option>
+                            <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
+                        </select>
+                    </td>
+                    {{-- Monto (vacío) --}}
+                    <td class="p-1"></td>
+                    {{-- Fecha: Desde / Hasta --}}
+                    <td class="p-1">
+                        <input type="date" name="desde" value="{{ $desde }}"
+                               class="form-control form-control-sm mb-1" title="Desde">
+                        <input type="date" name="hasta" value="{{ $hasta }}"
+                               class="form-control form-control-sm" title="Hasta">
+                    </td>
                 </tr>
             </thead>
             <tbody>
