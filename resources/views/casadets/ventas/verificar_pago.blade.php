@@ -12,13 +12,6 @@
 
     $metodosActuales = array_filter(explode(',', $venta->metodo_pago ?? ''));
     $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['ninguno'];
-<<<<<<< HEAD
-
-    $tieneValesPendientes = isset($ventasPendientesCliente) && $ventasPendientesCliente->count() > 0;
-    $colIzq = 'col-md-5';
-    $colMed = 'col-md-7';
-=======
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
 @endphp
 
 <style>
@@ -79,24 +72,16 @@
 .diferencia-pill { font-size:.78rem; padding:.2rem .5rem; border-radius:20px; display:inline-block; white-space:nowrap; }
 .historial-row { font-size:.85rem; }
 .banco-hint { font-size:.73rem; color:#6c757d; }
-<<<<<<< HEAD
-.vale-item { cursor:default; transition:background .1s; }
-.vale-item:hover { background:#f0f4ff; }
-.vale-item.seleccionado { background:#e8f0fe; border-color:#0d6efd !important; }
-.venta-seleccionada { display:none; }
-.venta-seleccionada.visible { display:block; }
+.vale-adicional-card { border:1.5px solid #dee2e6; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; cursor:pointer; transition:background .1s, border-color .1s; }
+.vale-adicional-card:hover { background:#f0f4ff; border-color:#0d6efd; }
+.vale-adicional-card.seleccionado { background:#e8f0fe; border-color:#0d6efd; }
+.vale-adicional-card.seleccionado .vale-check { color:#0d6efd; }
 @media (max-width: 576px) {
     .pago-row-top { grid-template-columns:32px 1fr 34px; }
     .pago-monto-field { grid-column:2 / 3; }
     .pago-row-desc { padding-left:0; }
     .pago-header-total { width:100%; justify-content:flex-start !important; margin-top:.35rem; }
 }
-=======
-.vale-adicional-card { border:1.5px solid #dee2e6; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; cursor:pointer; transition:background .1s, border-color .1s; }
-.vale-adicional-card:hover { background:#f0f4ff; border-color:#0d6efd; }
-.vale-adicional-card.seleccionado { background:#e8f0fe; border-color:#0d6efd; }
-.vale-adicional-card.seleccionado .vale-check { color:#0d6efd; }
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
 </style>
 
 <div id="toastContainer" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;min-width:300px;"></div>
@@ -255,8 +240,6 @@
             </div>
         </div>
 
-<<<<<<< HEAD
-=======
         {{-- Vales adicionales del mismo cliente --}}
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-header bg-white d-flex align-items-center justify-content-between">
@@ -351,36 +334,43 @@
                 <div class="card-body">
                     <div class="text-muted small mb-2">
                         <i class="bi bi-info-circle me-1"></i>
-                        Para transferencias indica el banco o cuenta en <strong>Banco / referencia</strong>.
+                        Para transferencias, Yape o Plin indica el destino en <strong>Destino / referencia</strong>.
                     </div>
 
                     <div id="pagosContainer">
                         @foreach($primerosMetodos as $pi => $met)
                         <div class="pago-row">
                             <div class="pago-row-top">
-                                <div class="text-muted fw-semibold me-1" style="min-width:18px;font-size:.8rem;">{{ $pi + 1 }}</div>
-                                <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1.2;">
-                                    @foreach($metodos as $m)
-                                        <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
-                                            {{ $metodoLabels[$m] ?? ucfirst($m) }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <div class="input-group input-group-sm" style="width:140px;">
-                                    <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-                                    <input type="number" name="pagos[{{ $pi }}][monto]"
-                                        value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
-                                        step="0.01" min="0"
-                                        class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                                <span class="pago-row-index">{{ $pi + 1 }}</span>
+                                <div>
+                                    <label class="pago-field-label">Método</label>
+                                    <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel">
+                                        @foreach($metodos as $m)
+                                            <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
+                                                {{ $metodoLabels[$m] ?? ucfirst($m) }}
+                                            </option>
+                                        @endforeach
+                                    </select>
                                 </div>
-                                <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
+                                <div class="pago-monto-field">
+                                    <label class="pago-field-label">Monto</label>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                                        <input type="number" name="pagos[{{ $pi }}][monto]"
+                                            value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
+                                            step="0.01" min="0"
+                                            class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" title="Quitar">
                                     <i class="bi bi-x-circle-fill"></i>
                                 </button>
                             </div>
-                            <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta']) ? 'visible' : '' }}">
+                            <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta','yape','plin']) ? 'visible' : '' }}">
+                                <label class="pago-field-label">Destino / referencia</label>
                                 <input type="text" name="pagos[{{ $pi }}][descripcion]"
-                                    class="form-control form-control-sm desc-pago mt-1"
-                                    placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
+                                    class="form-control form-control-sm desc-pago"
+                                    placeholder="Destino / referencia (ej: BCP, Yape Juan, Plin tienda)"
                                     maxlength="200">
                             </div>
                         </div>
@@ -391,8 +381,7 @@
                         <i class="bi bi-plus-lg me-1"></i> Agregar método de pago
                     </button>
 
-                    {{-- Resumen --}}
-                    <div class="mt-3 p-2 bg-light rounded">
+                    <div class="mt-3 p-2 bg-light pago-resumen">
                         <div class="row text-center">
                             <div class="col-4">
                                 <div class="text-muted" style="font-size:.72rem;">Pendiente total</div>
@@ -434,7 +423,6 @@
 
         {{-- Historial de cobros (debajo del formulario) --}}
         @if(isset($historial) && $historial->count() > 0)
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-header bg-white d-flex align-items-center justify-content-between">
                 <div>
@@ -576,168 +564,7 @@
         </div>
         @endif
 
-<<<<<<< HEAD
-    {{-- ── Columna central: formulario de pago ─────────────────── --}}
-    <div class="{{ $colMed }}">
-        <form id="formPago" action="/casadets/ventas/{{ $venta->id }}/pago" method="POST">
-            @csrf
-            {{-- Inputs ocultos para vales adicionales (se llenan por JS) --}}
-            <div id="ventasAdicionalesHidden"></div>
-
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <span>
-                        <i class="bi bi-credit-card me-1"></i>
-                        {{ $ventaPagada ? 'Registrar pago adicional' : 'Registrar pago' }}
-                    </span>
-                    <div class="pago-header-total d-flex align-items-center justify-content-end gap-2">
-                        <span class="text-muted small">Total:</span>
-                        <span class="total-pill text-primary" id="totalCobradoDisplay">S/ 0.00</span>
-                        <span class="diferencia-pill bg-light text-muted" id="diferenciaPill">—</span>
-                    </div>
-                </div>
-                <div class="card-body">
-
-                    {{-- Info texto --}}
-                    <div class="text-muted small mb-2">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Para transferencias, Yape o Plin indica el destino o cuenta en <strong>Destino / referencia</strong>.
-                    </div>
-
-                    <div id="pagosContainer">
-                        @foreach($primerosMetodos as $pi => $met)
-                        <div class="pago-row">
-                            <div class="pago-row-top">
-                                <span class="pago-row-index">{{ $pi + 1 }}</span>
-                                <div>
-                                    <label class="pago-field-label">Método</label>
-                                    <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel">
-                                        @foreach($metodos as $m)
-                                            <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
-                                                {{ $metodoLabels[$m] ?? ucfirst($m) }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="pago-monto-field">
-                                    <label class="pago-field-label">Monto</label>
-                                    <div class="input-group input-group-sm">
-                                        <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-                                        <input type="number" name="pagos[{{ $pi }}][monto]"
-                                            value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
-                                            step="0.01" min="0"
-                                            class="form-control form-control-sm text-end monto-pago border-start-0" required>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" title="Quitar">
-                                    <i class="bi bi-x-circle-fill"></i>
-                                </button>
-                            </div>
-                            <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta','yape','plin']) ? 'visible' : '' }}">
-                                <label class="pago-field-label">Destino / referencia</label>
-                                <input type="text" name="pagos[{{ $pi }}][descripcion]"
-                                    class="form-control form-control-sm desc-pago"
-                                    placeholder="Destino / referencia (ej: BCP, Yape Juan, Plin tienda)"
-                                    maxlength="200">
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                    <button type="button" class="btn-add-pago" id="btnAgregarPago">
-                        <i class="bi bi-plus-lg me-1"></i> Agregar método de pago
-                    </button>
-
-                    {{-- Resumen combinado --}}
-                    <div class="mt-3 p-2 bg-light pago-resumen">
-                        <div class="row text-center">
-                            <div class="col-4">
-                                <div class="text-muted" style="font-size:.72rem;">Pendiente total</div>
-                                <div class="fw-bold text-danger" id="pendienteTotalDisplay">S/ {{ number_format($saldoPendiente, 2) }}</div>
-                                <div id="labelAdicionales" class="text-primary" style="font-size:.65rem;display:none;">
-                                    +<span id="numAdicionalesLabel">0</span> vale(s) adicional(es)
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-muted" style="font-size:.72rem;">Este pago</div>
-                                <div class="fw-bold text-primary" id="totalResumen">S/ 0.00</div>
-                            </div>
-                            <div class="col-4">
-                                <div class="text-muted" style="font-size:.72rem;">Diferencia</div>
-                                <div id="difResumen" class="fw-semibold text-muted">—</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="card-footer bg-white">
-                    <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                        <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary btn-sm">Cancelar</a>
-                        <div class="d-flex align-items-center gap-2">
-                            <select name="estado_manual" id="estadoManual" class="form-select form-select-sm" style="width:auto;">
-                                <option value="" selected>Automático</option>
-                                <option value="pendiente">⏳ Pendiente</option>
-                                <option value="pagado">✔ Pagado</option>
-                                <option value="anulado">✕ Anulado</option>
-                            </select>
-                            <span id="estadoAutoLabel" class="badge bg-secondary small text-nowrap">se calculará al guardar</span>
-                        </div>
-                        <button id="btnGuardar" class="btn btn-success px-3">
-                            <i class="bi bi-check-lg me-1"></i> Guardar pago
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </form>
-
-        {{-- Historial de pagos anteriores --}}
-        @if(isset($historial) && $historial->count() > 0)
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-clock-history me-1 text-secondary"></i> Historial de cobros
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm mb-0 align-middle historial-row">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Método / Banco</th>
-                            <th class="text-end">Aplicado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($historial as $h)
-                        <tr>
-                            <td>{{ $h->created_at->format('d/m/Y') }}</td>
-                            <td>
-                                @foreach($h->pago->metodos ?? [] as $met)
-                                    <span class="badge bg-secondary">{{ ucfirst($met->metodo) }}</span>
-                                    @if($met->descripcion)
-                                        <span class="banco-hint">{{ $met->descripcion }}</span>
-                                    @endif
-                                @endforeach
-                                @if(($h->pago->metodos ?? collect())->isEmpty())
-                                    @foreach(explode(',', $h->pago->metodo_pago ?? '—') as $met)
-                                        <span class="badge bg-secondary">{{ ucfirst(trim($met)) }}</span>
-                                    @endforeach
-                                @endif
-                            </td>
-                            <td class="text-end fw-semibold text-success">S/ {{ number_format($h->monto_aplicado, 2) }}</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot class="table-light">
-                        <tr>
-                            <th colspan="2" class="text-end">Total cobrado</th>
-                            <th class="text-end">S/ {{ number_format($historial->sum('monto_aplicado'), 2) }}</th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-        @endif
-    </div>
-=======
     </div>{{-- /col derecha --}}
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
 
 </div>{{-- /row --}}
 
@@ -747,15 +574,9 @@ const METODO_LABELS  = @json($metodoLabels);
 const TOTAL_REAL     = {{ (float) $totalVenta }};
 const YA_PAGADO      = {{ (float) $yaPagedo }};
 const SALDO_PENDIENTE = {{ (float) $saldoPendiente }};
-<<<<<<< HEAD
 const VENTA_PAGADA    = {{ $ventaPagada ? 'true' : 'false' }};
 const VENTA_ID        = {{ $venta->id }};
 const METODOS_CON_DESC = ['transferencia', 'tarjeta', 'yape', 'plin'];
-=======
-const VENTA_PAGADA   = {{ $ventaPagada ? 'true' : 'false' }};
-const VENTA_ID       = {{ $venta->id }};
-const METODOS_CON_DESC = ['transferencia', 'tarjeta'];
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
 let pagoIdx = {{ count($primerosMetodos) }};
 let saldoAdicionalSel = 0;
 
@@ -950,18 +771,11 @@ function crearFila(met = 'transferencia') {
                 <i class="bi bi-x-circle-fill"></i>
             </button>
         </div>
-<<<<<<< HEAD
         <div class="pago-row-desc ${showDesc ? 'visible' : ''}">
             <label class="pago-field-label">Destino / referencia</label>
             <input type="text" name="pagos[${pagoIdx}][descripcion]"
                 class="form-control form-control-sm desc-pago"
                 placeholder="Destino / referencia (ej: BCP, Yape Juan, Plin tienda)"
-=======
-        <div class="pago-row-desc ${METODOS_CON_DESC.includes(met)?'visible':''}">
-            <input type="text" name="pagos[${pagoIdx}][descripcion]"
-                class="form-control form-control-sm desc-pago mt-1"
-                placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
                 maxlength="200">
         </div>`;
     pagoIdx++;
@@ -995,116 +809,6 @@ document.getElementById('btnAgregarPago').addEventListener('click', () => {
 
 document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
 
-<<<<<<< HEAD
-// ── Vales adicionales del mismo cliente ───────────────────────
-@if($tieneValesPendientes)
-function actualizarVentasSeleccionadas() {
-    const seleccionados = new Set(
-        [...document.querySelectorAll('.vale-adicional-check:checked')].map(c => c.value)
-    );
-
-    document.querySelectorAll('.venta-seleccionada').forEach(card => {
-        card.classList.toggle('visible', seleccionados.has(card.dataset.ventaDetalle));
-    });
-
-    const contenedor = document.getElementById('ventasSeleccionadas');
-    if (contenedor) {
-        contenedor.style.display = seleccionados.size > 0 ? '' : 'none';
-    }
-}
-
-function actualizarValesAdicionales() {
-    const checks = document.querySelectorAll('.vale-adicional-check:checked');
-    saldoAdicionalSel = 0;
-
-    const hidden = document.getElementById('ventasAdicionalesHidden');
-    hidden.innerHTML = '';
-
-    checks.forEach(c => {
-        saldoAdicionalSel += parseFloat(c.dataset.saldo) || 0;
-        const h = document.createElement('input');
-        h.type = 'hidden'; h.name = 'ventas_adicionales[]'; h.value = c.value;
-        hidden.appendChild(h);
-
-        c.closest('.vale-item').classList.add('seleccionado');
-    });
-
-    // Quitar seleccionado de los no marcados
-    document.querySelectorAll('.vale-adicional-check:not(:checked)').forEach(c => {
-        c.closest('.vale-item').classList.remove('seleccionado');
-    });
-
-    saldoAdicionalSel = Math.round(saldoAdicionalSel * 100) / 100;
-    const saldoCombinado = SALDO_PENDIENTE + saldoAdicionalSel;
-
-    // Actualizar "Pendiente total" en el formulario de pago
-    document.getElementById('pendienteTotalDisplay').textContent = 'S/ ' + saldoCombinado.toFixed(2);
-
-    const labelAdicionales = document.getElementById('labelAdicionales');
-    const numAdicionalesLabel = document.getElementById('numAdicionalesLabel');
-    if (checks.length > 0) {
-        labelAdicionales.style.display = '';
-        numAdicionalesLabel.textContent = checks.length;
-        document.getElementById('resumenAdicionales').style.display = '';
-        document.getElementById('countAdicionales').textContent = checks.length;
-        document.getElementById('totalAdicionalesLabel').textContent = 'S/ ' + saldoAdicionalSel.toFixed(2);
-    } else {
-        labelAdicionales.style.display = 'none';
-        document.getElementById('resumenAdicionales').style.display = 'none';
-    }
-
-    actualizarVentasSeleccionadas();
-
-    // Auto-rellenar el monto de pago con el saldo combinado
-    const primerMonto = document.querySelector('.monto-pago');
-    if (primerMonto) {
-        primerMonto.value = saldoCombinado.toFixed(2);
-    }
-
-    recalc();
-}
-
-// Click en toda la tarjeta del vale también hace toggle
-document.querySelectorAll('.vale-item').forEach(item => {
-    item.addEventListener('click', e => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'LABEL') return;
-        const chk = item.querySelector('.vale-adicional-check');
-        if (chk) { chk.checked = !chk.checked; actualizarValesAdicionales(); }
-    });
-});
-
-document.querySelectorAll('.vale-adicional-check').forEach(c => {
-    c.addEventListener('change', actualizarValesAdicionales);
-});
-
-document.querySelectorAll('.quitar-vale-seleccionado').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const chk = document.getElementById('vale_' + btn.dataset.ventaId);
-        if (chk) {
-            chk.checked = false;
-            actualizarValesAdicionales();
-        }
-    });
-});
-
-// Buscador de vales
-function normalizar(s) {
-    return (s||'').toLowerCase()
-        .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
-        .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
-        .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
-}
-document.getElementById('buscarVale').addEventListener('input', function() {
-    const q = normalizar(this.value.trim());
-    document.querySelectorAll('.vale-item').forEach(item => {
-        const txt = normalizar(item.dataset.buscar || '');
-        item.style.display = (!q || txt.includes(q)) ? '' : 'none';
-    });
-});
-@endif
-
-// ── Toast y envío AJAX ─────────────────────────────────────────
-=======
 // ── Buscador de vales (si hay > 3) ────────────────────────────
 const buscarValeEl = document.getElementById('buscarVale');
 if (buscarValeEl) {
@@ -1124,7 +828,6 @@ if (buscarValeEl) {
 }
 
 // ── Toast ──────────────────────────────────────────────────────
->>>>>>> 3f9c67f65aadb2c7f0c2eafc52156469ff94b833
 function showToast(msg, type = 'success') {
     const el = document.createElement('div');
     el.className = `alert alert-${type} shadow mb-2`;
