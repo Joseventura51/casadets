@@ -15,12 +15,16 @@
 @endphp
 
 <style>
-.pago-row { background:#f8f9fa; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; display:flex; gap:.5rem; align-items:center; }
+.pago-row { background:#f8f9fa; border-radius:8px; padding:.5rem .75rem; margin-bottom:.4rem; }
+.pago-row-top { display:flex; gap:.5rem; align-items:center; }
+.pago-row-desc { padding:.3rem .75rem .1rem; display:none; }
+.pago-row-desc.visible { display:block; }
 .btn-add-pago { border:1.5px dashed #0d6efd; border-radius:8px; font-size:.82rem; padding:.3rem .9rem; color:#0d6efd; background:transparent; cursor:pointer; width:100%; margin-top:.3rem; }
 .btn-add-pago:hover { background:#e8f0fe; }
 .total-pill { font-size:1.4rem; font-weight:700; }
 .diferencia-pill { font-size:.82rem; padding:.2rem .6rem; border-radius:20px; display:inline-block; }
 .historial-row { font-size:.85rem; }
+.banco-hint { font-size:.75rem; color:#6c757d; }
 </style>
 
 <div id="toastContainer" style="position:fixed;bottom:1.5rem;right:1.5rem;z-index:9999;min-width:300px;"></div>
@@ -56,7 +60,6 @@
 
 <div id="alertContainer"></div>
 
-{{-- Alerta si ya está pagada --}}
 @if($ventaPagada)
 <div class="alert alert-success d-flex align-items-center gap-2 mb-3">
     <i class="bi bi-check-circle-fill fs-5"></i>
@@ -75,7 +78,6 @@
 </div>
 @endif
 
-{{-- Saldo a favor del cliente: panel interactivo --}}
 @if(isset($saldoFavor) && $saldoFavor > 0 && !$ventaPagada)
 <div class="alert alert-info border-info mb-3 p-0 overflow-hidden">
     <div class="d-flex align-items-center gap-3 px-3 py-2">
@@ -198,7 +200,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Fecha</th>
-                            <th>Método</th>
+                            <th>Método / Banco</th>
                             <th class="text-end">Aplicado</th>
                         </tr>
                     </thead>
@@ -207,9 +209,17 @@
                         <tr>
                             <td>{{ $h->created_at->format('d/m/Y') }}</td>
                             <td>
-                                @foreach(explode(',', $h->pago->metodo_pago ?? '—') as $met)
-                                    <span class="badge bg-secondary">{{ ucfirst(trim($met)) }}</span>
+                                @foreach($h->pago->metodos ?? [] as $met)
+                                    <span class="badge bg-secondary">{{ ucfirst($met->metodo) }}</span>
+                                    @if($met->descripcion)
+                                        <span class="banco-hint">{{ $met->descripcion }}</span>
+                                    @endif
                                 @endforeach
+                                @if(($h->pago->metodos ?? collect())->isEmpty())
+                                    @foreach(explode(',', $h->pago->metodo_pago ?? '—') as $met)
+                                        <span class="badge bg-secondary">{{ ucfirst(trim($met)) }}</span>
+                                    @endforeach
+                                @endif
                             </td>
                             <td class="text-end fw-semibold text-success">S/ {{ number_format($h->monto_aplicado, 2) }}</td>
                         </tr>
@@ -248,26 +258,40 @@
                     </div>
                 </div>
                 <div class="card-body">
+
+                    <div class="text-muted small mb-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Para transferencias puedes indicar el banco o número de cuenta en el campo <strong>Banco / referencia</strong>.
+                    </div>
+
                     <div id="pagosContainer">
                         @foreach($primerosMetodos as $pi => $met)
                         <div class="pago-row">
-                            <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1;">
-                                @foreach($metodos as $m)
-                                    <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
-                                        {{ $metodoLabels[$m] ?? ucfirst($m) }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            <div class="input-group input-group-sm" style="width:130px;">
-                                <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-                                <input type="number" name="pagos[{{ $pi }}][monto]"
-                                    value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
-                                    step="0.01" min="0"
-                                    class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                            <div class="pago-row-top">
+                                <select name="pagos[{{ $pi }}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1.2;">
+                                    @foreach($metodos as $m)
+                                        <option value="{{ $m }}" {{ trim($met)==$m ? 'selected' : '' }}>
+                                            {{ $metodoLabels[$m] ?? ucfirst($m) }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <div class="input-group input-group-sm" style="width:130px;">
+                                    <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                                    <input type="number" name="pagos[{{ $pi }}][monto]"
+                                        value="{{ $pi === 0 && !$ventaPagada ? number_format($saldoPendiente ?: 0, 2, '.', '') : '' }}"
+                                        step="0.01" min="0"
+                                        class="form-control form-control-sm text-end monto-pago border-start-0" required>
+                                </div>
+                                <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
+                                    <i class="bi bi-x-circle-fill"></i>
+                                </button>
                             </div>
-                            <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
-                                <i class="bi bi-x-circle-fill"></i>
-                            </button>
+                            <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta']) ? 'visible' : '' }}">
+                                <input type="text" name="pagos[{{ $pi }}][descripcion]"
+                                    class="form-control form-control-sm desc-pago"
+                                    placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
+                                    maxlength="200">
+                            </div>
                         </div>
                         @endforeach
                     </div>
@@ -330,6 +354,22 @@ const VENTA_PAGADA   = {{ $ventaPagada ? 'true' : 'false' }};
 const VENTA_ID       = {{ $venta->id }};
 let pagoIdx = {{ count($primerosMetodos) }};
 
+// Métodos que muestran el campo banco/referencia
+const METODOS_CON_DESC = ['transferencia', 'tarjeta'];
+
+function toggleDesc(row) {
+    const metodo = row.querySelector('select.metodo-sel')?.value ?? '';
+    const desc   = row.querySelector('.pago-row-desc');
+    if (!desc) return;
+    if (METODOS_CON_DESC.includes(metodo)) {
+        desc.classList.add('visible');
+    } else {
+        desc.classList.remove('visible');
+        const inp = desc.querySelector('input');
+        if (inp) inp.value = '';
+    }
+}
+
 function recalc() {
     let total = 0;
     document.querySelectorAll('.monto-pago').forEach(i => {
@@ -345,7 +385,6 @@ function recalc() {
     const dRes  = document.getElementById('difResumen');
 
     if (VENTA_PAGADA) {
-        // Cualquier monto = saldo a favor
         if (total > 0) {
             pill.className = 'diferencia-pill bg-info text-white';
             pill.textContent = 'Saldo favor +S/ ' + total.toFixed(2);
@@ -416,28 +455,42 @@ document.getElementById('estadoManual').addEventListener('change', () => {
 
 function reindex() {
     document.querySelectorAll('#pagosContainer .pago-row').forEach((row, i) => {
-        row.querySelector('select').name = `pagos[${i}][metodo]`;
-        row.querySelector('input').name  = `pagos[${i}][monto]`;
+        const sel = row.querySelector('select.metodo-sel');
+        const inp = row.querySelector('input.monto-pago');
+        const desc = row.querySelector('input.desc-pago');
+        if (sel)  sel.name  = `pagos[${i}][metodo]`;
+        if (inp)  inp.name  = `pagos[${i}][monto]`;
+        if (desc) desc.name = `pagos[${i}][descripcion]`;
     });
     pagoIdx = document.querySelectorAll('#pagosContainer .pago-row').length;
 }
 
 function crearFila(met = 'ninguno', monto = '') {
+    const showDesc = METODOS_CON_DESC.includes(met);
+    const opts = METODOS.map(m => `<option value="${m}" ${m===met?'selected':''}>${METODO_LABELS[m]||m}</option>`).join('');
     const div = document.createElement('div');
     div.className = 'pago-row';
     div.innerHTML = `
-        <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1;">
-            ${METODOS.map(m=>`<option value="${m}" ${m===met?'selected':''}>${METODO_LABELS[m]||m}</option>`).join('')}
-        </select>
-        <div class="input-group input-group-sm" style="width:130px;">
-            <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-            <input type="number" name="pagos[${pagoIdx}][monto]"
-                value="${monto}" step="0.01" min="0"
-                class="form-control form-control-sm text-end monto-pago border-start-0" required>
+        <div class="pago-row-top">
+            <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1.2;">
+                ${opts}
+            </select>
+            <div class="input-group input-group-sm" style="width:130px;">
+                <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
+                <input type="number" name="pagos[${pagoIdx}][monto]"
+                    value="${monto}" step="0.01" min="0"
+                    class="form-control form-control-sm text-end monto-pago border-start-0" required>
+            </div>
+            <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
+                <i class="bi bi-x-circle-fill"></i>
+            </button>
         </div>
-        <button type="button" class="btn p-1 lh-1 text-danger border-0 bg-transparent btn-del-pago" style="font-size:1.1rem;" title="Quitar">
-            <i class="bi bi-x-circle-fill"></i>
-        </button>`;
+        <div class="pago-row-desc ${showDesc ? 'visible' : ''}">
+            <input type="text" name="pagos[${pagoIdx}][descripcion]"
+                class="form-control form-control-sm desc-pago"
+                placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
+                maxlength="200">
+        </div>`;
     pagoIdx++;
     return div;
 }
@@ -446,7 +499,10 @@ document.getElementById('pagosContainer').addEventListener('input', e => {
     if (e.target.classList.contains('monto-pago') || e.target.classList.contains('metodo-sel')) recalc();
 });
 document.getElementById('pagosContainer').addEventListener('change', e => {
-    if (e.target.classList.contains('metodo-sel')) recalc();
+    if (e.target.classList.contains('metodo-sel')) {
+        toggleDesc(e.target.closest('.pago-row'));
+        recalc();
+    }
 });
 document.getElementById('pagosContainer').addEventListener('click', e => {
     const btn = e.target.closest('.btn-del-pago');
@@ -458,10 +514,13 @@ document.getElementById('pagosContainer').addEventListener('click', e => {
     reindex(); recalc();
 });
 document.getElementById('btnAgregarPago').addEventListener('click', () => {
-    const row = crearFila('efectivo', '');
+    const row = crearFila('transferencia', '');
     document.getElementById('pagosContainer').appendChild(row);
     row.querySelector('.monto-pago').focus();
 });
+
+// Inicializar toggleDesc en filas existentes
+document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
 
 // ── AJAX submit ────────────────────────────────────────────────
 function showToast(msg, type = 'success') {
@@ -476,7 +535,6 @@ function showToast(msg, type = 'success') {
 document.getElementById('formPago').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    // Calcular total que se va a ingresar en este pago
     let totalNuevo = 0;
     document.querySelectorAll('.monto-pago').forEach(i => {
         const row = i.closest('.pago-row');
@@ -484,150 +542,81 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
         if (metodo !== 'ninguno') totalNuevo += parseFloat(i.value) || 0;
     });
 
-    const estadoManual   = document.getElementById('estadoManual').value;
-    const acumulado      = YA_PAGADO + totalNuevo;
-    const diferencia     = acumulado - TOTAL_REAL;
-
-    // ── Confirmación 1: marcando como Pagado pero el monto es menor al total del vale
-    if (estadoManual === 'pagado' && totalNuevo > 0 && diferencia < -0.005) {
-        const faltan = Math.abs(diferencia).toFixed(2);
-        const ok = confirm(
-            `⚠️ El monto a cobrar (S/ ${acumulado.toFixed(2)}) es menor al total del vale (S/ ${TOTAL_REAL.toFixed(2)}).\n\n` +
-            `Diferencia: S/ ${faltan}\n\n` +
-            `Al confirmar, el vale se marcará como PAGADO por S/ ${acumulado.toFixed(2)} y el valor del vale se reducirá a dicho monto.\n\n` +
-            `¿Deseas continuar?`
-        );
-        if (!ok) return;
-    }
-
-    // ── Confirmación 2: el pago genera saldo a favor (excedente)
-    if (!VENTA_PAGADA && diferencia > 0.005 && totalNuevo > 0) {
-        const excedente = diferencia.toFixed(2);
-        const ok = confirm(
-            `ℹ️ El monto ingresado supera el total del vale en S/ ${excedente}.\n\n` +
-            `El excedente se registrará como SALDO A FAVOR del cliente.\n\n` +
-            `¿Confirmar saldo a favor de S/ ${excedente}?`
-        );
-        if (!ok) return;
-    }
-
-    // ── Confirmación 3: venta ya pagada, pago adicional → saldo a favor
-    if (VENTA_PAGADA && totalNuevo > 0) {
-        const ok = confirm(
-            `ℹ️ La venta ya está pagada.\n\n` +
-            `El monto adicional de S/ ${totalNuevo.toFixed(2)} se registrará como SALDO A FAVOR del cliente.\n\n` +
-            `¿Confirmar saldo a favor de S/ ${totalNuevo.toFixed(2)}?`
-        );
-        if (!ok) return;
-    }
-
     const btn = document.getElementById('btnGuardar');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Guardando…';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
 
     try {
+        const fd  = new FormData(e.target);
         const res = await fetch(e.target.action, {
-            method:  'POST',
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body:    new FormData(e.target),
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': fd.get('_token') },
+            body: fd,
         });
-        const data = await res.json();
+        const json = await res.json();
 
-        if (!res.ok) {
-            const msgs = data.errors
-                ? Object.values(data.errors).flat().join(' ')
-                : (data.message || 'Error al guardar el pago.');
-            throw new Error(msgs);
+        if (json.success) {
+            showToast('Pago guardado correctamente.' + (json.msg_saldo_favor ? ' ' + json.msg_saldo_favor : ''), 'success');
+            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1500);
+        } else {
+            const errs = json.errors ? Object.values(json.errors).flat().join(' ') : (json.message || 'Error desconocido');
+            showToast(errs, 'danger');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardar pago';
         }
-
-        const estadoLabels = { pagado:'Pagado', parcial:'Pago parcial', pendiente:'Pendiente', anulado:'Anulado' };
-        let msg = 'Pago guardado. Estado: <strong>' + (estadoLabels[data.estado] || data.estado) + '</strong>';
-        if (data.msg_saldo_favor) msg += '<br><i class="bi bi-wallet2 me-1"></i>' + data.msg_saldo_favor;
-        if (data.saldo_pendiente > 0 && data.estado === 'parcial') {
-            msg += '<br><span class="text-warning">Saldo pendiente: S/ ' + data.saldo_pendiente.toFixed(2) + '</span>';
-        }
-
-        showToast(msg);
-        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardado';
-        btn.className = 'btn btn-outline-success px-4';
-
-        setTimeout(() => { window.location.href = `/casadets/ventas/${VENTA_ID}`; }, 2000);
-
-    } catch (err) {
-        showToast(err.message, 'danger');
+    } catch(err) {
+        showToast('Error de red: ' + err.message, 'danger');
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Guardar pago';
     }
 });
 
-// ── Aplicar saldo a favor desde esta misma pantalla ───────────
+// ── Aplicar saldo a favor (AJAX) ───────────────────────────────
 document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
-    btn.addEventListener('click', async function() {
-        const saldoId   = this.dataset.saldoId;
-        const inputEl   = document.getElementById(this.dataset.input);
-        const monto     = parseFloat(inputEl?.value) || 0;
-        const disponible = parseFloat(this.dataset.disponible) || 0;
-        const alerta    = document.getElementById('saldosAplicarAlerta');
+    btn.addEventListener('click', async () => {
+        const saldoId    = btn.dataset.saldoId;
+        const disponible = parseFloat(btn.dataset.disponible);
+        const inputEl    = document.getElementById(btn.dataset.input);
+        const monto      = parseFloat(inputEl?.value) || 0;
+        const alerta     = document.getElementById('saldosAplicarAlerta');
 
-        alerta.className = 'mx-3 mt-2 alert d-none';
-
-        if (monto <= 0) {
+        if (monto <= 0 || monto > disponible) {
             alerta.className = 'mx-3 mt-2 alert alert-warning';
-            alerta.textContent = 'Ingresa un monto mayor a cero.';
-            return;
-        }
-        if (monto > disponible + 0.005) {
-            alerta.className = 'mx-3 mt-2 alert alert-danger';
-            alerta.textContent = 'El monto supera el saldo disponible (S/ ' + disponible.toFixed(2) + ').';
+            alerta.textContent = 'Monto inválido (debe ser > 0 y ≤ disponible).';
+            alerta.classList.remove('d-none');
             return;
         }
 
-        // ── Confirmación antes de aplicar saldo a favor
-        const okSaldo = confirm(
-            `¿Confirmar aplicación de S/ ${monto.toFixed(2)} de saldo a favor a esta venta?\n\n` +
-            `Saldo disponible: S/ ${disponible.toFixed(2)}\n` +
-            `Monto a aplicar:  S/ ${monto.toFixed(2)}`
-        );
-        if (!okSaldo) return;
-
-        const orig = this.innerHTML;
-        this.disabled = true;
-        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
+        btn.disabled = true;
         try {
-            const form = new FormData();
-            form.append('venta_id', VENTA_ID);
-            form.append('monto', monto.toFixed(2));
-            form.append('_token', '{{ csrf_token() }}');
-
-            const res  = await fetch(`/casadets/saldos-favor/${saldoId}/aplicar`, {
+            const res = await fetch(`/casadets/saldos-favor/${saldoId}/aplicar`, {
                 method: 'POST',
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                body: form,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content
+                        || document.querySelector('input[name=_token]')?.value
+                        || '',
+                },
+                body: JSON.stringify({ venta_id: VENTA_ID, monto }),
             });
-            const data = await res.json();
-
-            if (!res.ok) throw new Error(data.message || 'Error al aplicar el saldo.');
-
-            const estadoLabels = { pagado:'Pagado', parcial:'Pago parcial', pendiente:'Pendiente' };
-            showToast(
-                '<i class="bi bi-wallet2 me-1"></i>Saldo de S/ ' + data.aplicado.toFixed(2)
-                + ' aplicado. Estado venta: <strong>' + (estadoLabels[data.estado_venta] || data.estado_venta) + '</strong>'
-                + (data.saldo_restante > 0 ? '<br>Saldo restante: S/ ' + data.saldo_restante.toFixed(2) : '')
-            );
-
-            // Recargar después de mostrar el toast
-            setTimeout(() => window.location.reload(), 2000);
-
-        } catch (err) {
+            const json = await res.json();
+            if (json.success) {
+                showToast(`Saldo a favor aplicado: S/ ${monto.toFixed(2)}. ${json.estado_venta === 'pagado' ? '¡Venta pagada!' : ''}`, 'success');
+                setTimeout(() => window.location.reload(), 1200);
+            } else {
+                alerta.className = 'mx-3 mt-2 alert alert-danger';
+                alerta.textContent = json.message || 'Error al aplicar saldo.';
+                alerta.classList.remove('d-none');
+                btn.disabled = false;
+            }
+        } catch(err) {
             alerta.className = 'mx-3 mt-2 alert alert-danger';
-            alerta.textContent = err.message;
-            this.disabled = false;
-            this.innerHTML = orig;
+            alerta.textContent = 'Error de red.';
+            alerta.classList.remove('d-none');
+            btn.disabled = false;
         }
     });
 });
-
-recalc();
 </script>
 @endsection

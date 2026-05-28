@@ -40,6 +40,8 @@ Route::get('/casadets/pendientes', [VentaController::class, 'pendientes']);
 
 // CASADETS — Ventas
 Route::get('/casadets/ventas/export', [VentaController::class, 'export']);
+Route::get('/casadets/ventas/pago-multiple', [VentaController::class, 'pagoMultiple']);
+Route::post('/casadets/ventas/pago-multiple', [VentaController::class, 'updatePagoMultiple']);
 Route::get('/casadets/ventas', [VentaController::class, 'index']);
 Route::get('/casadets/ventas/create', [VentaController::class, 'create']);
 Route::post('/casadets/ventas', [VentaController::class, 'store']);

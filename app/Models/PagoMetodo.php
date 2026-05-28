@@ -12,6 +12,7 @@ class PagoMetodo extends Model
     protected $fillable = [
         'pago_id',
         'metodo',
+        'descripcion',
         'monto',
     ];
 

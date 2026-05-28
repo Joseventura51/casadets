@@ -13,19 +13,13 @@ use Illuminate\Support\Facades\DB;
 class CobranzaService
 {
     /**
-     * Registra un pago para una venta y genera el movimiento en el ledger.
-     *
-     * Escenarios:
-     *  - Pago exacto    → venta PAGADA
-     *  - Pago parcial   → venta PARCIAL
-     *  - Pago excedente → venta PAGADA + saldo a favor (si hay cliente)
-     *  - Venta ya PAGADA → 100% saldo a favor
+     * Registra un pago para UNA venta y genera el movimiento en el ledger.
      *
      * @param  Venta        $venta
-     * @param  array        $pagosInput   [['metodo'=>'efectivo','monto'=>100.00], ...]
-     * @param  string|null  $estadoManual Fuerza estado concreto (sin efecto financiero)
-     * @param  int|null     $userId       ID del usuario (auditoría)
-     * @param  string       $empresa      Empresa dueña de la operación
+     * @param  array        $pagosInput   [['metodo'=>'efectivo','monto'=>100,'descripcion'=>'BCP'], ...]
+     * @param  string|null  $estadoManual
+     * @param  int|null     $userId
+     * @param  string       $empresa
      */
     public function registrarPago(
         Venta $venta,
@@ -36,21 +30,19 @@ class CobranzaService
     ): array {
         return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId, $empresa) {
 
-            // ── 1. Filtrar métodos reales con monto > 0 ────────────────────
             $pagosReales = collect($pagosInput)
                 ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
                 ->map(fn ($p) => [
-                    'metodo' => $p['metodo'],
-                    'monto'  => round((float) $p['monto'], 2),
+                    'metodo'      => $p['metodo'],
+                    'monto'       => round((float) $p['monto'], 2),
+                    'descripcion' => trim($p['descripcion'] ?? ''),
                 ]);
 
-            // Suma exacta con bcmath
             $montoNuevo = (float) $pagosReales->reduce(
                 fn ($carry, $p) => bcadd($carry, (string) $p['monto'], 2),
                 '0'
             );
 
-            // String de métodos únicos (display / compatibilidad)
             $metodoStr = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
 
             if ($montoNuevo <= 0) {
@@ -61,15 +53,10 @@ class CobranzaService
                     'pago'            => null,
                     'estado'          => $venta->fresh()->estado,
                     'saldo_favor'     => 0.0,
-                    'saldo_pendiente' => max(0, (float) bcsub(
-                        (string) $venta->total,
-                        (string) $venta->pagado,
-                        2
-                    )),
+                    'saldo_pendiente' => max(0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2)),
                 ];
             }
 
-            // ── 2. Crear registro de Pago ────────────────────────────────
             $pago = Pago::create([
                 'cliente_id'  => $venta->cliente_id,
                 'user_id'     => $userId,
@@ -79,22 +66,18 @@ class CobranzaService
                 'fecha'       => now()->toDateString(),
             ]);
 
-            // ── 3. Desglose real por método ──────────────────────────────
             foreach ($pagosReales as $p) {
                 PagoMetodo::create([
-                    'pago_id' => $pago->id,
-                    'metodo'  => $p['metodo'],
-                    'monto'   => $p['monto'],
+                    'pago_id'     => $pago->id,
+                    'metodo'      => $p['metodo'],
+                    'descripcion' => $p['descripcion'] ?: null,
+                    'monto'       => $p['monto'],
                 ]);
             }
 
-            // ── 4. Calcular monto aplicable (bcmath) ─────────────────────
             $totalDeuda    = (float) $venta->total;
             $yaPagado      = (float) $venta->pagado;
-            $saldoDeuda    = (float) max(
-                '0',
-                bcsub((string) $totalDeuda, (string) $yaPagado, 2)
-            );
+            $saldoDeuda    = (float) max('0', bcsub((string) $totalDeuda, (string) $yaPagado, 2));
             $ventaYaPagada = $venta->estado === 'pagado';
 
             if ($ventaYaPagada) {
@@ -105,7 +88,6 @@ class CobranzaService
                 $excedente     = (float) bcsub((string) $montoNuevo, (string) $montoAplicado, 2);
             }
 
-            // ── 5. Vincular pago con venta ───────────────────────────────
             if ($montoAplicado > 0) {
                 DetallePagoFactura::create([
                     'pago_id'        => $pago->id,
@@ -124,7 +106,6 @@ class CobranzaService
                 }
             }
 
-            // ── 6. Saldo a favor si hay excedente + cliente ──────────────
             $hayExcedente = $excedente > 0;
 
             if ($hayExcedente && $venta->cliente_id) {
@@ -147,10 +128,6 @@ class CobranzaService
                 $pago->update(['estado' => $montoAplicado > 0 ? 'parcial' : 'saldo_favor']);
             }
 
-            // ── 7. Movimiento en ledger ──────────────────────────────────
-            // NOTA: solo se registra el monto total del pago recibido (montoNuevo).
-            // NO se registra el saldo a favor como ingreso separado
-            // (ya está incluido en montoNuevo). Sin doble conteo.
             $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
             Movimiento::create([
                 'tipo'             => 'ingreso',
@@ -176,11 +153,137 @@ class CobranzaService
                 'pago'            => $pago,
                 'estado'          => $venta->estado,
                 'saldo_favor'     => $hayExcedente ? $excedente : 0.0,
-                'saldo_pendiente' => max(0, (float) bcsub(
-                    (string) $venta->total,
-                    (string) $venta->pagado,
-                    2
-                )),
+                'saldo_pendiente' => max(0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2)),
+            ];
+        });
+    }
+
+    /**
+     * Registra un pago para MÚLTIPLES ventas en una sola operación.
+     * El pago se aplica FIFO (más antiguas primero) hasta agotar el monto.
+     *
+     * @param  int[]    $ventaIds
+     * @param  array    $pagosInput  [['metodo'=>'...','monto'=>...,'descripcion'=>'...'], ...]
+     * @param  int|null $userId
+     * @param  string   $empresa
+     */
+    public function registrarPagoMultiple(
+        array $ventaIds,
+        array $pagosInput,
+        ?int $userId = null,
+        string $empresa = 'casadets'
+    ): array {
+        return DB::transaction(function () use ($ventaIds, $pagosInput, $userId, $empresa) {
+
+            // Cargar ventas pendientes/parciales en orden FIFO
+            $ventas = Venta::whereIn('id', $ventaIds)
+                ->whereIn('estado', ['pendiente', 'parcial'])
+                ->orderBy('fecha', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
+
+            if ($ventas->isEmpty()) {
+                throw new \InvalidArgumentException('No hay ventas pendientes válidas seleccionadas.');
+            }
+
+            // Filtrar métodos reales con monto > 0
+            $pagosReales = collect($pagosInput)
+                ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
+                ->map(fn ($p) => [
+                    'metodo'      => $p['metodo'],
+                    'monto'       => round((float) $p['monto'], 2),
+                    'descripcion' => trim($p['descripcion'] ?? ''),
+                ]);
+
+            $montoTotal = (float) $pagosReales->reduce(
+                fn ($carry, $p) => bcadd($carry, (string) $p['monto'], 2),
+                '0'
+            );
+
+            if ($montoTotal <= 0) {
+                throw new \InvalidArgumentException('El monto total del pago debe ser mayor a cero.');
+            }
+
+            $metodoStr = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
+
+            // Crear un único Pago para todas las ventas
+            $pago = Pago::create([
+                'cliente_id'  => null, // puede ser multi-cliente
+                'user_id'     => $userId,
+                'monto_total' => $montoTotal,
+                'metodo_pago' => $metodoStr,
+                'estado'      => 'aplicado',
+                'fecha'       => now()->toDateString(),
+            ]);
+
+            foreach ($pagosReales as $p) {
+                PagoMetodo::create([
+                    'pago_id'     => $pago->id,
+                    'metodo'      => $p['metodo'],
+                    'descripcion' => $p['descripcion'] ?: null,
+                    'monto'       => $p['monto'],
+                ]);
+            }
+
+            // Distribuir el pago FIFO entre las ventas
+            $restante         = $montoTotal;
+            $ventasActualizadas = [];
+            $totalAplicado    = 0.0;
+
+            foreach ($ventas as $venta) {
+                if ($restante <= 0) break;
+
+                $saldoVenta = max(0.0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2));
+                if ($saldoVenta <= 0) continue;
+
+                $aplicar  = min($restante, $saldoVenta);
+                $aplicar  = round($aplicar, 2);
+                $restante = round((float) bcsub((string) $restante, (string) $aplicar, 2), 2);
+
+                DetallePagoFactura::create([
+                    'pago_id'        => $pago->id,
+                    'venta_id'       => $venta->id,
+                    'monto_aplicado' => $aplicar,
+                ]);
+
+                $nuevoPagado = (float) bcadd((string) $venta->pagado, (string) $aplicar, 2);
+                $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $metodoStr]);
+                $venta->refresh();
+                $venta->recalcularEstado();
+
+                $totalAplicado += $aplicar;
+                $ventasActualizadas[] = [
+                    'id'             => $venta->id,
+                    'documento'      => trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? '')),
+                    'aplicado'       => $aplicar,
+                    'estado'         => $venta->fresh()->estado,
+                ];
+            }
+
+            // Movimiento consolidado en el ledger
+            $docList = collect($ventasActualizadas)->pluck('documento')->filter()->implode(', ');
+            Movimiento::create([
+                'tipo'             => 'ingreso',
+                'subtipo'          => 'pago_venta',
+                'origen'           => 'auto',
+                'estado'           => 'activo',
+                'empresa'          => $empresa,
+                'categoria'        => 'Cobro múltiple de ventas',
+                'metodo_pago'      => $metodoStr,
+                'referencia_tipo'  => 'pago',
+                'referencia_id'    => $pago->id,
+                'user_id'          => $userId,
+                'monto'            => $totalAplicado,
+                'fecha'            => now()->toDateString(),
+                'observaciones'    => 'Pago múltiple (' . count($ventasActualizadas) . ' ventas)' . ($docList ? ": {$docList}" : ''),
+            ]);
+
+            return [
+                'pago'               => $pago,
+                'ventas_actualizadas' => $ventasActualizadas,
+                'total_aplicado'     => $totalAplicado,
+                'sobrante'           => $restante,
+                'ventas_cobradas'    => collect($ventasActualizadas)->where('estado', 'pagado')->count(),
             ];
         });
     }
@@ -208,12 +311,6 @@ class CobranzaService
 
     /**
      * Aplica un saldo a favor existente a una venta pendiente/parcial.
-     *
-     * BUG #3 CORREGIDO: NO genera movimiento tipo='ingreso'.
-     * El dinero ya entró al sistema cuando se registró el excedente.
-     * Se registra un movimiento tipo='contable' solo para trazabilidad.
-     *
-     * @param  int|null $userId
      */
     public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto, ?int $userId = null, string $empresa = 'casadets'): array
     {
@@ -240,7 +337,6 @@ class CobranzaService
                 throw new \InvalidArgumentException('El monto a aplicar debe ser mayor a cero.');
             }
 
-            // Pago contable para el saldo a favor
             $pago = Pago::create([
                 'cliente_id'  => $venta->cliente_id,
                 'user_id'     => $userId,
@@ -263,13 +359,11 @@ class CobranzaService
                 'monto_aplicado' => $aplicar,
             ]);
 
-            // Actualizar venta (bcmath)
             $nuevoPagado = (float) bcadd((string) $venta->pagado, (string) $aplicar, 2);
             $venta->update(['pagado' => $nuevoPagado]);
             $venta->refresh();
             $venta->recalcularEstado();
 
-            // Actualizar saldo a favor (bcmath)
             $nuevoDisponible = max(0.0, (float) bcsub((string) $disponible, (string) $aplicar, 2));
             $nuevoEstado     = round($nuevoDisponible, 2) <= 0 ? 'usado' : 'parcialmente_usado';
             $saldo->update([
@@ -277,10 +371,6 @@ class CobranzaService
                 'estado'           => $nuevoEstado,
             ]);
 
-            // ── Movimiento CONTABLE — solo trazabilidad, NO afecta balance ──
-            // El dinero ya fue registrado como ingreso cuando se recibió el pago
-            // original que generó el excedente. Aplicar el saldo es una
-            // transferencia contable (deuda → saldada), no un nuevo ingreso de caja.
             $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
             Movimiento::create([
                 'tipo'             => 'contable',
@@ -335,11 +425,7 @@ class CobranzaService
             ->orderBy('fecha', 'asc')
             ->get()
             ->map(function ($v) {
-                $v->saldo_pendiente = (float) bcsub(
-                    (string) $v->total,
-                    (string) $v->pagado,
-                    2
-                );
+                $v->saldo_pendiente = (float) bcsub((string) $v->total, (string) $v->pagado, 2);
                 return $v;
             });
     }

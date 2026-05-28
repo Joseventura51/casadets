@@ -11,9 +11,11 @@
 .fila-amarillo { background: #fff9e6 !important; }
 .fila-rojo     { background: #fff0f0 !important; }
 .fila-oculta   { display: none !important; }
+.fila-seleccionada { outline: 2px solid #0d6efd !important; outline-offset:-2px; }
 .filter-input { font-size:.78rem; border-radius:5px; border:1px solid #ced4da; padding:.2rem .4rem; background:#fff; width:100%; min-width:0; transition:border-color .15s,box-shadow .15s; }
 .filter-input:focus { outline:none; border-color:#86b7fe; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
 .thead-filter td { background:#fff3cd; padding:.3rem .5rem; border-bottom:2px solid #ffe69c; }
+#barraMultiple { position:sticky; bottom:0; z-index:100; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -23,6 +25,19 @@
     </div>
     <a href="/casadets/ventas" class="btn btn-outline-secondary btn-sm">← Ver todas las ventas</a>
 </div>
+
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show py-2">
+    {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show py-2">
+    {{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
 
 {{-- ── Filtros server-side ─────────────────────────────────── --}}
 <form method="GET" action="/casadets/pendientes" class="card p-3 mb-3" data-dynamic-filter>
@@ -63,12 +78,23 @@
     </div>
 </div>
 
-{{-- ── Tabla con filtros en vivo ───────────────────────────── --}}
+{{-- ── Tabla con selección múltiple ───────────────────────── --}}
 <div class="card">
+    <div class="card-header d-flex align-items-center gap-2 py-2">
+        <div class="form-check mb-0">
+            <input type="checkbox" class="form-check-input" id="checkAll" title="Seleccionar todas">
+            <label class="form-check-label small text-muted" for="checkAll">Todas</label>
+        </div>
+        <span class="text-muted small" id="conteoSel" style="display:none;">
+            <strong id="numSel">0</strong> seleccionadas
+        </span>
+        <span class="text-muted small ms-auto">Marca varias ventas y usa <strong>Cobrar seleccionadas</strong></span>
+    </div>
     <div class="table-responsive">
         <table class="table mb-0 align-middle" id="tablaPendientes">
             <thead class="table-light">
                 <tr>
+                    <th style="width:36px;"></th>
                     <th>Estado</th>
                     <th>Días</th>
                     <th>Fecha venta</th>
@@ -82,7 +108,7 @@
                 </tr>
                 {{-- Fila de búsqueda en vivo --}}
                 <tr class="thead-filter">
-                    <td colspan="4"></td>
+                    <td colspan="5"></td>
                     <td><input type="text" id="fVendedor"  class="filter-input" placeholder="Vendedor…"></td>
                     <td><input type="text" id="fCliente"   class="filter-input" placeholder="Nombre o RUC…"></td>
                     <td><input type="text" id="fProducto"  class="filter-input" placeholder="Producto…"></td>
@@ -106,13 +132,19 @@
                     $productosStr = $v->detalles->map(fn($d) => $d->producto)->join(', ');
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                     $docTxt      = ($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '');
+                    $saldoPend   = max(0, (float) bcsub((string) $v->total, (string) $v->pagado, 2));
                 @endphp
                 <tr class="fila-pendiente {{ $filaClass }}"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
                     data-cliente="{{ strtolower($clienteTxt) }}"
                     data-producto="{{ strtolower($productosStr) }}"
                     data-documento="{{ strtolower($docTxt) }}"
-                    data-total="{{ number_format($v->total, 2) }}">
+                    data-total="{{ number_format($v->total, 2) }}"
+                    data-saldo="{{ $saldoPend }}">
+                    <td class="text-center" style="width:36px;">
+                        <input type="checkbox" class="form-check-input venta-check"
+                               value="{{ $v->id }}" data-total="{{ $saldoPend }}">
+                    </td>
                     <td>
                         @php $estV = $v->estado ?? 'pendiente'; @endphp
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
@@ -164,7 +196,6 @@
                         S/ {{ number_format($v->total, 2) }}
                         @if((float)$v->pagado > 0)
                             <br><small class="text-success">Cobrado: S/ {{ number_format($v->pagado, 2) }}</small>
-                            @php $saldoPend = max(0, (float)$v->total - (float)$v->pagado); @endphp
                             @if($saldoPend > 0)
                                 <br><small class="text-danger fw-semibold">Falta: S/ {{ number_format($saldoPend, 2) }}</small>
                             @endif
@@ -181,7 +212,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-4">
+                    <td colspan="11" class="text-center text-muted py-4">
                         <i class="bi bi-check-circle text-success fs-3 d-block mb-2"></i>
                         No hay ventas pendientes de días anteriores.
                     </td>
@@ -191,7 +222,7 @@
             @if($ventas->count())
             <tfoot class="table-light">
                 <tr>
-                    <th colspan="8" class="text-end">Total por cobrar (visibles)</th>
+                    <th colspan="9" class="text-end">Total por cobrar (visibles)</th>
                     <th class="text-end text-danger" id="totalVisible">S/ {{ number_format($ventas->sum('total'), 2) }}</th>
                     <th></th>
                 </tr>
@@ -205,12 +236,32 @@
     <i class="bi bi-search me-1"></i> Sin resultados para la búsqueda aplicada.
 </div>
 
+{{-- ── Barra de acción múltiple (sticky bottom) ────────────── --}}
+<div id="barraMultiple" class="card shadow-lg border-primary mt-3" style="display:none;">
+    <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+        <div>
+            <span class="fw-semibold text-primary"><i class="bi bi-check2-square me-1"></i></span>
+            <strong id="barraConteo">0</strong> ventas seleccionadas —
+            Total: <strong class="text-primary" id="barraTotal">S/ 0.00</strong>
+        </div>
+        <form id="formMultiple" action="/casadets/ventas/pago-multiple" method="GET" class="d-flex gap-2 align-items-center ms-auto">
+            <div id="hiddenVentas"></div>
+            <button type="button" id="btnDeselect" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-x-lg me-1"></i>Deseleccionar
+            </button>
+            <button type="submit" class="btn btn-success btn-sm px-3">
+                <i class="bi bi-cash-stack me-1"></i>Cobrar seleccionadas
+            </button>
+        </form>
+    </div>
+</div>
+
 <script>
 document.querySelectorAll('.select-estado').forEach(sel => {
     sel.addEventListener('change', function() { this.className = 'select-estado est-' + this.value; });
 });
 
-// ── Búsqueda en vivo sobre las filas cargadas ─────────────────
+// ── Búsqueda en vivo ───────────────────────────────────────────
 const filtros = {
     vendedor:  document.getElementById('fVendedor'),
     cliente:   document.getElementById('fCliente'),
@@ -237,8 +288,7 @@ function aplicarFiltros() {
     for (const [k, el] of Object.entries(filtros)) vals[k] = normalizar(el.value.trim());
     const hayFiltro = Object.values(vals).some(v => v !== '');
 
-    let conteo = 0;
-    let monto  = 0;
+    let conteo = 0, monto = 0;
 
     filas.forEach(tr => {
         const d = {
@@ -269,10 +319,66 @@ function aplicarFiltros() {
 }
 
 Object.values(filtros).forEach(el => el.addEventListener('input', aplicarFiltros));
-
 document.getElementById('btnLimpiar').addEventListener('click', () => {
     Object.values(filtros).forEach(el => el.value = '');
     aplicarFiltros();
+});
+
+// ── Selección múltiple ─────────────────────────────────────────
+const barra        = document.getElementById('barraMultiple');
+const barraConteo  = document.getElementById('barraConteo');
+const barraTotal   = document.getElementById('barraTotal');
+const hiddenVentas = document.getElementById('hiddenVentas');
+const conteoSel    = document.getElementById('conteoSel');
+const numSel       = document.getElementById('numSel');
+const checkAll     = document.getElementById('checkAll');
+
+function actualizarBarra() {
+    const checks = document.querySelectorAll('.venta-check:checked');
+    const n      = checks.length;
+    let total    = 0;
+    hiddenVentas.innerHTML = '';
+    checks.forEach(c => {
+        total += parseFloat(c.dataset.total) || 0;
+        const h = document.createElement('input');
+        h.type  = 'hidden'; h.name = 'ventas[]'; h.value = c.value;
+        hiddenVentas.appendChild(h);
+    });
+
+    if (n > 0) {
+        barra.style.display = '';
+        barraConteo.textContent = n;
+        barraTotal.textContent = 'S/ ' + total.toFixed(2);
+        conteoSel.style.display = '';
+        numSel.textContent = n;
+    } else {
+        barra.style.display = 'none';
+        conteoSel.style.display = 'none';
+    }
+}
+
+document.querySelectorAll('.venta-check').forEach(c => {
+    c.addEventListener('change', () => {
+        c.closest('tr').classList.toggle('fila-seleccionada', c.checked);
+        actualizarBarra();
+    });
+});
+
+checkAll.addEventListener('change', function() {
+    document.querySelectorAll('.fila-pendiente:not(.fila-oculta) .venta-check').forEach(c => {
+        c.checked = this.checked;
+        c.closest('tr').classList.toggle('fila-seleccionada', this.checked);
+    });
+    actualizarBarra();
+});
+
+document.getElementById('btnDeselect').addEventListener('click', () => {
+    document.querySelectorAll('.venta-check').forEach(c => {
+        c.checked = false;
+        c.closest('tr').classList.remove('fila-seleccionada');
+    });
+    checkAll.checked = false;
+    actualizarBarra();
 });
 </script>
 @endsection

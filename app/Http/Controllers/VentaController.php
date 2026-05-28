@@ -295,10 +295,11 @@ class VentaController extends Controller
     public function updatePago(Request $request, Venta $venta)
     {
         $data = $request->validate([
-            'pagos'          => 'required|array|min:1',
-            'pagos.*.metodo' => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
-            'pagos.*.monto'  => 'required|numeric|min:0',
-            'estado_manual'  => 'nullable|in:pendiente,pagado,anulado',
+            'pagos'               => 'required|array|min:1',
+            'pagos.*.metodo'      => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
+            'pagos.*.monto'       => 'required|numeric|min:0',
+            'pagos.*.descripcion' => 'nullable|string|max:200',
+            'estado_manual'       => 'nullable|in:pendiente,pagado,anulado',
         ]);
 
         $result = app(CobranzaService::class)->registrarPago(
@@ -325,6 +326,61 @@ class VentaController extends Controller
             $msg .= ' Se generó un saldo a favor de S/ ' . number_format($result['saldo_favor'], 2) . '.';
         }
         return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
+    }
+
+    /* ─── Pago múltiple (varios vales a la vez) ─────────────────── */
+
+    public function pagoMultiple(Request $request)
+    {
+        $ids = array_filter(array_map('intval', (array) $request->input('ventas', [])));
+
+        if (empty($ids)) {
+            return redirect('/casadets/pendientes')->with('error', 'Selecciona al menos una venta.');
+        }
+
+        $ventas = Venta::with(['vendedor:id,nombre', 'cliente:id,nombre', 'detalles:id,venta_id,producto,cantidad'])
+            ->whereIn('id', $ids)
+            ->whereIn('estado', ['pendiente', 'parcial'])
+            ->orderBy('fecha', 'asc')
+            ->get();
+
+        if ($ventas->isEmpty()) {
+            return redirect('/casadets/pendientes')->with('error', 'Las ventas seleccionadas no están pendientes.');
+        }
+
+        $totalPendiente = $ventas->sum(fn ($v) => max(0, (float) bcsub((string) $v->total, (string) $v->pagado, 2)));
+
+        return view('casadets.ventas.pago_multiple', compact('ventas', 'totalPendiente'));
+    }
+
+    public function updatePagoMultiple(Request $request)
+    {
+        $data = $request->validate([
+            'ventas'              => 'required|array|min:1',
+            'ventas.*'            => 'integer|exists:ventas,id',
+            'pagos'               => 'required|array|min:1',
+            'pagos.*.metodo'      => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
+            'pagos.*.monto'       => 'required|numeric|min:0',
+            'pagos.*.descripcion' => 'nullable|string|max:200',
+        ]);
+
+        try {
+            $result = app(CobranzaService::class)->registrarPagoMultiple(
+                $data['ventas'],
+                $data['pagos']
+            );
+
+            $cobradas = $result['ventas_cobradas'];
+            $total    = count($result['ventas_actualizadas']);
+            $msg      = "Pago registrado: {$cobradas} de {$total} ventas quedaron pagadas.";
+            if ($result['sobrante'] > 0) {
+                $msg .= ' Sobrante S/ ' . number_format($result['sobrante'], 2) . ' no aplicado (ventas sin cliente para saldo a favor).';
+            }
+
+            return redirect('/casadets/pendientes')->with('success', $msg);
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()])->withInput();
+        }
     }
 
     /* ─── Cambio de estado (solo anulado) ───────────────────────── */
