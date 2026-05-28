@@ -14,8 +14,8 @@
     $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['ninguno'];
 
     $tieneValesPendientes = isset($ventasPendientesCliente) && $ventasPendientesCliente->count() > 0;
-    $colIzq = $tieneValesPendientes ? 'col-md-4' : 'col-md-5';
-    $colMed = $tieneValesPendientes ? 'col-md-4' : 'col-md-7';
+    $colIzq = 'col-md-5';
+    $colMed = 'col-md-7';
 @endphp
 
 <style>
@@ -79,6 +79,8 @@
 .vale-item { cursor:default; transition:background .1s; }
 .vale-item:hover { background:#f0f4ff; }
 .vale-item.seleccionado { background:#e8f0fe; border-color:#0d6efd !important; }
+.venta-seleccionada { display:none; }
+.venta-seleccionada.visible { display:block; }
 @media (max-width: 576px) {
     .pago-row-top { grid-template-columns:32px 1fr 34px; }
     .pago-monto-field { grid-column:2 / 3; }
@@ -252,50 +254,144 @@
             </div>
         </div>
 
-        {{-- Historial de pagos anteriores --}}
-        @if(isset($historial) && $historial->count() > 0)
         <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-clock-history me-1 text-secondary"></i> Historial de cobros
+            <div class="card-header bg-white d-flex align-items-center justify-content-between">
+                <div>
+                    <i class="bi bi-plus-circle me-1 text-primary"></i>
+                    <span class="fw-semibold">Añadir nueva venta</span>
+                </div>
+                @if($tieneValesPendientes)
+                    <span class="badge bg-primary">{{ $ventasPendientesCliente->count() }} pendiente(s)</span>
+                @endif
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm mb-0 align-middle historial-row">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Fecha</th>
-                            <th>Método / Banco</th>
-                            <th class="text-end">Aplicado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($historial as $h)
-                        <tr>
-                            <td>{{ $h->created_at->format('d/m/Y') }}</td>
-                            <td>
-                                @foreach($h->pago->metodos ?? [] as $met)
-                                    <span class="badge bg-secondary">{{ ucfirst($met->metodo) }}</span>
-                                    @if($met->descripcion)
-                                        <span class="banco-hint">{{ $met->descripcion }}</span>
-                                    @endif
-                                @endforeach
-                                @if(($h->pago->metodos ?? collect())->isEmpty())
-                                    @foreach(explode(',', $h->pago->metodo_pago ?? '—') as $met)
-                                        <span class="badge bg-secondary">{{ ucfirst(trim($met)) }}</span>
-                                    @endforeach
-                                @endif
-                            </td>
-                            <td class="text-end fw-semibold text-success">S/ {{ number_format($h->monto_aplicado, 2) }}</td>
-                        </tr>
-                        @endforeach
-                    </tbody>
-                    <tfoot class="table-light">
-                        <tr>
-                            <th colspan="2" class="text-end">Total cobrado</th>
-                            <th class="text-end">S/ {{ number_format($historial->sum('monto_aplicado'), 2) }}</th>
-                        </tr>
-                    </tfoot>
-                </table>
+            <div class="card-body p-2">
+                @if($tieneValesPendientes)
+                    <button type="button"
+                        class="btn btn-outline-primary btn-sm w-100 mb-2"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#panelValesPendientes">
+                        <i class="bi bi-plus-lg me-1"></i> Añadir nueva venta
+                    </button>
+
+                    <div class="collapse" id="panelValesPendientes">
+                        <div class="text-muted small px-1 mb-2">
+                            Marca los vales que quieras cobrar junto con este pago.
+                        </div>
+                        <input type="text" id="buscarVale"
+                            class="form-control form-control-sm mb-2"
+                            placeholder="Buscar: doc, fecha, producto...">
+
+                        <div id="listaVales" style="max-height:320px;overflow-y:auto;">
+                            @foreach($ventasPendientesCliente as $vp)
+                            @php
+                                $docVp = ucfirst($vp->documento_tipo ?? '').' '.($vp->documento_numero ?? "#$vp->id");
+                                $productosVp = $vp->detalles->pluck('producto')->join(' ');
+                                $buscarVp = strtolower($docVp.' '.$vp->fecha->format('d/m/Y').' '.$productosVp);
+                            @endphp
+                            <div class="vale-item border rounded p-2 mb-1"
+                                 data-buscar="{{ $buscarVp }}"
+                                 data-id="{{ $vp->id }}">
+                                <div class="d-flex align-items-start gap-2">
+                                    <input type="checkbox"
+                                        class="form-check-input mt-1 flex-shrink-0 vale-adicional-check"
+                                        value="{{ $vp->id }}"
+                                        data-saldo="{{ $vp->saldo_pendiente }}"
+                                        id="vale_{{ $vp->id }}">
+                                    <label for="vale_{{ $vp->id }}" class="flex-grow-1 mb-0" style="cursor:pointer;">
+                                        <div class="fw-semibold small">
+                                            {{ $docVp }}
+                                            <span class="badge {{ $vp->estado==='parcial' ? 'bg-warning text-dark' : 'bg-secondary' }} ms-1" style="font-size:.6rem;">
+                                                {{ $vp->estado==='parcial' ? 'Parcial' : 'Pendiente' }}
+                                            </span>
+                                        </div>
+                                        <div class="text-muted" style="font-size:.72rem;">{{ $vp->fecha->format('d/m/Y') }}</div>
+                                        <div class="text-muted text-truncate" style="font-size:.72rem;max-width:240px;">
+                                            {{ $vp->detalles->take(2)->pluck('producto')->join(', ') }}
+                                            @if($vp->detalles->count() > 2)
+                                                <em>+{{ $vp->detalles->count()-2 }} más</em>
+                                            @endif
+                                        </div>
+                                    </label>
+                                    <div class="text-end flex-shrink-0">
+                                        <div class="fw-bold text-danger" style="font-size:.82rem;">S/ {{ number_format($vp->saldo_pendiente, 2) }}</div>
+                                        @if((float)$vp->pagado > 0)
+                                        <div class="text-muted" style="font-size:.65rem;">Total: S/ {{ number_format($vp->total, 2) }}</div>
+                                        @endif
+                                    </div>
+                                </div>
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @else
+                    <div class="text-center text-muted small py-3">
+                        <i class="bi bi-check-circle text-success d-block fs-4 mb-1"></i>
+                        No hay más vales pendientes.
+                    </div>
+                @endif
             </div>
+
+            @if($tieneValesPendientes)
+            <div class="card-footer py-2 bg-light" id="resumenAdicionales" style="display:none;">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-muted">
+                        <strong class="text-primary" id="countAdicionales">0</strong> vale(s) adicional(es)
+                    </span>
+                    <span class="fw-bold text-primary small" id="totalAdicionalesLabel">S/ 0.00</span>
+                </div>
+            </div>
+            @endif
+        </div>
+
+        @if($tieneValesPendientes)
+        <div id="ventasSeleccionadas" class="mt-3" style="display:none;">
+            @foreach($ventasPendientesCliente as $vp)
+            @php
+                $docVpSel = ucfirst($vp->documento_tipo ?? '').' '.($vp->documento_numero ?? "#$vp->id");
+            @endphp
+            <div class="card border-0 shadow-sm venta-seleccionada mb-3" data-venta-detalle="{{ $vp->id }}">
+                <div class="card-header bg-white d-flex align-items-center justify-content-between">
+                    <div>
+                        <i class="bi bi-receipt me-1"></i>
+                        <span class="fw-semibold">Productos</span>
+                        <span class="badge bg-primary ms-1 fw-normal">{{ $docVpSel }}</span>
+                    </div>
+                    <button type="button"
+                        class="btn btn-sm btn-outline-danger py-0 quitar-vale-seleccionado"
+                        data-venta-id="{{ $vp->id }}">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Producto</th>
+                                <th class="text-end">Cant.</th>
+                                <th class="text-end">Precio</th>
+                                <th class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($vp->detalles as $d)
+                            <tr>
+                                <td>{{ $d->producto }}</td>
+                                <td class="text-end">{{ rtrim(rtrim(number_format($d->cantidad, 2), '0'), '.') }}</td>
+                                <td class="text-end">S/ {{ number_format($d->precio_unitario, 2) }}</td>
+                                <td class="text-end">S/ {{ number_format($d->subtotal, 2) }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="3" class="text-end">Saldo pendiente</th>
+                                <th class="text-end text-danger">S/ {{ number_format($vp->saldo_pendiente, 2) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            @endforeach
         </div>
         @endif
     </div>
@@ -324,7 +420,7 @@
                     {{-- Info texto --}}
                     <div class="text-muted small mb-2">
                         <i class="bi bi-info-circle me-1"></i>
-                        Para transferencias indica el banco o cuenta en <strong>Banco / referencia</strong>.
+                        Para transferencias, Yape o Plin indica el destino o cuenta en <strong>Destino / referencia</strong>.
                     </div>
 
                     <div id="pagosContainer">
@@ -356,11 +452,11 @@
                                     <i class="bi bi-x-circle-fill"></i>
                                 </button>
                             </div>
-                            <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta']) ? 'visible' : '' }}">
-                                <label class="pago-field-label">Banco / referencia</label>
+                            <div class="pago-row-desc {{ in_array(trim($met), ['transferencia','tarjeta','yape','plin']) ? 'visible' : '' }}">
+                                <label class="pago-field-label">Destino / referencia</label>
                                 <input type="text" name="pagos[{{ $pi }}][descripcion]"
                                     class="form-control form-control-sm desc-pago"
-                                    placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
+                                    placeholder="Destino / referencia (ej: BCP, Yape Juan, Plin tienda)"
                                     maxlength="200">
                             </div>
                         </div>
@@ -410,82 +506,54 @@
                 </div>
             </div>
         </form>
-    </div>
 
-    {{-- ── Columna derecha: otros vales del mismo cliente ──────── --}}
-    @if($tieneValesPendientes)
-    <div class="col-md-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-white d-flex align-items-center justify-content-between">
-                <div>
-                    <i class="bi bi-list-check me-1 text-primary"></i>
-                    <span class="fw-semibold small">Otros vales de {{ $venta->cliente->nombre }}</span>
-                </div>
-                <span class="badge bg-primary">{{ $ventasPendientesCliente->count() }} pendiente(s)</span>
+        {{-- Historial de pagos anteriores --}}
+        @if(isset($historial) && $historial->count() > 0)
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-white fw-semibold">
+                <i class="bi bi-clock-history me-1 text-secondary"></i> Historial de cobros
             </div>
-            <div class="card-body p-2">
-                <div class="text-muted small px-1 mb-2">
-                    Marca los vales que quieras cobrar junto con este pago (solo mismo cliente).
-                </div>
-                <input type="text" id="buscarVale"
-                    class="form-control form-control-sm mb-2"
-                    placeholder="Buscar: doc, fecha, producto…">
-
-                <div id="listaVales" style="max-height:380px;overflow-y:auto;">
-                    @foreach($ventasPendientesCliente as $vp)
-                    @php
-                        $docVp = ucfirst($vp->documento_tipo ?? '').' '.($vp->documento_numero ?? "#$vp->id");
-                        $productosVp = $vp->detalles->pluck('producto')->join(' ');
-                        $buscarVp = strtolower($docVp.' '.$vp->fecha->format('d/m/Y').' '.$productosVp);
-                    @endphp
-                    <div class="vale-item border rounded p-2 mb-1"
-                         data-buscar="{{ $buscarVp }}"
-                         data-id="{{ $vp->id }}">
-                        <div class="d-flex align-items-start gap-2">
-                            <input type="checkbox"
-                                class="form-check-input mt-1 flex-shrink-0 vale-adicional-check"
-                                value="{{ $vp->id }}"
-                                data-saldo="{{ $vp->saldo_pendiente }}"
-                                id="vale_{{ $vp->id }}">
-                            <label for="vale_{{ $vp->id }}" class="flex-grow-1 mb-0" style="cursor:pointer;">
-                                <div class="fw-semibold small">
-                                    {{ $docVp }}
-                                    <span class="badge {{ $vp->estado==='parcial' ? 'bg-warning text-dark' : 'bg-secondary' }} ms-1" style="font-size:.6rem;">
-                                        {{ $vp->estado==='parcial' ? 'Parcial' : 'Pendiente' }}
-                                    </span>
-                                </div>
-                                <div class="text-muted" style="font-size:.72rem;">{{ $vp->fecha->format('d/m/Y') }}</div>
-                                <div class="text-muted text-truncate" style="font-size:.72rem;max-width:140px;">
-                                    {{ $vp->detalles->take(2)->pluck('producto')->join(', ') }}
-                                    @if($vp->detalles->count() > 2)
-                                        <em>+{{ $vp->detalles->count()-2 }} más</em>
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle historial-row">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Método / Banco</th>
+                            <th class="text-end">Aplicado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($historial as $h)
+                        <tr>
+                            <td>{{ $h->created_at->format('d/m/Y') }}</td>
+                            <td>
+                                @foreach($h->pago->metodos ?? [] as $met)
+                                    <span class="badge bg-secondary">{{ ucfirst($met->metodo) }}</span>
+                                    @if($met->descripcion)
+                                        <span class="banco-hint">{{ $met->descripcion }}</span>
                                     @endif
-                                </div>
-                            </label>
-                            <div class="text-end flex-shrink-0">
-                                <div class="fw-bold text-danger" style="font-size:.82rem;">S/ {{ number_format($vp->saldo_pendiente, 2) }}</div>
-                                @if((float)$vp->pagado > 0)
-                                <div class="text-muted" style="font-size:.65rem;">Total: S/ {{ number_format($vp->total, 2) }}</div>
+                                @endforeach
+                                @if(($h->pago->metodos ?? collect())->isEmpty())
+                                    @foreach(explode(',', $h->pago->metodo_pago ?? '—') as $met)
+                                        <span class="badge bg-secondary">{{ ucfirst(trim($met)) }}</span>
+                                    @endforeach
                                 @endif
-                            </div>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-            </div>
-
-            {{-- Footer con resumen de selección --}}
-            <div class="card-footer py-2 bg-light" id="resumenAdicionales" style="display:none;">
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="small text-muted">
-                        <strong class="text-primary" id="countAdicionales">0</strong> vale(s) adicional(es)
-                    </span>
-                    <span class="fw-bold text-primary small" id="totalAdicionalesLabel">S/ 0.00</span>
-                </div>
+                            </td>
+                            <td class="text-end fw-semibold text-success">S/ {{ number_format($h->monto_aplicado, 2) }}</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="2" class="text-end">Total cobrado</th>
+                            <th class="text-end">S/ {{ number_format($historial->sum('monto_aplicado'), 2) }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
+        @endif
     </div>
-    @endif
 
 </div>{{-- /row --}}
 
@@ -497,7 +565,7 @@ const YA_PAGADO       = {{ (float) $yaPagedo }};
 const SALDO_PENDIENTE = {{ (float) $saldoPendiente }};
 const VENTA_PAGADA    = {{ $ventaPagada ? 'true' : 'false' }};
 const VENTA_ID        = {{ $venta->id }};
-const METODOS_CON_DESC = ['transferencia', 'tarjeta'];
+const METODOS_CON_DESC = ['transferencia', 'tarjeta', 'yape', 'plin'];
 let pagoIdx = {{ count($primerosMetodos) }};
 let saldoAdicionalSel = 0;  // saldo de vales adicionales seleccionados
 
@@ -643,10 +711,10 @@ function crearFila(met = 'transferencia', monto = '') {
             </button>
         </div>
         <div class="pago-row-desc ${showDesc ? 'visible' : ''}">
-            <label class="pago-field-label">Banco / referencia</label>
+            <label class="pago-field-label">Destino / referencia</label>
             <input type="text" name="pagos[${pagoIdx}][descripcion]"
                 class="form-control form-control-sm desc-pago"
-                placeholder="Banco / referencia (ej: BCP Cta 1234-56)"
+                placeholder="Destino / referencia (ej: BCP, Yape Juan, Plin tienda)"
                 maxlength="200">
         </div>`;
     pagoIdx++;
@@ -682,6 +750,21 @@ document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
 
 // ── Vales adicionales del mismo cliente ───────────────────────
 @if($tieneValesPendientes)
+function actualizarVentasSeleccionadas() {
+    const seleccionados = new Set(
+        [...document.querySelectorAll('.vale-adicional-check:checked')].map(c => c.value)
+    );
+
+    document.querySelectorAll('.venta-seleccionada').forEach(card => {
+        card.classList.toggle('visible', seleccionados.has(card.dataset.ventaDetalle));
+    });
+
+    const contenedor = document.getElementById('ventasSeleccionadas');
+    if (contenedor) {
+        contenedor.style.display = seleccionados.size > 0 ? '' : 'none';
+    }
+}
+
 function actualizarValesAdicionales() {
     const checks = document.querySelectorAll('.vale-adicional-check:checked');
     saldoAdicionalSel = 0;
@@ -722,6 +805,8 @@ function actualizarValesAdicionales() {
         document.getElementById('resumenAdicionales').style.display = 'none';
     }
 
+    actualizarVentasSeleccionadas();
+
     // Auto-rellenar el monto de pago con el saldo combinado
     const primerMonto = document.querySelector('.monto-pago');
     if (primerMonto) {
@@ -742,6 +827,16 @@ document.querySelectorAll('.vale-item').forEach(item => {
 
 document.querySelectorAll('.vale-adicional-check').forEach(c => {
     c.addEventListener('change', actualizarValesAdicionales);
+});
+
+document.querySelectorAll('.quitar-vale-seleccionado').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const chk = document.getElementById('vale_' + btn.dataset.ventaId);
+        if (chk) {
+            chk.checked = false;
+            actualizarValesAdicionales();
+        }
+    });
 });
 
 // Buscador de vales

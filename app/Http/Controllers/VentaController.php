@@ -293,7 +293,7 @@ class VentaController extends Controller
         $ventasPendientesCliente = collect();
         if ($venta->cliente_id) {
             $ventasPendientesCliente = \App\Models\Venta::with([
-                    'detalles:id,venta_id,producto',
+                    'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
                 ])
                 ->where('cliente_id', $venta->cliente_id)
                 ->where('id', '!=', $venta->id)
