@@ -25,9 +25,9 @@
 </div>
 
 {{-- ── Filtros server-side ─────────────────────────────────── --}}
-<form method="GET" action="/casadets/pendientes" class="card p-3 mb-3" data-dynamic-filter data-default-today>
+<form method="GET" action="/casadets/pendientes" class="card p-3 mb-3" data-dynamic-filter>
     <div class="row g-2 align-items-end">
-        <div class="col-6 col-md-3">
+        <div class="col-12 col-md-4">
             <label class="form-label small mb-1">Vendedor</label>
             <select name="vendedor_id" class="form-select form-select-sm">
                 <option value="">Todos</option>
@@ -38,15 +38,7 @@
                 @endforeach
             </select>
         </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small mb-1">Desde</label>
-            <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-6 col-md-2">
-            <label class="form-label small mb-1">Hasta</label>
-            <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
-        </div>
-        <div class="col-6 col-md-2 d-flex gap-2">
+        <div class="col-12 col-md-3 d-flex gap-2">
             <button type="submit" class="btn btn-primary btn-sm w-100">Filtrar</button>
             <a href="/casadets/pendientes" class="btn btn-outline-secondary btn-sm w-100">Limpiar</a>
         </div>
