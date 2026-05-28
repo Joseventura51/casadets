@@ -80,7 +80,7 @@
                         <li><strong>B</strong> = Boleta · <strong>F</strong> = Factura · <strong>P</strong> = Proforma.</li>
                         <li><strong>NombreRazonSocial</strong> y <strong>Ruc</strong> crean o vinculan el cliente automáticamente.</li>
                         <li><strong>Codigo</strong> se importa por producto y se puede editar en la vista previa.</li>
-                        <li><strong>vendedor</strong> se detecta automáticamente por nombre y se puede cambiar en la vista previa.</li>
+                        <li><strong>vendedor</strong> se detecta automáticamente por nombre; si no existe, se registra activo y se puede cambiar en la vista previa.</li>
                     </ul>
                 </div>
             </div>
