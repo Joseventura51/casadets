@@ -1,80 +1,21 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-3">
+{{-- Encabezado: solo empresa + botones --}}
+<form method="GET" id="formFiltros" data-dynamic-filter data-default-today>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h2 class="h3 mb-1">Movimientos</h2>
         <p class="text-muted mb-0">Ledger de ingresos y salidas — fuente única de verdad financiera.</p>
     </div>
-    <div class="d-flex gap-2">
-        <a href="/movimientos/create/ingreso" class="btn btn-success">+ Ingreso</a>
-        <a href="/movimientos/create/salida" class="btn btn-danger">+ Salida</a>
-    </div>
-</div>
-
-{{-- Filtros server-side --}}
-<div class="card mb-3">
-    <div class="card-body py-2">
-        <form method="GET" class="row g-2 align-items-end" data-dynamic-filter data-default-today>
-            <div class="col-md-2 col-6">
-                <label class="form-label small mb-1">Tipo</label>
-                <select name="tipo" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    <option value="ingreso"  {{ request('tipo') === 'ingreso'  ? 'selected' : '' }}>Ingreso</option>
-                    <option value="salida"   {{ request('tipo') === 'salida'   ? 'selected' : '' }}>Salida</option>
-                    <option value="contable" {{ request('tipo') === 'contable' ? 'selected' : '' }}>Contable</option>
-                </select>
-            </div>
-            <div class="col-md-2 col-6">
-                <label class="form-label small mb-1">Subtipo</label>
-                <select name="subtipo" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    <option value="pago_venta"        {{ request('subtipo') === 'pago_venta'        ? 'selected' : '' }}>Pago de venta</option>
-                    <option value="compra"            {{ request('subtipo') === 'compra'            ? 'selected' : '' }}>Compra</option>
-                    <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo a favor</option>
-                    <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
-                </select>
-            </div>
-            <div class="col-md-2 col-6">
-                <label class="form-label small mb-1">Método de pago</label>
-                <select name="metodo_pago" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    <option value="efectivo"      {{ request('metodo_pago') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
-                    <option value="yape"          {{ request('metodo_pago') === 'yape'          ? 'selected' : '' }}>Yape</option>
-                    <option value="plin"          {{ request('metodo_pago') === 'plin'          ? 'selected' : '' }}>Plin</option>
-                    <option value="deposito"      {{ request('metodo_pago') === 'deposito'      ? 'selected' : '' }}>Depósito</option>
-                    <option value="transferencia" {{ request('metodo_pago') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
-                </select>
-            </div>
-            <div class="col-md-1 col-6">
-                <label class="form-label small mb-1">Empresa</label>
-                <select name="empresa" class="form-select form-select-sm">
-                    <option value="">Todas</option>
-                    <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
-                    <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
-                </select>
-            </div>
-            <div class="col-md-1 col-6">
-                <label class="form-label small mb-1">Estado</label>
-                <select name="estado" class="form-select form-select-sm">
-                    <option value="">Todos</option>
-                    <option value="activo"  {{ request('estado') === 'activo'  ? 'selected' : '' }}>Activo</option>
-                    <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
-                </select>
-            </div>
-            <div class="col-md-2 col-6">
-                <label class="form-label small mb-1">Desde</label>
-                <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-2 col-6">
-                <label class="form-label small mb-1">Hasta</label>
-                <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
-            </div>
-            <div class="col-md-12 col-12 d-flex gap-2">
-                <button class="btn btn-sm btn-primary">Filtrar</button>
-                <a href="/movimientos" class="btn btn-sm btn-outline-secondary">Limpiar filtros</a>
-            </div>
-        </form>
+    <div class="d-flex align-items-center gap-2">
+        <select name="empresa" class="form-select form-select-sm" style="width:140px;" onchange="document.getElementById('formFiltros').submit()">
+            <option value="">Todas las empresas</option>
+            <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+            <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
+        </select>
+        <a href="/movimientos/create/ingreso" class="btn btn-success btn-sm">+ Ingreso</a>
+        <a href="/movimientos/create/salida"  class="btn btn-danger btn-sm">+ Salida</a>
     </div>
 </div>
 
@@ -120,6 +61,68 @@
 
 {{-- Tabla ledger con filas expandibles --}}
 <div class="card shadow-sm border-0">
+    {{-- Filtros de tabla --}}
+    <div class="card-header bg-white border-bottom py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3 col-12">
+                <label class="form-label small mb-1">Buscar cliente</label>
+                <input type="text" name="cliente" value="{{ request('cliente') }}"
+                       class="form-control form-control-sm"
+                       placeholder="Nombre del cliente...">
+            </div>
+            <div class="col-md-2 col-6">
+                <label class="form-label small mb-1">Tipo</label>
+                <select name="tipo" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="ingreso"  {{ request('tipo') === 'ingreso'  ? 'selected' : '' }}>Ingreso</option>
+                    <option value="salida"   {{ request('tipo') === 'salida'   ? 'selected' : '' }}>Salida</option>
+                </select>
+            </div>
+            <div class="col-md-2 col-6">
+                <label class="form-label small mb-1">Subtipo</label>
+                <select name="subtipo" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="pago_venta"        {{ request('subtipo') === 'pago_venta'        ? 'selected' : '' }}>Pago de venta</option>
+                    <option value="compra"            {{ request('subtipo') === 'compra'            ? 'selected' : '' }}>Compra</option>
+                    <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo a favor</option>
+                    <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
+                </select>
+            </div>
+            <div class="col-md-2 col-6">
+                <label class="form-label small mb-1">Método de pago</label>
+                <select name="metodo_pago" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="efectivo"      {{ request('metodo_pago') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
+                    <option value="yape"          {{ request('metodo_pago') === 'yape'          ? 'selected' : '' }}>Yape</option>
+                    <option value="plin"          {{ request('metodo_pago') === 'plin'          ? 'selected' : '' }}>Plin</option>
+                    <option value="deposito"      {{ request('metodo_pago') === 'deposito'      ? 'selected' : '' }}>Depósito</option>
+                    <option value="transferencia" {{ request('metodo_pago') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
+                </select>
+            </div>
+            <div class="col-md-1 col-6">
+                <label class="form-label small mb-1">Estado</label>
+                <select name="estado" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="activo"  {{ request('estado') === 'activo'  ? 'selected' : '' }}>Activo</option>
+                    <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
+                </select>
+            </div>
+            <div class="col-md-1 col-6">
+                <label class="form-label small mb-1">Desde</label>
+                <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-1 col-6">
+                <label class="form-label small mb-1">Hasta</label>
+                <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-12 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-search me-1"></i>Filtrar
+                </button>
+                <a href="/movimientos" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+            </div>
+        </div>
+    </div>
     <div class="table-responsive">
         <table class="table mb-0 align-middle" id="tablaMovimientos">
             <thead class="table-light">
@@ -395,6 +398,8 @@
     {{ $movimientos->links() }}
 </div>
 @endif
+
+</form>
 
 <script>
 document.querySelectorAll('.mov-row').forEach(function(row) {

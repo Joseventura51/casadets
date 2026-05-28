@@ -26,6 +26,9 @@ class MovimientoController extends Controller
         if ($request->filled('empresa'))     $query->where('empresa', $request->empresa);
         if ($request->filled('estado'))      $query->where('estado', $request->estado);
         if ($request->filled('metodo_pago')) $query->where('metodo_pago', $request->metodo_pago);
+        if ($request->filled('cliente')) {
+            $query->whereHas('cliente', fn ($q) => $q->where('nombre', 'like', '%'.$request->cliente.'%'));
+        }
         $query->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta);
 
