@@ -9,9 +9,8 @@ class MovimientoController extends Controller
 {
     public function index(Request $request)
     {
-        $desde = $request->input('desde', today()->toDateString());
-        $hasta = $request->input('hasta', $desde);
-        if ($hasta < $desde) $hasta = $desde;
+        $periodo = $request->input('periodo', 'hoy');
+        [$desde, $hasta] = $this->rangoPeriodo($periodo, $request);
 
         $query = Movimiento::with([
                 'cliente:id,nombre,documento',
@@ -60,7 +59,38 @@ class MovimientoController extends Controller
             ),
         ];
 
-        return view('movimientos.index', compact('movimientos', 'totales', 'desde', 'hasta'));
+        $categorias = Movimiento::query()
+            ->select('categoria')
+            ->whereNotNull('categoria')
+            ->distinct()
+            ->orderBy('categoria')
+            ->pluck('categoria');
+
+        return view('movimientos.index', compact('movimientos', 'totales', 'desde', 'hasta', 'periodo', 'categorias'));
+    }
+
+    private function rangoPeriodo(string $periodo, Request $request): array
+    {
+        return match ($periodo) {
+            'ayer' => [today()->subDay()->toDateString(), today()->subDay()->toDateString()],
+            'semana' => [today()->startOfWeek()->toDateString(), today()->toDateString()],
+            'mes' => [today()->startOfMonth()->toDateString(), today()->toDateString()],
+            'todo' => ['1900-01-01', today()->toDateString()],
+            'rango' => $this->rangoPersonalizado($request),
+            default => [today()->toDateString(), today()->toDateString()],
+        };
+    }
+
+    private function rangoPersonalizado(Request $request): array
+    {
+        $desde = $request->input('desde', today()->toDateString());
+        $hasta = $request->input('hasta', $desde);
+
+        if ($hasta < $desde) {
+            $hasta = $desde;
+        }
+
+        return [$desde, $hasta];
     }
 
     public function create(string $tipo)

@@ -1,29 +1,137 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+.mov-filter-card { border:0; box-shadow:0 1px 6px rgba(15,23,42,.08); }
+.mov-filter-grid { display:grid; grid-template-columns:repeat(6,minmax(130px,1fr)); gap:.65rem; }
+.mov-filter-grid .filter-wide { grid-column:span 2; }
+.mov-filter-label { display:block; margin-bottom:.22rem; font-size:.68rem; font-weight:700; color:#6c757d; text-transform:uppercase; letter-spacing:.02em; }
+.mov-filter-control { border-radius:7px; font-size:.82rem; }
+.mov-stat-card { border:1px solid rgba(0,0,0,.07); border-radius:8px; box-shadow:0 1px 4px rgba(15,23,42,.04); }
+.mov-table th { font-size:.72rem; text-transform:uppercase; letter-spacing:.02em; color:#6c757d; white-space:nowrap; }
+.mov-table td { vertical-align:middle; }
+.mov-table thead tr.align-top { display:none; }
+.mov-row { transition:background .12s ease; }
+.mov-row:hover { background:#f8fafc; }
+@media (max-width: 992px) { .mov-filter-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width: 576px) {
+    .mov-filter-grid { grid-template-columns:1fr; }
+    .mov-filter-grid .filter-wide { grid-column:auto; }
+}
+</style>
 {{-- Encabezado: solo empresa + botones --}}
-<form method="GET" id="formFiltros" data-dynamic-filter data-default-today>
+<form method="GET" id="formFiltros" data-dynamic-filter>
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
         <h2 class="h3 mb-1">Movimientos</h2>
         <p class="text-muted mb-0">Ledger de ingresos y salidas — fuente única de verdad financiera.</p>
     </div>
     <div class="d-flex align-items-center gap-2">
-        <select name="empresa" class="form-select form-select-sm" style="width:140px;" onchange="document.getElementById('formFiltros').submit()">
-            <option value="">Todas las empresas</option>
-            <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
-            <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
-        </select>
         <a href="/movimientos/create/ingreso" class="btn btn-success btn-sm">+ Ingreso</a>
         <a href="/movimientos/create/salida"  class="btn btn-danger btn-sm">+ Salida</a>
     </div>
 </div>
 
 {{-- Totales de la página actual (solo activos afectan balance) --}}
+<div class="card mov-filter-card mb-3">
+    <div class="card-body">
+        <div class="mov-filter-grid">
+            <div>
+                <label class="mov-filter-label">Periodo</label>
+                <select name="periodo" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="hoy" {{ $periodo === 'hoy' ? 'selected' : '' }}>Hoy</option>
+                    <option value="ayer" {{ $periodo === 'ayer' ? 'selected' : '' }}>Ayer</option>
+                    <option value="semana" {{ $periodo === 'semana' ? 'selected' : '' }}>Esta semana</option>
+                    <option value="mes" {{ $periodo === 'mes' ? 'selected' : '' }}>Este mes</option>
+                    <option value="todo" {{ $periodo === 'todo' ? 'selected' : '' }}>Todo</option>
+                    <option value="rango" {{ $periodo === 'rango' ? 'selected' : '' }}>Rango</option>
+                </select>
+            </div>
+            <div class="periodo-rango {{ $periodo === 'rango' ? '' : 'd-none' }}">
+                <label class="mov-filter-label">Desde</label>
+                <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm mov-filter-control js-text-filter">
+            </div>
+            <div class="periodo-rango {{ $periodo === 'rango' ? '' : 'd-none' }}">
+                <label class="mov-filter-label">Hasta</label>
+                <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm mov-filter-control js-text-filter">
+            </div>
+            <div>
+                <label class="mov-filter-label">Tipo</label>
+                <select name="tipo" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="">Todos</option>
+                    <option value="ingreso" {{ request('tipo') === 'ingreso' ? 'selected' : '' }}>Ingreso</option>
+                    <option value="salida" {{ request('tipo') === 'salida' ? 'selected' : '' }}>Salida</option>
+                    <option value="contable" {{ request('tipo') === 'contable' ? 'selected' : '' }}>Contable</option>
+                </select>
+            </div>
+            <div>
+                <label class="mov-filter-label">Subtipo</label>
+                <select name="subtipo" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="">Todos</option>
+                    <option value="pago_venta" {{ request('subtipo') === 'pago_venta' ? 'selected' : '' }}>Pago venta</option>
+                    <option value="compra" {{ request('subtipo') === 'compra' ? 'selected' : '' }}>Compra</option>
+                    <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo favor</option>
+                    <option value="manual" {{ request('subtipo') === 'manual' ? 'selected' : '' }}>Manual</option>
+                </select>
+            </div>
+            <div>
+                <label class="mov-filter-label">Categoría</label>
+                <select name="categoria" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="">Todas</option>
+                    @foreach($categorias as $cat)
+                        <option value="{{ $cat }}" {{ request('categoria') === $cat ? 'selected' : '' }}>{{ $cat }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="mov-filter-label">Empresa</label>
+                <select name="empresa" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="">Todas</option>
+                    <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+                    <option value="zendy" {{ request('empresa') === 'zendy' ? 'selected' : '' }}>ZENDY</option>
+                </select>
+            </div>
+            <div>
+                <label class="mov-filter-label">Método</label>
+                <select name="metodo_pago" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="">Todos</option>
+                    <option value="efectivo" {{ request('metodo_pago') === 'efectivo' ? 'selected' : '' }}>Efectivo</option>
+                    <option value="yape" {{ request('metodo_pago') === 'yape' ? 'selected' : '' }}>Yape</option>
+                    <option value="plin" {{ request('metodo_pago') === 'plin' ? 'selected' : '' }}>Plin</option>
+                    <option value="deposito" {{ request('metodo_pago') === 'deposito' ? 'selected' : '' }}>Depósito</option>
+                    <option value="transferencia" {{ request('metodo_pago') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
+                </select>
+            </div>
+            <div>
+                <label class="mov-filter-label">Estado</label>
+                <select name="estado" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="">Todos</option>
+                    <option value="activo" {{ request('estado') === 'activo' ? 'selected' : '' }}>Activo</option>
+                    <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
+                </select>
+            </div>
+            <div class="filter-wide">
+                <label class="mov-filter-label">Cliente</label>
+                <input type="text" name="cliente" value="{{ request('cliente') }}" class="form-control form-control-sm mov-filter-control js-text-filter" placeholder="Buscar cliente...">
+            </div>
+            <div class="filter-wide">
+                <label class="mov-filter-label">Documento</label>
+                <input type="text" name="documento" value="{{ request('documento') }}" class="form-control form-control-sm mov-filter-control js-text-filter" placeholder="Buscar documento...">
+            </div>
+            <div class="d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary btn-sm w-100">Filtrar</button>
+                <a href="/movimientos" class="btn btn-outline-secondary btn-sm" title="Limpiar filtros">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 @if($movimientos->count())
 <div class="row g-2 mb-3">
     <div class="col-md-3">
-        <div class="card border-success border-opacity-25">
+        <div class="card mov-stat-card border-success border-opacity-25">
             <div class="card-body py-2">
                 <div class="small text-muted">Ingresos activos (pág.)</div>
                 <div class="fw-bold text-success">S/ {{ number_format($totales['ingresos'], 2) }}</div>
@@ -31,7 +139,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-danger border-opacity-25">
+        <div class="card mov-stat-card border-danger border-opacity-25">
             <div class="card-body py-2">
                 <div class="small text-muted">Salidas activas (pág.)</div>
                 <div class="fw-bold text-danger">S/ {{ number_format($totales['salidas'], 2) }}</div>
@@ -39,7 +147,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card {{ $totales['balance'] >= 0 ? 'border-primary' : 'border-warning' }} border-opacity-25">
+        <div class="card mov-stat-card {{ $totales['balance'] >= 0 ? 'border-primary' : 'border-warning' }} border-opacity-25">
             <div class="card-body py-2">
                 <div class="small text-muted">Balance (pág.)</div>
                 <div class="fw-bold {{ $totales['balance'] >= 0 ? 'text-primary' : 'text-warning' }}">
@@ -49,7 +157,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-secondary border-opacity-25">
+        <div class="card mov-stat-card border-secondary border-opacity-25">
             <div class="card-body py-2">
                 <div class="small text-muted">Registros</div>
                 <div class="fw-bold text-secondary">{{ $movimientos->total() }} total</div>
@@ -62,7 +170,7 @@
 {{-- Tabla ledger con filas expandibles --}}
 <div class="card shadow-sm border-0">
     <div class="table-responsive">
-        <table class="table mb-0 align-middle" id="tablaMovimientos">
+        <table class="table mb-0 align-middle mov-table" id="tablaMovimientos">
             <thead class="table-light">
                 {{-- Fila de títulos --}}
                 <tr>
@@ -418,6 +526,39 @@
 </form>
 
 <script>
+document.querySelectorAll('.mov-table thead tr.align-top [name]').forEach(el => {
+    el.disabled = true;
+});
+
+const formFiltros = document.getElementById('formFiltros');
+const periodoSelect = formFiltros?.querySelector('select[name="periodo"]');
+const rangoCampos = document.querySelectorAll('.periodo-rango');
+let filtroTimer = null;
+
+function toggleRangoPeriodo() {
+    const esRango = periodoSelect?.value === 'rango';
+    rangoCampos.forEach(el => el.classList.toggle('d-none', !esRango));
+}
+
+function enviarFiltros(delay = 0) {
+    clearTimeout(filtroTimer);
+    filtroTimer = setTimeout(() => formFiltros?.requestSubmit(), delay);
+}
+
+document.querySelectorAll('.js-auto-filter').forEach(el => {
+    el.addEventListener('change', () => {
+        toggleRangoPeriodo();
+        enviarFiltros(0);
+    });
+});
+
+document.querySelectorAll('.js-text-filter').forEach(el => {
+    el.addEventListener('input', () => enviarFiltros(450));
+    el.addEventListener('change', () => enviarFiltros(0));
+});
+
+toggleRangoPeriodo();
+
 document.querySelectorAll('.mov-row').forEach(function(row) {
     const targetId  = row.getAttribute('data-bs-target');
     const collapseEl = document.querySelector(targetId);
