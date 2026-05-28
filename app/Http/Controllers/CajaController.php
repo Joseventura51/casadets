@@ -71,7 +71,8 @@ class CajaController extends Controller
         $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas);
 
         // ── Efectivo actual en caja ──────────────────────────────────────
-        // apertura + efectivo_cobrado − compras_pagadas_en_efectivo
+        // apertura + cobrado_efectivo + ingresos_manuales_efectivo
+        //          - compras_efectivo - salidas_manuales_efectivo
         $comprasEnEfectivo = round(
             Compra::where('metodo_pago', 'efectivo')
                 ->whereDate('fecha', '>=', $desde)
@@ -79,12 +80,35 @@ class CajaController extends Controller
                 ->sum('monto_total'),
             2
         );
-        $efectivoEnCaja = round(
-            ($sesionHoy?->monto_apertura ?? 0)
-            + $ventasPorMetodo->get('efectivo', 0)
-            - $comprasEnEfectivo,
+
+        $ingresosManualEfectivo = round(
+            $movActivos->filter(
+                fn ($m) => $m->tipo === 'ingreso'
+                    && $m->subtipo === 'manual'
+                    && $m->metodo_pago === 'efectivo'
+            )->sum('monto'),
             2
         );
+
+        $salidasManualEfectivo = round(
+            $movActivos->filter(
+                fn ($m) => $m->tipo === 'salida'
+                    && $m->subtipo === 'manual'
+                    && $m->metodo_pago === 'efectivo'
+            )->sum('monto'),
+            2
+        );
+
+        $efectivoEntradas = round(
+            ($sesionHoy?->monto_apertura ?? 0)
+            + $ventasPorMetodo->get('efectivo', 0)
+            + $ingresosManualEfectivo,
+            2
+        );
+
+        $efectivoSalidas = round($comprasEnEfectivo + $salidasManualEfectivo, 2);
+
+        $efectivoEnCaja = round($efectivoEntradas - $efectivoSalidas, 2);
 
         // ── Por vendedor ─────────────────────────────────────────────────
         $ventasPorVendedor = $ventasCobradas
@@ -101,7 +125,8 @@ class CajaController extends Controller
             'totalVentasCobradas', 'totalOtrosIngresos', 'totalCompras',
             'totalSalidas', 'balance',
             'ventasPorMetodo', 'ventasPorVendedor',
-            'comprasEnEfectivo', 'efectivoEnCaja'
+            'comprasEnEfectivo', 'ingresosManualEfectivo', 'salidasManualEfectivo',
+            'efectivoEntradas', 'efectivoSalidas', 'efectivoEnCaja'
         ));
     }
 

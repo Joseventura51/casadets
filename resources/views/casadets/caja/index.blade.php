@@ -185,28 +185,62 @@
 
 {{-- Efectivo en caja --}}
 <div class="card mb-4" style="border-left: 4px solid #f59e0b;">
-    <div class="card-body py-3 d-flex align-items-center gap-4 flex-wrap">
-        <div>
-            <div class="text-muted small mb-1"><i class="bi bi-cash-coin me-1"></i>Efectivo actual en caja</div>
-            <h3 class="mb-0 {{ $efectivoEnCaja >= 0 ? 'text-warning-emphasis fw-bold' : 'text-danger fw-bold' }}">
-                S/ {{ number_format($efectivoEnCaja, 2) }}
-            </h3>
-        </div>
-        <div class="vr d-none d-md-block"></div>
-        <div class="small text-muted d-flex flex-column gap-1">
-            @if($sesionHoy && $sesionHoy->monto_apertura > 0)
-                <span><i class="bi bi-plus-circle text-success me-1"></i>
-                    Apertura: <strong>S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center gap-4 flex-wrap">
+            <div>
+                <div class="text-muted small mb-1"><i class="bi bi-cash-coin me-1"></i>Efectivo actual en caja</div>
+                <h3 class="mb-0 {{ $efectivoEnCaja >= 0 ? 'text-warning-emphasis fw-bold' : 'text-danger fw-bold' }}">
+                    S/ {{ number_format($efectivoEnCaja, 2) }}
+                </h3>
+            </div>
+            <div class="vr d-none d-md-block"></div>
+            {{-- Entradas de efectivo --}}
+            <div class="small d-flex flex-column gap-1">
+                <div class="fw-semibold text-success mb-1"><i class="bi bi-arrow-down-circle me-1"></i>Entradas de efectivo</div>
+                @if($sesionHoy && $sesionHoy->monto_apertura > 0)
+                    <span class="text-muted">
+                        <i class="bi bi-plus-circle text-success me-1"></i>
+                        Apertura: <strong>S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
+                    </span>
+                @endif
+                <span class="text-muted">
+                    <i class="bi bi-plus-circle text-primary me-1"></i>
+                    Ventas cobradas: <strong>S/ {{ number_format($ventasPorMetodo->get('efectivo', 0), 2) }}</strong>
                 </span>
-            @endif
-            <span><i class="bi bi-plus-circle text-primary me-1"></i>
-                Cobrado en efectivo: <strong>S/ {{ number_format($ventasPorMetodo->get('efectivo', 0), 2) }}</strong>
-            </span>
-            @if($comprasEnEfectivo > 0)
-                <span><i class="bi bi-dash-circle text-danger me-1"></i>
-                    Compras en efectivo: <strong>S/ {{ number_format($comprasEnEfectivo, 2) }}</strong>
+                @if($ingresosManualEfectivo > 0)
+                    <span class="text-muted">
+                        <i class="bi bi-plus-circle text-success me-1"></i>
+                        Otros ingresos: <strong>S/ {{ number_format($ingresosManualEfectivo, 2) }}</strong>
+                    </span>
+                @endif
+                <span class="fw-semibold text-success border-top pt-1 mt-1">
+                    Total entradas: S/ {{ number_format($efectivoEntradas, 2) }}
                 </span>
-            @endif
+            </div>
+            <div class="vr d-none d-md-block"></div>
+            {{-- Salidas de efectivo --}}
+            <div class="small d-flex flex-column gap-1">
+                <div class="fw-semibold text-danger mb-1"><i class="bi bi-arrow-up-circle me-1"></i>Salidas de efectivo</div>
+                @if($comprasEnEfectivo > 0)
+                    <span class="text-muted">
+                        <i class="bi bi-dash-circle text-danger me-1"></i>
+                        Compras: <strong>S/ {{ number_format($comprasEnEfectivo, 2) }}</strong>
+                    </span>
+                @endif
+                @if($salidasManualEfectivo > 0)
+                    <span class="text-muted">
+                        <i class="bi bi-dash-circle text-danger me-1"></i>
+                        Otras salidas: <strong>S/ {{ number_format($salidasManualEfectivo, 2) }}</strong>
+                    </span>
+                @endif
+                @if($efectivoSalidas == 0)
+                    <span class="text-muted fst-italic">Sin salidas en efectivo</span>
+                @else
+                    <span class="fw-semibold text-danger border-top pt-1 mt-1">
+                        Total salidas: S/ {{ number_format($efectivoSalidas, 2) }}
+                    </span>
+                @endif
+            </div>
         </div>
     </div>
 </div>
@@ -369,7 +403,7 @@
                     <th>Fecha</th>
                     <th>Tipo</th>
                     <th>Categoría</th>
-                    <th>Origen</th>
+                    <th>Método</th>
                     <th>Documento</th>
                     <th>Estado</th>
                     <th class="text-end">Monto</th>
@@ -397,9 +431,24 @@
                     </td>
                     <td>{{ $m->categoria }}</td>
                     <td>
-                        <span class="badge {{ ($m->origen ?? 'manual') === 'auto' ? 'bg-info text-dark' : 'bg-secondary' }}" style="font-size:.65rem;">
-                            {{ ($m->origen ?? 'manual') === 'auto' ? 'auto' : 'manual' }}
-                        </span>
+                        @php
+                            $iconos = [
+                                'efectivo'      => ['bi-cash',        'text-warning'],
+                                'yape'          => ['bi-phone',       'text-success'],
+                                'plin'          => ['bi-phone',       'text-info'],
+                                'deposito'      => ['bi-bank',        'text-primary'],
+                                'transferencia' => ['bi-bank',        'text-primary'],
+                            ];
+                            $mp = $m->metodo_pago ?? null;
+                            $icon = $iconos[$mp] ?? ['bi-dash', 'text-muted'];
+                        @endphp
+                        @if($mp)
+                            <span class="small {{ $icon[1] }}">
+                                <i class="bi {{ $icon[0] }} me-1"></i>{{ ucfirst($mp) }}
+                            </span>
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
                     </td>
                     <td class="small text-muted">{{ ucfirst($m->documento_tipo ?? '') }} {{ $m->documento_numero ?? '' }}</td>
                     <td>

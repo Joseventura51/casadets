@@ -64,6 +64,7 @@ class MovimientoController extends Controller
             'tipo'             => 'required|in:ingreso,salida',
             'categoria'        => 'required|string|max:255',
             'empresa'          => 'nullable|string|in:casadets,zendy',
+            'metodo_pago'      => 'required|string|in:efectivo,yape,plin,deposito,transferencia',
             'documento_tipo'   => 'nullable|string|max:50',
             'documento_numero' => 'nullable|string|max:255',
             'monto'            => 'required|numeric|min:0.01',
@@ -73,7 +74,7 @@ class MovimientoController extends Controller
 
         Movimiento::create(array_merge(
             $request->only([
-                'tipo', 'categoria', 'documento_tipo',
+                'tipo', 'categoria', 'metodo_pago', 'documento_tipo',
                 'documento_numero', 'monto', 'fecha', 'observaciones',
             ]),
             [

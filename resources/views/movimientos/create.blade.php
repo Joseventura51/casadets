@@ -46,6 +46,29 @@
                     </select>
                 </div>
 
+                <div class="col-md-6">
+                    <label class="form-label">Método de pago <span class="text-danger">*</span></label>
+                    <select name="metodo_pago" class="form-select" required>
+                        @foreach([
+                            'efectivo'      => 'Efectivo',
+                            'yape'          => 'Yape',
+                            'plin'          => 'Plin',
+                            'deposito'      => 'Depósito',
+                            'transferencia' => 'Transferencia',
+                        ] as $val => $label)
+                            <option value="{{ $val }}" {{ old('metodo_pago') === $val ? 'selected' : '' }}>
+                                {{ $label }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @if($tipo === 'salida')
+                        <div class="form-text text-warning">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Las salidas en <strong>Efectivo</strong> se descuentan del saldo de caja.
+                        </div>
+                    @endif
+                </div>
+
                 <div class="col-12">
                     <hr class="my-1">
                     <p class="text-muted small mb-2">Documento de referencia (opcional)</p>

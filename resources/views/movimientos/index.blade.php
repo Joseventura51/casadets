@@ -116,10 +116,10 @@
                     <th style="width:2rem;"></th>
                     <th>Tipo</th>
                     <th>Categoría</th>
+                    <th>Método</th>
                     <th>Empresa</th>
                     <th>Cliente</th>
                     <th>Documento</th>
-                    <th>Origen</th>
                     <th>Estado</th>
                     <th class="text-end">Monto</th>
                     <th>Fecha</th>
@@ -163,6 +163,28 @@
                             <span class="badge bg-light text-dark border" style="font-size:.65rem;">{{ strtoupper($m->empresa) }}</span>
                         @endif
                     </td>
+                    <td>
+                        @php
+                            $mpIconos = [
+                                'efectivo'      => ['bi-cash',   'text-warning'],
+                                'yape'          => ['bi-phone',  'text-success'],
+                                'plin'          => ['bi-phone',  'text-info'],
+                                'deposito'      => ['bi-bank',   'text-primary'],
+                                'transferencia' => ['bi-bank',   'text-primary'],
+                            ];
+                            $mpVal  = $m->metodo_pago ?? null;
+                            $mpIcon = $mpIconos[$mpVal] ?? null;
+                        @endphp
+                        @if($mpVal && $mpIcon)
+                            <span class="small {{ $mpIcon[1] }}">
+                                <i class="bi {{ $mpIcon[0] }} me-1"></i>{{ ucfirst($mpVal) }}
+                            </span>
+                        @elseif($mpVal)
+                            <span class="small text-muted">{{ ucfirst($mpVal) }}</span>
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
                     <td class="small text-muted">{{ $m->cliente->nombre ?? '—' }}</td>
                     <td class="small text-muted">
                         @if($m->documento_tipo)
@@ -192,7 +214,7 @@
 
                 {{-- Fila de detalle expandible --}}
                 <tr class="collapse-row">
-                    <td colspan="10" class="p-0 border-0">
+                    <td colspan="11" class="p-0 border-0">
                         <div class="collapse" id="det-{{ $m->id }}">
                             <div class="px-4 py-3 bg-light border-bottom">
                                 <div class="row g-3">
@@ -332,7 +354,7 @@
 
                 @empty
                 <tr>
-                    <td colspan="10" class="text-center text-muted py-5">
+                    <td colspan="11" class="text-center text-muted py-5">
                         No hay movimientos registrados.
                     </td>
                 </tr>
