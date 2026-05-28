@@ -16,7 +16,7 @@
 <div class="card mb-3">
     <div class="card-body py-2">
         <form method="GET" class="row g-2 align-items-end" data-dynamic-filter data-default-today>
-            <div class="col-md-2">
+            <div class="col-md-2 col-6">
                 <label class="form-label small mb-1">Tipo</label>
                 <select name="tipo" class="form-select form-select-sm">
                     <option value="">Todos</option>
@@ -25,7 +25,7 @@
                     <option value="contable" {{ request('tipo') === 'contable' ? 'selected' : '' }}>Contable</option>
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-2 col-6">
                 <label class="form-label small mb-1">Subtipo</label>
                 <select name="subtipo" class="form-select form-select-sm">
                     <option value="">Todos</option>
@@ -35,7 +35,18 @@
                     <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
                 </select>
             </div>
-            <div class="col-md-1">
+            <div class="col-md-2 col-6">
+                <label class="form-label small mb-1">Método de pago</label>
+                <select name="metodo_pago" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="efectivo"      {{ request('metodo_pago') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
+                    <option value="yape"          {{ request('metodo_pago') === 'yape'          ? 'selected' : '' }}>Yape</option>
+                    <option value="plin"          {{ request('metodo_pago') === 'plin'          ? 'selected' : '' }}>Plin</option>
+                    <option value="deposito"      {{ request('metodo_pago') === 'deposito'      ? 'selected' : '' }}>Depósito</option>
+                    <option value="transferencia" {{ request('metodo_pago') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
+                </select>
+            </div>
+            <div class="col-md-1 col-6">
                 <label class="form-label small mb-1">Empresa</label>
                 <select name="empresa" class="form-select form-select-sm">
                     <option value="">Todas</option>
@@ -43,7 +54,7 @@
                     <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
                 </select>
             </div>
-            <div class="col-md-1">
+            <div class="col-md-1 col-6">
                 <label class="form-label small mb-1">Estado</label>
                 <select name="estado" class="form-select form-select-sm">
                     <option value="">Todos</option>
@@ -51,17 +62,17 @@
                     <option value="anulado" {{ request('estado') === 'anulado' ? 'selected' : '' }}>Anulado</option>
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-2 col-6">
                 <label class="form-label small mb-1">Desde</label>
                 <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-2 col-6">
                 <label class="form-label small mb-1">Hasta</label>
                 <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button class="btn btn-sm btn-outline-primary w-100">Filtrar</button>
-                <a href="/movimientos" class="btn btn-sm btn-outline-secondary">✕</a>
+            <div class="col-md-12 col-12 d-flex gap-2">
+                <button class="btn btn-sm btn-primary">Filtrar</button>
+                <a href="/movimientos" class="btn btn-sm btn-outline-secondary">Limpiar filtros</a>
             </div>
         </form>
     </div>
@@ -116,8 +127,8 @@
                     <th style="width:2rem;"></th>
                     <th>Tipo</th>
                     <th>Categoría</th>
-                    <th>Método</th>
                     <th>Empresa</th>
+                    <th>Método</th>
                     <th>Cliente</th>
                     <th>Documento</th>
                     <th>Estado</th>
@@ -137,6 +148,7 @@
                     <td class="text-center text-muted">
                         <i class="bi bi-chevron-right toggle-icon small"></i>
                     </td>
+                    {{-- Tipo --}}
                     <td>
                         @if($m->tipo === 'ingreso')
                             <span class="badge bg-success {{ $m->estado === 'anulado' ? 'opacity-50' : '' }}">Ingreso</span>
@@ -157,12 +169,15 @@
                             <br><span class="badge bg-light text-secondary" style="font-size:.62rem;">manual</span>
                         @endif
                     </td>
+                    {{-- Categoría --}}
                     <td>{{ $m->categoria }}</td>
+                    {{-- Empresa --}}
                     <td>
                         @if($m->empresa)
                             <span class="badge bg-light text-dark border" style="font-size:.65rem;">{{ strtoupper($m->empresa) }}</span>
                         @endif
                     </td>
+                    {{-- Método de pago --}}
                     <td>
                         @php
                             $mpIconos = [
@@ -185,19 +200,28 @@
                             <span class="text-muted small">—</span>
                         @endif
                     </td>
+                    {{-- Cliente --}}
                     <td class="small text-muted">{{ $m->cliente->nombre ?? '—' }}</td>
-                    <td class="small text-muted">
+                    {{-- Documento: para pagos automáticos muestra las ventas del pago --}}
+                    <td class="small">
                         @if($m->documento_tipo)
-                            {{ ucfirst($m->documento_tipo) }}{{ $m->documento_numero ? ' '.$m->documento_numero : '' }}
+                            <span class="text-muted">{{ ucfirst($m->documento_tipo) }} {{ $m->documento_numero }}</span>
+                        @elseif($m->referencia_tipo === 'pago' && $m->pago && $m->pago->detalles->count())
+                            @foreach($m->pago->detalles->take(3) as $dpf)
+                                @php
+                                    $v = $dpf->venta;
+                                    $label = trim(ucfirst($v?->documento_tipo ?? 'Venta').' '.($v?->documento_numero ?? '#'.($dpf->venta_id ?? '')));
+                                @endphp
+                                <span class="d-block text-muted">{{ $label }}</span>
+                            @endforeach
+                            @if($m->pago->detalles->count() > 3)
+                                <span class="text-muted" style="font-size:.7rem;">+{{ $m->pago->detalles->count() - 3 }} más</span>
+                            @endif
                         @else
-                            —
+                            <span class="text-muted">—</span>
                         @endif
                     </td>
-                    <td>
-                        <span class="badge {{ ($m->origen ?? 'manual') === 'auto' ? 'bg-info text-dark' : 'bg-secondary' }}" style="font-size:.65rem;">
-                            {{ ($m->origen ?? 'manual') === 'auto' ? 'automático' : 'manual' }}
-                        </span>
-                    </td>
+                    {{-- Estado --}}
                     <td>
                         @if($m->estado === 'anulado')
                             <span class="badge bg-secondary" style="font-size:.65rem;">Anulado</span>
@@ -205,16 +229,18 @@
                             <span class="badge bg-success bg-opacity-10 text-success" style="font-size:.65rem;">Activo</span>
                         @endif
                     </td>
+                    {{-- Monto --}}
                     <td class="text-end fw-semibold {{ $m->estado === 'anulado' ? 'text-decoration-line-through text-muted' : ($m->tipo === 'ingreso' ? 'text-success' : ($m->tipo === 'salida' ? 'text-danger' : 'text-secondary')) }}">
                         @if($m->tipo === 'ingreso' && $m->estado !== 'anulado') + @elseif($m->tipo === 'salida' && $m->estado !== 'anulado') − @endif
                         S/ {{ number_format($m->monto, 2) }}
                     </td>
+                    {{-- Fecha --}}
                     <td class="small text-muted">{{ $m->fecha->format('d/m/Y') }}</td>
                 </tr>
 
                 {{-- Fila de detalle expandible --}}
                 <tr class="collapse-row">
-                    <td colspan="11" class="p-0 border-0">
+                    <td colspan="10" class="p-0 border-0">
                         <div class="collapse" id="det-{{ $m->id }}">
                             <div class="px-4 py-3 bg-light border-bottom">
                                 <div class="row g-3">
@@ -354,7 +380,7 @@
 
                 @empty
                 <tr>
-                    <td colspan="11" class="text-center text-muted py-5">
+                    <td colspan="10" class="text-center text-muted py-5">
                         No hay movimientos registrados.
                     </td>
                 </tr>

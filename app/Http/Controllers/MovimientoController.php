@@ -21,11 +21,11 @@ class MovimientoController extends Controller
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
 
-        if ($request->filled('tipo'))    $query->where('tipo', $request->tipo);
-        if ($request->filled('subtipo')) $query->where('subtipo', $request->subtipo);
-        if ($request->filled('origen'))  $query->where('origen', $request->origen);
-        if ($request->filled('empresa')) $query->where('empresa', $request->empresa);
-        if ($request->filled('estado'))  $query->where('estado', $request->estado);
+        if ($request->filled('tipo'))        $query->where('tipo', $request->tipo);
+        if ($request->filled('subtipo'))     $query->where('subtipo', $request->subtipo);
+        if ($request->filled('empresa'))     $query->where('empresa', $request->empresa);
+        if ($request->filled('estado'))      $query->where('estado', $request->estado);
+        if ($request->filled('metodo_pago')) $query->where('metodo_pago', $request->metodo_pago);
         $query->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta);
 
