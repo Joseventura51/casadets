@@ -636,7 +636,7 @@ document.getElementById('estadoManual').addEventListener('change', () => {
 // ── Reindexar y eventos del contenedor ────────────────────────
 function reindex() {
     document.querySelectorAll('#pagosContainer .pago-row').forEach((row, i) => {
-        const num  = row.querySelector('.pago-row-top > .text-muted.fw-semibold');
+        const num  = row.querySelector('.pago-row-index');
         const sel  = row.querySelector('select.metodo-sel');
         const inp  = row.querySelector('input.monto-pago');
         const desc = row.querySelector('input.desc-pago');
@@ -649,25 +649,23 @@ function reindex() {
 }
 
 function crearFila(met = 'transferencia') {
+    const showDesc = METODOS_CON_DESC.includes(met);
     const opts = METODOS.map(m => `<option value="${m}" ${m===met?'selected':''}>${METODO_LABELS[m]||m}</option>`).join('');
     const div  = document.createElement('div');
     div.className = 'pago-row';
     div.innerHTML = `
         <div class="pago-row-top">
-            <div class="text-muted fw-semibold me-1" style="min-width:18px;font-size:.8rem;">${pagoIdx+1}</div>
-            <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel" style="flex:1.2;">${opts}</select>
-            <div class="input-group input-group-sm" style="width:140px;">
-                <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
-                <input type="number" name="pagos[${pagoIdx}][monto]"
-                    value="" step="0.01" min="0"
-                    class="form-control form-control-sm text-end monto-pago border-start-0" required>
+            <span class="pago-row-index">${pagoIdx+1}</span>
+            <div>
+                <label class="pago-field-label">Método</label>
+                <select name="pagos[${pagoIdx}][metodo]" class="form-select form-select-sm metodo-sel">${opts}</select>
             </div>
             <div class="pago-monto-field">
                 <label class="pago-field-label">Monto</label>
                 <div class="input-group input-group-sm">
                     <span class="input-group-text py-0 px-1 bg-white border-end-0 text-muted small">S/</span>
                     <input type="number" name="pagos[${pagoIdx}][monto]"
-                        value="${monto}" step="0.01" min="0"
+                        value="" step="0.01" min="0"
                         class="form-control form-control-sm text-end monto-pago border-start-0" required>
                 </div>
             </div>
