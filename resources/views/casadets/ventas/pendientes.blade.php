@@ -72,7 +72,7 @@
     <div class="col-6 col-md-6">
         <div class="card p-3">
             <small class="text-muted">Monto total</small>
-            <h4 class="mb-0 text-danger fw-bold" id="kpiMonto">S/ {{ number_format($ventas->sum('total'), 2) }}</h4>
+            <h4 class="mb-0 text-danger fw-bold" id="kpiMonto">S/ {{ number_format($ventas->sum('saldo_pendiente'), 2) }}</h4>
             <small class="text-muted">por cobrar</small>
         </div>
     </div>
