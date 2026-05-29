@@ -22,6 +22,7 @@ Route::get('/reportes',               [ReporteController::class, 'index']);
 Route::get('/reportes/datos',         [ReporteController::class, 'datos']);
 Route::get('/reportes/utilidad-detalle', [ReporteController::class, 'utilidadDetalle']);
 Route::get('/reportes/export-excel',  [ReporteController::class, 'exportExcel']);
+Route::get('/reportes/export-pdf',    [ReporteController::class, 'exportPdf']);
 
 // Movimientos (ingresos / salidas)
 Route::get('/movimientos', [MovimientoController::class, 'index']);

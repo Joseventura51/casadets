@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Venta;
-use App\Models\Compra;
 use App\Models\Vendedor;
 use App\Models\Cliente;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -17,6 +16,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 
 class ReporteController extends Controller
 {
+    // ── Helpers ────────────────────────────────────────────
     private function rango(string $periodo): array
     {
         return match ($periodo) {
@@ -26,21 +26,54 @@ class ReporteController extends Controller
         };
     }
 
-    private function aplicarFiltros(\Illuminate\Database\Eloquent\Builder $q, Request $request): void
+    private function resolverRango(Request $r, string $periodo): array
     {
-        if ($request->filled('vendedor_id')) $q->where('vendedor_id', $request->vendedor_id);
-        if ($request->filled('metodo_pago')) $q->where('metodo_pago', $request->metodo_pago);
-        if ($request->filled('cliente_id'))  $q->where('cliente_id', $request->cliente_id);
+        [$d, $h] = $this->rango($periodo);
+        if ($r->filled('desde')) $d = Carbon::parse($r->desde)->startOfDay();
+        if ($r->filled('hasta')) $h = Carbon::parse($r->hasta)->endOfDay();
+        return [$d, $h];
     }
 
-    private function resolverRango(Request $request, string $periodo): array
+    /**
+     * Base query para ventas con filtros comunes aplicados.
+     * Devuelve un query builder sobre la tabla `ventas`.
+     */
+    private function qVentas(Request $r, $desde, $hasta)
     {
-        [$desde, $hasta] = $this->rango($periodo);
-        if ($request->filled('desde')) $desde = Carbon::parse($request->desde)->startOfDay();
-        if ($request->filled('hasta')) $hasta = Carbon::parse($request->hasta)->endOfDay();
-        return [$desde, $hasta];
+        $q = DB::table('ventas')
+            ->whereBetween('ventas.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('ventas.estado', '!=', 'anulado')
+            ->whereNull('ventas.deleted_at')
+            ->where(fn($q) => $q->whereNull('ventas.documento_tipo')
+                ->orWhere('ventas.documento_tipo', '!=', 'nota_credito'));
+
+        if ($r->filled('vendedor_id')) $q->where('ventas.vendedor_id', $r->vendedor_id);
+        if ($r->filled('metodo_pago')) $q->where('ventas.metodo_pago', $r->metodo_pago);
+        if ($r->filled('cliente_id'))  $q->where('ventas.cliente_id',  $r->cliente_id);
+
+        return $q;
     }
 
+    /** Condiciones de ventas válidas para joins desde venta_detalles */
+    private function qDetalles(Request $r, $desde, $hasta)
+    {
+        $q = DB::table('venta_detalles as vd')
+            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
+            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')
+                ->orWhere('v.documento_tipo', '!=', 'nota_credito'));
+
+        if ($r->filled('vendedor_id')) $q->where('v.vendedor_id', $r->vendedor_id);
+        if ($r->filled('metodo_pago')) $q->where('v.metodo_pago', $r->metodo_pago);
+        if ($r->filled('cliente_id'))  $q->where('v.cliente_id', $r->cliente_id);
+
+        return $q;
+    }
+
+    // ── Controllers ────────────────────────────────────────
     public function index(): \Illuminate\View\View
     {
         $vendedores = Vendedor::orderBy('nombre')->get(['id', 'nombre']);
@@ -48,93 +81,124 @@ class ReporteController extends Controller
         return view('reportes', compact('vendedores', 'clientes'));
     }
 
-    public function datos(Request $request): JsonResponse
+    public function datos(Request $r): JsonResponse
     {
-        $periodo        = $request->input('periodo', 'diario');
-        [$desde, $hasta] = $this->resolverRango($request, $periodo);
+        $periodo        = $r->input('periodo', 'diario');
+        [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        // ── Ventas ────────────────────────────────────────────
-        $qVentas = Venta::whereBetween('fecha', [$desde, $hasta])
-            ->where('estado', '!=', 'anulado')
-            ->where(fn($q) => $q->whereNull('documento_tipo')
-                ->orWhere('documento_tipo', '!=', 'nota_credito'));
-        $this->aplicarFiltros($qVentas, $request);
+        // ── Ventas: summary ─────────────────────────────
+        $vSum = $this->qVentas($r, $desde, $hasta)
+            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total),0) as total')
+            ->first();
 
-        $ventas       = $qVentas->with(['detalles.producto', 'cliente', 'vendedor'])->get();
-        $totalVentas  = (float) $ventas->sum('total');
-        $cantVentas   = $ventas->count();
-        $igvVentas    = round($totalVentas * 18 / 118, 2);
-        $subtotalV    = round($totalVentas / 1.18, 2);
+        $totalVentas = (float) ($vSum->total    ?? 0);
+        $cantVentas  = (int)   ($vSum->cantidad ?? 0);
+        $igvVentas   = round($totalVentas * 18 / 118, 2);
+        $subtotalV   = round($totalVentas / 1.18, 2);
 
-        $porMetodo = $ventas->groupBy('metodo_pago')
-            ->map(fn($g, $k) => [
-                'metodo' => $k ?: 'No especificado',
-                'total'  => round((float) $g->sum('total'), 2),
-                'count'  => $g->count(),
-            ])->sortByDesc('total')->values();
+        // ── Por método de pago ───────────────────────────
+        $porMetodo = $this->qVentas($r, $desde, $hasta)
+            ->selectRaw('COALESCE(metodo_pago,"No especificado") as metodo, COUNT(*) as count, SUM(total) as total')
+            ->groupBy('metodo_pago')
+            ->orderByDesc('total')
+            ->get()
+            ->map(fn($m) => ['metodo' => $m->metodo, 'total' => (float)$m->total, 'count' => (int)$m->count]);
 
-        $topClientes = $ventas->groupBy('cliente_id')
-            ->map(fn($g) => [
-                'nombre' => $g->first()->cliente->nombre ?? 'Sin cliente',
-                'total'  => round((float) $g->sum('total'), 2),
-                'count'  => $g->count(),
-            ])->sortByDesc('total')->take(8)->values();
+        // ── Top clientes ────────────────────────────────
+        $topClientes = $this->qVentas($r, $desde, $hasta)
+            ->leftJoin('clientes as cl', 'ventas.cliente_id', '=', 'cl.id')
+            ->selectRaw('COALESCE(cl.nombre,"Sin cliente") as nombre, COUNT(*) as count, SUM(ventas.total) as total')
+            ->groupBy('ventas.cliente_id', 'cl.nombre')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn($c) => ['nombre' => $c->nombre, 'total' => (float)$c->total, 'count' => (int)$c->count]);
 
-        $allDetalles = $ventas->flatMap->detalles;
+        // ── Top productos vendidos ───────────────────────
+        $topProductos = $this->qDetalles($r, $desde, $hasta)
+            ->selectRaw('COALESCE(vd.producto,"Manual") as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total')
+            ->groupBy('vd.producto')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn($p) => ['nombre' => $p->nombre, 'cantidad' => (float)$p->cantidad, 'total' => (float)$p->total]);
 
-        $topProductos = $allDetalles
-            ->groupBy(fn($d) => $d->getAttributes()['producto'] ?? 'Manual')
-            ->map(fn($g, $k) => [
-                'nombre'   => $k,
-                'cantidad' => round((float) $g->sum('cantidad'), 2),
-                'total'    => round((float) $g->sum('subtotal'), 2),
-            ])->sortByDesc('total')->take(8)->values();
+        // ── Comprobantes ─────────────────────────────────
+        $comprobantes = $this->qVentas($r, $desde, $hasta)
+            ->selectRaw('COALESCE(documento_tipo,"Sin tipo") as tipo, COUNT(*) as count, SUM(total) as total')
+            ->groupBy('documento_tipo')
+            ->get()
+            ->map(fn($c) => ['tipo' => $c->tipo, 'count' => (int)$c->count, 'total' => (float)$c->total]);
 
-        $comprobantes = $ventas->groupBy('documento_tipo')
-            ->map(fn($g, $k) => [
-                'tipo'  => $k ?: 'Sin tipo',
-                'count' => $g->count(),
-                'total' => round((float) $g->sum('total'), 2),
-            ])->values();
+        // ── Ventas por día + costo por día (para gráfico) ─
+        $porDia = $this->qDetalles($r, $desde, $hasta)
+            ->selectRaw("DATE(v.fecha) as fecha,
+                         COUNT(DISTINCT v.id)                                            as count,
+                         SUM(v.total)                                                    as total_ventas,
+                         SUM(vd.cantidad * COALESCE(p.precio_costo, 0))                 as total_costo")
+            ->groupByRaw('DATE(v.fecha)')
+            ->orderBy('fecha')
+            ->get()
+            ->map(fn($d) => [
+                'fecha'      => $d->fecha,
+                'count'      => (int) $d->count,
+                'total'      => (float) $d->total_ventas,
+                'utilidad'   => round((float)$d->total_ventas - (float)$d->total_costo, 2),
+            ]);
 
-        $porDia = $ventas->groupBy(fn($v) => $v->fecha->format('Y-m-d'))
-            ->map(fn($g, $k) => [
-                'fecha' => $k,
-                'total' => round((float) $g->sum('total'), 2),
-                'count' => $g->count(),
-            ])->sortBy('fecha')->values();
+        // Si no hay detalles, al menos mostramos el total de ventas por día sin costo
+        if ($porDia->isEmpty()) {
+            $porDia = $this->qVentas($r, $desde, $hasta)
+                ->selectRaw("DATE(fecha) as fecha, COUNT(*) as count, SUM(total) as total_ventas")
+                ->groupByRaw('DATE(fecha)')
+                ->orderBy('fecha')
+                ->get()
+                ->map(fn($d) => [
+                    'fecha'    => $d->fecha,
+                    'count'    => (int) $d->count,
+                    'total'    => (float) $d->total_ventas,
+                    'utilidad' => 0.0,
+                ]);
+        }
 
-        // ── Costo / Utilidad ──────────────────────────────────
-        $totalCosto = $allDetalles->sum(function ($d) {
-            $costo = (float) ($d->producto?->precio_costo ?? 0);
-            return $costo * (float) $d->cantidad;
-        });
+        // ── Costo y utilidad totales ─────────────────────
+        $totalCosto = (float) $this->qDetalles($r, $desde, $hasta)
+            ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total')
+            ->value('total');
+
         $utilidad = round($totalVentas - $totalCosto, 2);
         $margen   = $totalVentas > 0 ? round($utilidad / $totalVentas * 100, 1) : 0;
 
-        // ── Compras ───────────────────────────────────────────
-        $qCompras = Compra::whereBetween('fecha', [$desde, $hasta]);
-        $compras  = $qCompras->with(['lineas.producto'])->get();
+        // ── Compras ──────────────────────────────────────
+        $cmpSum = DB::table('compras')
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->whereNull('deleted_at')
+            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(monto_total),0) as total')
+            ->first();
 
-        $totalCompras = (float) $compras->sum('monto_total');
-        $cantCompras  = $compras->count();
+        $totalCompras = (float) ($cmpSum->total    ?? 0);
+        $cantCompras  = (int)   ($cmpSum->cantidad ?? 0);
         $igvCompras   = round($totalCompras * 18 / 118, 2);
 
-        $porProveedor = $compras->groupBy('empresa')
-            ->map(fn($g, $k) => [
-                'proveedor' => $k ?: 'Sin proveedor',
-                'total'     => round((float) $g->sum('monto_total'), 2),
-                'count'     => $g->count(),
-            ])->sortByDesc('total')->values();
+        $porProveedor = DB::table('compras')
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->whereNull('deleted_at')
+            ->selectRaw('COALESCE(empresa,"Sin proveedor") as proveedor, COUNT(*) as count, SUM(monto_total) as total')
+            ->groupBy('empresa')
+            ->orderByDesc('total')
+            ->get()
+            ->map(fn($p) => ['proveedor' => $p->proveedor, 'total' => (float)$p->total, 'count' => (int)$p->count]);
 
-        $allLineas = $compras->flatMap->lineas;
-        $topProductosCompra = $allLineas
-            ->groupBy(fn($l) => $l->getAttributes()['producto'] ?? 'Manual')
-            ->map(fn($g, $k) => [
-                'nombre'   => $k,
-                'cantidad' => round((float) $g->sum('cantidad'), 2),
-                'total'    => round((float) $g->sum('monto_total'), 2),
-            ])->sortByDesc('total')->take(8)->values();
+        $topProductosCompra = DB::table('compra_lineas as cl')
+            ->join('compras as c', 'cl.compra_id', '=', 'c.id')
+            ->whereBetween('c.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->whereNull('c.deleted_at')
+            ->selectRaw('COALESCE(cl.producto,"Manual") as nombre, SUM(cl.cantidad) as cantidad, SUM(cl.monto_total) as total')
+            ->groupBy('cl.producto')
+            ->orderByDesc('total')
+            ->limit(8)
+            ->get()
+            ->map(fn($p) => ['nombre' => $p->nombre, 'cantidad' => (float)$p->cantidad, 'total' => (float)$p->total]);
 
         return response()->json([
             'periodo' => $periodo,
@@ -152,12 +216,12 @@ class ReporteController extends Controller
                 'por_dia'       => $porDia,
             ],
             'compras' => [
-                'total'          => $totalCompras,
-                'cantidad'       => $cantCompras,
-                'igv'            => $igvCompras,
-                'neto'           => round($totalCompras, 2),
-                'por_proveedor'  => $porProveedor,
-                'top_productos'  => $topProductosCompra,
+                'total'         => $totalCompras,
+                'cantidad'      => $cantCompras,
+                'igv'           => $igvCompras,
+                'neto'          => $totalCompras,
+                'por_proveedor' => $porProveedor,
+                'top_productos' => $topProductosCompra,
             ],
             'utilidad' => [
                 'total_ventas' => round($totalVentas, 2),
@@ -170,83 +234,124 @@ class ReporteController extends Controller
         ]);
     }
 
-    public function utilidadDetalle(Request $request): JsonResponse
+    public function utilidadDetalle(Request $r): JsonResponse
     {
-        $periodo        = $request->input('periodo', 'diario');
-        [$desde, $hasta] = $this->resolverRango($request, $periodo);
+        $periodo        = $r->input('periodo', 'diario');
+        [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        $qVentas = Venta::whereBetween('fecha', [$desde, $hasta])
-            ->where('estado', '!=', 'anulado')
-            ->where(fn($q) => $q->whereNull('documento_tipo')
-                ->orWhere('documento_tipo', '!=', 'nota_credito'));
-        $this->aplicarFiltros($qVentas, $request);
+        // IDs de ventas válidas
+        $ventaIds = $this->qVentas($r, $desde, $hasta)->pluck('id');
 
-        $ventas = $qVentas->with(['detalles.producto', 'cliente'])->get();
+        if ($ventaIds->isEmpty()) {
+            return response()->json(['detalle' => []]);
+        }
 
-        $detalle = $ventas->map(function ($v) {
-            $lineas = $v->detalles->map(function ($d) {
-                $costo    = (float) ($d->producto?->precio_costo ?? 0);
-                $qty      = (float) $d->cantidad;
-                $pv       = (float) $d->precio_unitario;
-                $ganancia = round(($pv - $costo) * $qty, 2);
-                return [
-                    'producto'    => $d->getAttributes()['producto'] ?? 'Manual',
-                    'codigo'      => $d->codigo ?? '',
-                    'cantidad'    => $qty,
-                    'precio_venta'=> $pv,
-                    'costo'       => $costo,
-                    'subtotal'    => (float) $d->subtotal,
-                    'ganancia'    => $ganancia,
-                ];
-            })->values();
+        // Traer ventas con sus detalles y costos en una sola consulta
+        $detalles = DB::table('venta_detalles as vd')
+            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
+            ->whereIn('vd.venta_id', $ventaIds)
+            ->selectRaw("vd.venta_id,
+                         COALESCE(vd.producto,'Manual')      as nombre_producto,
+                         vd.codigo,
+                         vd.cantidad,
+                         vd.precio_unitario,
+                         vd.subtotal,
+                         COALESCE(p.precio_costo, 0)         as precio_costo,
+                         (vd.precio_unitario - COALESCE(p.precio_costo,0)) * vd.cantidad as ganancia")
+            ->orderBy('vd.venta_id')
+            ->get()
+            ->groupBy('venta_id');
 
+        $ventas = DB::table('ventas as v')
+            ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
+            ->whereIn('v.id', $ventaIds)
+            ->selectRaw("v.id, v.documento_tipo, v.documento_numero, v.fecha, v.total,
+                         COALESCE(c.nombre,'Sin cliente') as cliente")
+            ->orderByDesc('v.fecha')
+            ->get();
+
+        $resultado = $ventas->map(function ($v) use ($detalles) {
+            $lineas = ($detalles[$v->id] ?? collect())->map(fn($d) => [
+                'producto'    => $d->nombre_producto,
+                'codigo'      => $d->codigo ?? '',
+                'cantidad'    => (float) $d->cantidad,
+                'precio_venta'=> (float) $d->precio_unitario,
+                'costo'       => (float) $d->precio_costo,
+                'subtotal'    => (float) $d->subtotal,
+                'ganancia'    => round((float) $d->ganancia, 2),
+            ])->values();
+
+            $numero = trim(ucfirst($v->documento_tipo ?? 'Venta') . ' ' . ($v->documento_numero ?? '#' . $v->id));
             return [
-                'id'          => $v->id,
-                'numero'      => trim(ucfirst($v->documento_tipo ?? 'Venta') . ' ' . ($v->documento_numero ?? '#' . $v->id)),
-                'fecha'       => $v->fecha->format('d/m/Y'),
-                'cliente'     => $v->cliente?->nombre ?? 'Sin cliente',
-                'total'       => (float) $v->total,
-                'ganancia'    => round($lineas->sum('ganancia'), 2),
-                'lineas'      => $lineas,
+                'id'       => $v->id,
+                'numero'   => $numero,
+                'fecha'    => Carbon::parse($v->fecha)->format('d/m/Y'),
+                'cliente'  => $v->cliente,
+                'total'    => (float) $v->total,
+                'ganancia' => round($lineas->sum('ganancia'), 2),
+                'lineas'   => $lineas,
             ];
-        })->sortByDesc('fecha')->values();
+        });
 
-        return response()->json(['detalle' => $detalle]);
+        return response()->json(['detalle' => $resultado]);
     }
 
-    public function exportExcel(Request $request): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    public function exportExcel(Request $r): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        $periodo        = $request->input('periodo', 'diario');
-        [$desde, $hasta] = $this->resolverRango($request, $periodo);
+        $periodo        = $r->input('periodo', 'diario');
+        [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        $qVentas = Venta::whereBetween('fecha', [$desde, $hasta])
-            ->where('estado', '!=', 'anulado')
-            ->with(['detalles.producto', 'cliente', 'vendedor']);
-        $this->aplicarFiltros($qVentas, $request);
-        $ventas = $qVentas->orderBy('fecha')->get();
+        $ventas = DB::table('ventas as v')
+            ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
+            ->leftJoin('vendedores as vend', 'v.vendedor_id', '=', 'vend.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
+            ->when($r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
+            ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
+            ->selectRaw("v.fecha, v.documento_tipo, v.documento_numero,
+                         COALESCE(c.nombre,'') as cliente, COALESCE(vend.nombre,'') as vendedor,
+                         COALESCE(v.metodo_pago,'') as metodo_pago, v.total, v.estado")
+            ->orderBy('v.fecha')
+            ->get();
 
-        $qCompras = Compra::whereBetween('fecha', [$desde, $hasta])->with('lineas');
-        $compras  = $qCompras->orderBy('fecha')->get();
+        $compras = DB::table('compras')
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->whereNull('deleted_at')
+            ->selectRaw("fecha, empresa, documento_tipo, documento_numero, metodo_pago, monto_total")
+            ->orderBy('fecha')
+            ->get();
+
+        // Resumen utilidad
+        $totalV  = $ventas->sum('total');
+        $costoT  = (float) DB::table('venta_detalles as vd')
+            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
+            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
+            ->value('total');
+        $totalC = $compras->sum('monto_total');
 
         $spreadsheet = new Spreadsheet();
 
-        // ── Hoja Ventas ──────────────────────────────────────
-        $sv = $spreadsheet->getActiveSheet();
-        $sv->setTitle('Ventas');
-        $hV = ['Fecha','Documento','Nro.','Cliente','Vendedor','Método Pago','Total','IGV','Subtotal','Estado'];
-        $sv->fromArray($hV, null, 'A1');
+        // ── Hoja Ventas ──────────────────────────────────
+        $sv = $spreadsheet->getActiveSheet()->setTitle('Ventas');
+        $sv->fromArray(['Fecha','Documento','Nro.','Cliente','Vendedor','Método','Total','IGV','Base','Estado'], null, 'A1');
         $this->estiloHeader($sv, 'A1:J1', '2563EB');
-
         $row = 2;
         foreach ($ventas as $v) {
             $total = (float) $v->total;
             $sv->fromArray([
-                $v->fecha->format('d/m/Y'),
+                Carbon::parse($v->fecha)->format('d/m/Y'),
                 ucfirst($v->documento_tipo ?? ''),
                 $v->documento_numero ?? '',
-                $v->cliente?->nombre ?? '',
-                $v->vendedor?->nombre ?? '',
-                ucfirst($v->metodo_pago ?? ''),
+                $v->cliente,
+                $v->vendedor,
+                ucfirst($v->metodo_pago),
                 $total,
                 round($total * 18 / 118, 2),
                 round($total / 1.18, 2),
@@ -254,24 +359,20 @@ class ReporteController extends Controller
             ], null, "A{$row}");
             $row++;
         }
-        foreach (range('G', 'I') as $col) {
+        foreach (range('G','I') as $col) {
             $sv->getStyle("{$col}2:{$col}{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
-        foreach (range('A', 'J') as $col) {
-            $sv->getColumnDimension($col)->setAutoSize(true);
-        }
+        foreach (range('A','J') as $col) { $sv->getColumnDimension($col)->setAutoSize(true); }
 
-        // ── Hoja Compras ─────────────────────────────────────
-        $sc = $spreadsheet->createSheet();
-        $sc->setTitle('Compras');
-        $hC = ['Fecha','Empresa','Tipo Doc.','Nro. Doc.','Método Pago','Total','IGV'];
-        $sc->fromArray($hC, null, 'A1');
+        // ── Hoja Compras ─────────────────────────────────
+        $sc = $spreadsheet->createSheet()->setTitle('Compras');
+        $sc->fromArray(['Fecha','Empresa','Tipo Doc.','Nro. Doc.','Método','Total','IGV'], null, 'A1');
         $this->estiloHeader($sc, 'A1:G1', '059669');
         $row = 2;
         foreach ($compras as $c) {
             $total = (float) $c->monto_total;
             $sc->fromArray([
-                $c->fecha->format('d/m/Y'),
+                Carbon::parse($c->fecha)->format('d/m/Y'),
                 $c->empresa ?? '',
                 ucfirst($c->documento_tipo ?? ''),
                 $c->documento_numero ?? '',
@@ -281,39 +382,31 @@ class ReporteController extends Controller
             ], null, "A{$row}");
             $row++;
         }
-        foreach (range('F', 'G') as $col) {
+        foreach (range('F','G') as $col) {
             $sc->getStyle("{$col}2:{$col}{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
         }
-        foreach (range('A', 'G') as $col) {
-            $sc->getColumnDimension($col)->setAutoSize(true);
-        }
+        foreach (range('A','G') as $col) { $sc->getColumnDimension($col)->setAutoSize(true); }
 
-        // ── Hoja Resumen ─────────────────────────────────────
-        $sr = $spreadsheet->createSheet();
-        $sr->setTitle('Resumen');
-        $totalV = $ventas->sum('total');
-        $allD   = $ventas->flatMap->detalles;
-        $costoT = $allD->sum(fn($d) => (float) ($d->producto?->precio_costo ?? 0) * (float) $d->cantidad);
-        $totalC = $compras->sum('monto_total');
-
-        $sr->fromArray(['Métrica', 'Valor'], null, 'A1');
+        // ── Hoja Resumen ─────────────────────────────────
+        $sr = $spreadsheet->createSheet()->setTitle('Resumen');
+        $sr->fromArray(['Métrica','Valor'], null, 'A1');
         $this->estiloHeader($sr, 'A1:B1', '7C3AED');
         $sr->fromArray([
-            ['Período',    ucfirst($periodo)],
-            ['Desde',      $desde->format('d/m/Y')],
-            ['Hasta',      $hasta->format('d/m/Y')],
+            ['Período',         ucfirst($periodo)],
+            ['Desde',           $desde->format('d/m/Y')],
+            ['Hasta',           $hasta->format('d/m/Y')],
             ['',''],
-            ['Total Ventas',  round($totalV, 2)],
+            ['Total Ventas',    round($totalV, 2)],
             ['Cantidad Ventas', $ventas->count()],
-            ['IGV Ventas',  round($totalV * 18 / 118, 2)],
+            ['IGV Ventas',      round($totalV * 18 / 118, 2)],
             ['Subtotal Ventas', round($totalV / 1.18, 2)],
             ['',''],
-            ['Total Compras',  round($totalC, 2)],
-            ['Cantidad Compras', $compras->count()],
+            ['Total Compras',   round($totalC, 2)],
+            ['Cantidad Compras',$compras->count()],
             ['',''],
             ['Costo Productos', round($costoT, 2)],
-            ['Utilidad',  round($totalV - $costoT, 2)],
-            ['Margen %',  $totalV > 0 ? round(($totalV - $costoT) / $totalV * 100, 1) : 0],
+            ['Utilidad',        round($totalV - $costoT, 2)],
+            ['Margen %',        $totalV > 0 ? round(($totalV - $costoT) / $totalV * 100, 1) : 0],
         ], null, 'A2');
         $sr->getColumnDimension('A')->setWidth(22);
         $sr->getColumnDimension('B')->setAutoSize(true);
@@ -322,8 +415,85 @@ class ReporteController extends Controller
         $filename = 'reporte-' . $periodo . '-' . now()->format('Y-m-d') . '.xlsx';
         $path     = storage_path('app/' . $filename);
         (new Xlsx($spreadsheet))->save($path);
-
         return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
+    public function exportPdf(Request $r): \Illuminate\Http\Response
+    {
+        $periodo        = $r->input('periodo', 'diario');
+        [$desde, $hasta] = $this->resolverRango($r, $periodo);
+
+        // Reusa la misma lógica de datos pero con colección pequeña para el PDF
+        $ventasSummary = DB::table('ventas')
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('estado', '!=', 'anulado')
+            ->whereNull('deleted_at')
+            ->where(fn($q) => $q->whereNull('documento_tipo')->orWhere('documento_tipo', '!=', 'nota_credito'))
+            ->when($r->filled('vendedor_id'), fn($q) => $q->where('vendedor_id', $r->vendedor_id))
+            ->when($r->filled('metodo_pago'), fn($q) => $q->where('metodo_pago', $r->metodo_pago))
+            ->when($r->filled('cliente_id'),  fn($q) => $q->where('cliente_id',  $r->cliente_id))
+            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total),0) as total')
+            ->first();
+
+        $totalVentas = (float) ($ventasSummary->total    ?? 0);
+        $cantVentas  = (int)   ($ventasSummary->cantidad ?? 0);
+
+        $comprasSummary = DB::table('compras')
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->whereNull('deleted_at')
+            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(monto_total),0) as total')
+            ->first();
+
+        $totalCompras = (float) ($comprasSummary->total    ?? 0);
+        $cantCompras  = (int)   ($comprasSummary->cantidad ?? 0);
+
+        $totalCosto = (float) DB::table('venta_detalles as vd')
+            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
+            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
+            ->value('total');
+
+        $topClientes = DB::table('ventas as v')
+            ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->selectRaw('COALESCE(c.nombre,"Sin cliente") as nombre, COUNT(*) as count, SUM(v.total) as total')
+            ->groupBy('v.cliente_id', 'c.nombre')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        $topProductos = DB::table('venta_detalles as vd')
+            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->selectRaw('COALESCE(vd.producto,"Manual") as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total')
+            ->groupBy('vd.producto')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get();
+
+        $data = compact(
+            'periodo', 'desde', 'hasta',
+            'totalVentas', 'cantVentas',
+            'totalCompras', 'cantCompras',
+            'totalCosto', 'topClientes', 'topProductos'
+        );
+        $data['utilidad'] = round($totalVentas - $totalCosto, 2);
+        $data['margen']   = $totalVentas > 0 ? round($data['utilidad'] / $totalVentas * 100, 1) : 0;
+        $data['igvVentas']  = round($totalVentas * 18 / 118, 2);
+        $data['igvCompras'] = round($totalCompras * 18 / 118, 2);
+
+        $pdf = app('dompdf.wrapper');
+        $pdf->loadView('reportes-pdf', $data);
+        $pdf->setPaper('A4', 'portrait');
+
+        return $pdf->download('reporte-' . $periodo . '-' . now()->format('Y-m-d') . '.pdf');
     }
 
     private function estiloHeader(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, string $rango, string $color): void

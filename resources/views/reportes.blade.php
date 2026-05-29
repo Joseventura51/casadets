@@ -78,8 +78,8 @@
         <button class="btn btn-outline-success btn-sm" onclick="exportarExcel()">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
         </button>
-        <button class="btn btn-outline-danger btn-sm" onclick="window.print()">
-            <i class="bi bi-printer me-1"></i>PDF / Imprimir
+        <button class="btn btn-outline-danger btn-sm" onclick="exportarPdf()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
         </button>
     </div>
 </div>
@@ -584,34 +584,62 @@ function renderDatos(data) {
     }
 }
 
-/* ── Gráfico: Ventas por día ────────────────────────── */
+/* ── Gráfico mixto: Ventas (barras) + Utilidad (línea) ── */
 function renderChartVentas(porDia, label) {
     const ctx = document.getElementById('chartVentas').getContext('2d');
     document.getElementById('chartLabel').textContent = label;
 
-    const labels = porDia.map(d => {
+    const labels   = porDia.map(d => {
         const f = new Date(d.fecha + 'T00:00:00');
         return f.toLocaleDateString('es-PE', { day:'2-digit', month:'short' });
     });
-    const values = porDia.map(d => d.total);
+    const ventas   = porDia.map(d => d.total);
+    const utilidad = porDia.map(d => d.utilidad);
 
     if (chartVentas) chartVentas.destroy();
     chartVentas = new Chart(ctx, {
-        type: 'bar',
         data: {
             labels,
-            datasets: [{
-                label: 'Ventas (S/)',
-                data: values,
-                backgroundColor: 'rgba(37,99,235,.75)',
-                borderColor: '#2563eb',
-                borderWidth: 1,
-                borderRadius: 5,
-            }]
+            datasets: [
+                {
+                    type: 'bar',
+                    label: 'Ventas',
+                    data: ventas,
+                    backgroundColor: 'rgba(37,99,235,.7)',
+                    borderColor: '#2563eb',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'y',
+                },
+                {
+                    type: 'line',
+                    label: 'Utilidad',
+                    data: utilidad,
+                    borderColor: '#7c3aed',
+                    backgroundColor: 'rgba(124,58,237,.1)',
+                    borderWidth: 2,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#7c3aed',
+                    tension: 0.35,
+                    fill: true,
+                    yAxisID: 'y',
+                }
+            ]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: { font: { size: 11 }, boxWidth: 12, padding: 12 }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` S/ ${fmtN(ctx.raw)} (${ctx.dataset.label})`
+                    }
+                }
+            },
             scales: {
                 y: {
                     beginAtZero: true,
@@ -801,17 +829,24 @@ function toggleLineasUtilidad(i) {
     icon.className     = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down text-primary';
 }
 
-/* ── Exportar Excel ─────────────────────────────────── */
-function exportarExcel() {
-    const params = new URLSearchParams({
+/* ── Exportar Excel / PDF ───────────────────────────── */
+function _params() {
+    return new URLSearchParams({
         periodo:     periodoActual,
         desde:       document.getElementById('fDesde').value,
         hasta:       document.getElementById('fHasta').value,
         vendedor_id: document.getElementById('fVendedor').value,
         metodo_pago: document.getElementById('fMetodo').value,
         cliente_id:  document.getElementById('fCliente').value,
-    });
-    window.location.href = '/reportes/export-excel?' + params.toString();
+    }).toString();
+}
+
+function exportarExcel() {
+    window.location.href = '/reportes/export-excel?' + _params();
+}
+
+function exportarPdf() {
+    window.open('/reportes/export-pdf?' + _params(), '_blank');
 }
 
 /* ── Helpers ────────────────────────────────────────── */
