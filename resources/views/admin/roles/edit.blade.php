@@ -8,7 +8,11 @@
     $permisosCatalog = PermisoCatalog::PERMISOS;
     $modulosActivos  = $rol->modulos  ?? [];
     $permisosActivos = $rol->permisos ?? [];
-    $grupos = collect($modulosCatalog)->groupBy(fn($m) => $m['grupo']);
+    // Agrupar con PHP puro para preservar las claves string (collect->groupBy las re-indexa)
+    $grupos = [];
+    foreach ($modulosCatalog as $clave => $info) {
+        $grupos[$info['grupo']][$clave] = $info;
+    }
 @endphp
 
 @section('content')

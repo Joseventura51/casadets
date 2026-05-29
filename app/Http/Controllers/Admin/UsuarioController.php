@@ -33,7 +33,6 @@ class UsuarioController extends Controller
             'email'       => 'required|email|unique:users,email',
             'password'    => ['required', Password::min(6)],
             'rol_id'      => 'required|exists:roles,id',
-            'activo'      => 'boolean',
             'vendedores'  => 'nullable|array',
             'vendedores.*'=> 'exists:vendedores,id',
         ]);
@@ -68,7 +67,6 @@ class UsuarioController extends Controller
             'email'       => ['required', 'email', Rule::unique('users')->ignore($usuario->id)],
             'password'    => ['nullable', Password::min(6)],
             'rol_id'      => 'required|exists:roles,id',
-            'activo'      => 'boolean',
             'vendedores'  => 'nullable|array',
             'vendedores.*'=> 'exists:vendedores,id',
         ]);
