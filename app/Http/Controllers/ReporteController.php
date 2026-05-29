@@ -130,36 +130,31 @@ class ReporteController extends Controller
             ->get()
             ->map(fn($c) => ['tipo' => $c->tipo, 'count' => (int)$c->count, 'total' => (float)$c->total]);
 
-        // ── Ventas por día + costo por día (para gráfico) ─
-        $porDia = $this->qDetalles($r, $desde, $hasta)
-            ->selectRaw("DATE(v.fecha) as fecha,
-                         COUNT(DISTINCT v.id)                                            as count,
-                         SUM(v.total)                                                    as total_ventas,
-                         SUM(vd.cantidad * COALESCE(p.precio_costo, 0))                 as total_costo")
-            ->groupByRaw('DATE(v.fecha)')
+        // ── Ventas por día (sólo tabla ventas, sin JOIN a detalles para no multiplicar) ─
+        $ventasPorDia = $this->qVentas($r, $desde, $hasta)
+            ->selectRaw("DATE(ventas.fecha) as fecha, COUNT(*) as count, SUM(ventas.total) as total_ventas")
+            ->groupByRaw('DATE(ventas.fecha)')
             ->orderBy('fecha')
             ->get()
-            ->map(fn($d) => [
-                'fecha'      => $d->fecha,
-                'count'      => (int) $d->count,
-                'total'      => (float) $d->total_ventas,
-                'utilidad'   => round((float)$d->total_ventas - (float)$d->total_costo, 2),
-            ]);
+            ->keyBy('fecha');
 
-        // Si no hay detalles, al menos mostramos el total de ventas por día sin costo
-        if ($porDia->isEmpty()) {
-            $porDia = $this->qVentas($r, $desde, $hasta)
-                ->selectRaw("DATE(fecha) as fecha, COUNT(*) as count, SUM(total) as total_ventas")
-                ->groupByRaw('DATE(fecha)')
-                ->orderBy('fecha')
-                ->get()
-                ->map(fn($d) => [
-                    'fecha'    => $d->fecha,
-                    'count'    => (int) $d->count,
-                    'total'    => (float) $d->total_ventas,
-                    'utilidad' => 0.0,
-                ]);
-        }
+        // ── Costo por día (desde venta_detalles, con los mismos filtros) ─────────
+        $costoPorDia = $this->qDetalles($r, $desde, $hasta)
+            ->selectRaw("DATE(v.fecha) as fecha, SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total_costo")
+            ->groupByRaw('DATE(v.fecha)')
+            ->get()
+            ->keyBy('fecha');
+
+        // ── Merge por fecha ──────────────────────────────────────────────────────
+        $porDia = $ventasPorDia->map(function ($v) use ($costoPorDia) {
+            $costo = (float) ($costoPorDia[$v->fecha]->total_costo ?? 0);
+            return [
+                'fecha'    => $v->fecha,
+                'count'    => (int)   $v->count,
+                'total'    => (float) $v->total_ventas,
+                'utilidad' => round((float)$v->total_ventas - $costo, 2),
+            ];
+        })->values();
 
         // ── Costo y utilidad totales ─────────────────────
         $totalCosto = (float) $this->qDetalles($r, $desde, $hasta)
@@ -324,7 +319,7 @@ class ReporteController extends Controller
             ->orderBy('fecha')
             ->get();
 
-        // Resumen utilidad
+        // Resumen utilidad (mismos filtros que ventas: excluye anulado + nota_credito)
         $totalV  = $ventas->sum('total');
         $costoT  = (float) DB::table('venta_detalles as vd')
             ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
@@ -332,6 +327,10 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
+            ->when($r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
+            ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
             ->value('total');
         $totalC = $compras->sum('monto_total');
@@ -453,6 +452,10 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
+            ->when($r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
+            ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
             ->value('total');
 
