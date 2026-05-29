@@ -1,0 +1,201 @@
+# Sistema de Login, Usuarios y Roles - Gestión Plex
+
+Además del módulo de reportes, comenzar con la construcción completa del sistema de login y control de usuarios.
+
+El sistema debe estar preparado para manejar distintos tipos de usuarios con permisos y restricciones específicas.
+
+---
+
+# Tipos de usuarios
+
+El sistema debe permitir crear usuarios para:
+
+* Administradores
+* Cajeros
+* Vendedores
+* Supervisores
+* Otros roles futuros
+
+Cada usuario debe tener:
+
+* Nombre
+* Email o usuario
+* Contraseña segura
+* Estado activo/inactivo
+* Rol asignado
+* Permisos específicos
+
+---
+
+# Sistema de Roles y Permisos
+
+Es obligatorio implementar un sistema de roles.
+
+Cada rol tendrá restricciones distintas dentro del sistema.
+
+Ejemplos:
+
+## Administrador
+
+* Acceso completo
+
+## Cajero
+
+* Acceso a caja
+* Ventas
+* Consultas limitadas
+* Sin acceso a configuración crítica
+
+## Vendedor
+
+* Solo sus ventas
+* Sus clientes
+* Sus reportes
+* Sin acceso administrativo
+
+---
+
+# Relación Usuario ↔ Vendedor
+
+Importante:
+
+Los vendedores normalmente se filtran desde la sección “Vendedores”.
+
+Por ello, cada usuario debe poder tener asociado:
+
+* un vendedor
+  o
+* múltiples vendedores
+
+Ejemplo:
+
+```text
+Usuario:
+juan_admin
+
+Vendedores asociados:
+- Juan Pérez
+- Carlos Díaz
+```
+
+Esto permitirá:
+
+* filtrar ventas automáticamente
+* mostrar solo información permitida
+* generar reportes personalizados
+* restringir acceso según vendedor
+
+---
+
+# Restricciones automáticas
+
+Cuando un usuario vendedor inicie sesión:
+
+* solo debe ver sus ventas
+* solo debe ver sus reportes
+* solo debe ver sus clientes
+* no debe acceder a módulos administrativos
+
+Cuando un cajero inicie sesión:
+
+* solo debe acceder a caja y ventas
+
+Todo debe controlarse mediante middleware, guards o validaciones backend.
+
+---
+
+# Login
+
+Construir pantalla de login moderna y profesional.
+
+Debe incluir:
+
+* Usuario/email
+* Contraseña
+* Mostrar/ocultar contraseña
+* Recordar sesión
+* Recuperar contraseña
+* Diseño responsive
+* Validaciones
+* Mensajes de error elegantes
+
+---
+
+# Seguridad
+
+Implementar:
+
+* Hash de contraseñas
+* Sesiones seguras
+* Tokens si aplica
+* Middleware de autenticación
+* Control de permisos
+* Protección de rutas
+* Logout seguro
+
+---
+
+# Base de datos
+
+Crear tablas necesarias:
+
+## usuarios
+
+* id
+* nombre
+* email
+* password
+* rol_id
+* estado
+* timestamps
+
+## roles
+
+* id
+* nombre
+* descripcion
+
+## permisos
+
+* id
+* nombre
+
+## usuario_vendedor
+
+* usuario_id
+* vendedor_id
+
+---
+
+# Panel de administración
+
+Crear módulo para administrar:
+
+* usuarios
+* roles
+* permisos
+* vendedores asociados
+
+Debe permitir:
+
+* crear usuario
+* editar usuario
+* asignar roles
+* activar/desactivar usuarios
+* asignar vendedores
+* cambiar permisos
+
+---
+
+# UI
+
+Mantener el mismo diseño visual del sistema actual:
+
+* Angular Material
+* Dashboard moderno
+* Responsive
+* Similar a “Movimientos”
+* Cards y tablas elegantes
+* Sidebar con permisos dinámicos
+
+Los módulos del menú deben mostrarse u ocultarse dependiendo del rol del usuario.

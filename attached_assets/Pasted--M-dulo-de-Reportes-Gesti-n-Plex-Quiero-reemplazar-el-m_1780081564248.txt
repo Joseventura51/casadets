@@ -1,0 +1,184 @@
+# Módulo de Reportes - Gestión Plex
+
+Quiero reemplazar el módulo de reportes que actualmente aparece “En construcción”.
+
+Ese módulo debe convertirse en un módulo completo de reportes y estadísticas del sistema.
+
+## Objetivo
+
+El módulo debe mostrar reportes completos de:
+
+* Ventas
+* Compras
+* Utilidades
+
+El diseño debe verse moderno y similar visualmente al módulo de “Movimientos”.
+
+---
+
+# Estructura del módulo
+
+El módulo debe tener 3 pestañas principales:
+
+1. Reporte Diario
+2. Reporte Semanal
+3. Reporte Mensual
+
+---
+
+# Información que debe mostrar
+
+## Ventas
+
+Mostrar:
+
+* Total vendido
+* Cantidad de ventas
+* Productos vendidos
+* Métodos de pago
+* Clientes frecuentes
+* Comprobantes emitidos
+* IGV total
+* Subtotal
+* Total neto
+
+---
+
+## Compras
+
+Mostrar:
+
+* Total comprado
+* Cantidad de compras
+* Proveedores
+* Productos comprados
+* Gastos registrados
+* IGV compras
+* Total neto
+
+---
+
+# Sección de Utilidad
+
+En el reporte Diario y Mensual debe existir una sección especial llamada:
+
+## Utilidad
+
+Debe mostrar:
+
+* Utilidad total
+* Margen de ganancia
+* Total invertido
+* Total recuperado
+
+La utilidad debe calcularse usando:
+
+```text
+Utilidad = Total ventas - Total costo productos
+```
+
+---
+
+# Interacción importante
+
+La utilidad debe ser interactiva.
+
+Al hacer click sobre la utilidad:
+
+* abrir modal
+  o
+* expandir tabla detalle
+
+Mostrando:
+
+* Número de venta
+* Fecha
+* Cliente
+* Producto
+* Cantidad
+* Precio venta
+* Costo producto
+* Ganancia por producto
+* Ganancia total de la venta
+
+Debe verse parecido al módulo de Movimientos.
+
+---
+
+# Diseño UI
+
+Quiero un diseño moderno tipo dashboard:
+
+* Cards estadísticas arriba
+* Tablas responsive
+* Filtros por fecha
+* Tabs para Día / Semana / Mes
+* Colores similares al sistema actual
+* Compatible con móvil
+* Scroll elegante
+* Animaciones suaves
+
+---
+
+# Funcionalidades
+
+Agregar:
+
+* Exportar Excel
+* Exportar PDF
+* Búsqueda
+* Filtro por vendedor
+* Filtro por método de pago
+* Filtro por cliente
+* Filtro por rango de fechas
+
+---
+
+# Backend
+
+Crear endpoints optimizados para:
+
+* Reporte diario
+* Reporte semanal
+* Reporte mensual
+* Utilidad detallada
+
+Evitar consultas lentas.
+
+Usar:
+
+* agrupaciones SQL
+* índices
+* paginación
+* eager loading si aplica
+
+---
+
+# Base de datos
+
+Las utilidades deben calcularse usando:
+
+* costo del producto
+* precio de venta
+* cantidad vendida
+
+Tomar datos reales de:
+
+* ventas
+* detalle_ventas
+* productos
+* compras
+
+---
+
+# Extras
+
+Agregar:
+
+* gráficos de ventas
+* gráficos de utilidad
+* top productos vendidos
+* top clientes
+* resumen rápido del día
+
+Usar un diseño profesional similar a sistemas ERP modernos.
