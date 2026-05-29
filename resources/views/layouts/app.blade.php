@@ -28,7 +28,7 @@
         <h5 class="text-white fw-bold mb-0"><i class="bi bi-layers me-2"></i>Sistema</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
-    <div class="offcanvas-body p-3" id="sidebarMobileNav">
+    <div class="offcanvas-body p-3 d-flex flex-column" id="sidebarMobileNav" style="padding-bottom:90px!important;">
         @include('layouts._sidebar_nav')
     </div>
 </div>
@@ -37,9 +37,9 @@
     <div class="row">
 
         {{-- SIDEBAR ESCRITORIO (oculto en móvil) --}}
-        <div class="col-md-2 sidebar p-3 d-none d-md-block">
+        <div class="col-md-2 sidebar p-3 d-none d-md-flex flex-column" style="position:relative;min-height:100vh;padding-bottom:90px!important;">
             <h5 class="text-center fw-bold mb-4 text-white">Sistema</h5>
-            <div id="sidebarDesktopNav">
+            <div id="sidebarDesktopNav" class="flex-grow-1">
                 @include('layouts._sidebar_nav')
             </div>
         </div>

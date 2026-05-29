@@ -46,6 +46,11 @@ class VentaController extends Controller
                      'total', 'metodo_pago',
                      'documento_tipo', 'documento_numero', 'observaciones');
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $query->whereIn('vendedor_id', $authUser->vendedorIds());
+        }
+
         if (!$request->boolean('todas')) {
             $query->whereDate('fecha', '>=', $desde)
                   ->whereDate('fecha', '<=', $hasta);
@@ -110,10 +115,24 @@ class VentaController extends Controller
         ));
     }
 
+    /* ─── Autorización de vendedor ─────────────────────────────── */
+
+    private function authorizeVenta(Venta $venta): void
+    {
+        $user = auth()->user();
+        if ($user && $user->esVendedor()) {
+            $ids = $user->vendedorIds();
+            if (!in_array($venta->vendedor_id, $ids)) {
+                abort(403, 'No tienes permiso para acceder a esta venta.');
+            }
+        }
+    }
+
     /* ─── Detalle ──────────────────────────────────────────────── */
 
     public function show(Venta $venta)
     {
+        $this->authorizeVenta($venta);
         $venta->load(['vendedor', 'cliente', 'detalles.compras', 'detalles.producto']);
         return view('casadets.ventas.show', compact('venta'));
     }
@@ -133,6 +152,14 @@ class VentaController extends Controller
 
     public function store(Request $request)
     {
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $allowed = $authUser->vendedorIds();
+            if (!in_array((int) $request->input('vendedor_id'), $allowed)) {
+                abort(403, 'No puedes crear ventas para este vendedor.');
+            }
+        }
+
         $data = $request->validate([
             'vendedor_id'      => 'required|exists:vendedores,id',
             'cliente_id'       => 'nullable|exists:clientes,id',
@@ -206,6 +233,7 @@ class VentaController extends Controller
 
     public function edit(Venta $venta)
     {
+        $this->authorizeVenta($venta);
         $venta->load('detalles.producto');
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
         $clientes   = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
@@ -214,6 +242,15 @@ class VentaController extends Controller
 
     public function update(Request $request, Venta $venta)
     {
+        $this->authorizeVenta($venta);
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $allowed = $authUser->vendedorIds();
+            if (!in_array((int) $request->input('vendedor_id'), $allowed)) {
+                abort(403, 'No puedes reasignar esta venta a un vendedor que no te pertenece.');
+            }
+        }
+
         $data = $request->validate([
             'vendedor_id'      => 'required|exists:vendedores,id',
             'cliente_id'       => 'nullable|exists:clientes,id',
@@ -314,6 +351,11 @@ class VentaController extends Controller
             ->whereIn('estado', ['pendiente', 'parcial'])
             ->whereDate('fecha', '<=', today());
 
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $query->whereIn('vendedor_id', $authUser->vendedorIds());
+        }
+
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
 
         $ventas     = $query->orderBy('fecha', 'asc')->get();
@@ -326,6 +368,7 @@ class VentaController extends Controller
 
     public function pago(Venta $venta)
     {
+        $this->authorizeVenta($venta);
         $venta->load([
             'vendedor:id,nombre',
             'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
@@ -359,6 +402,7 @@ class VentaController extends Controller
 
     public function updatePago(Request $request, Venta $venta)
     {
+        $this->authorizeVenta($venta);
         $data = $request->validate([
             'pagos'               => 'required|array|min:1',
             'pagos.*.metodo'      => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
@@ -372,6 +416,16 @@ class VentaController extends Controller
         ));
 
         if (!empty($ventasAdicionales)) {
+            $authUser2 = auth()->user();
+            if ($authUser2 && $authUser2->esVendedor()) {
+                $allowed2 = $authUser2->vendedorIds();
+                $unauthorized = Venta::whereIn('id', $ventasAdicionales)
+                    ->whereNotIn('vendedor_id', $allowed2)
+                    ->exists();
+                if ($unauthorized) {
+                    abort(403, 'No tienes permiso para pagar algunas de las ventas adicionales seleccionadas.');
+                }
+            }
             $allIds = array_merge([$venta->id], $ventasAdicionales);
             try {
                 $result = app(CobranzaService::class)->registrarPagoMultiple($allIds, $data['pagos']);
@@ -439,11 +493,17 @@ class VentaController extends Controller
             return redirect('/casadets/pendientes')->with('error', 'Selecciona al menos una venta.');
         }
 
-        $ventas = Venta::with(['vendedor:id,nombre', 'cliente:id,nombre', 'detalles:id,venta_id,producto,cantidad'])
+        $query = Venta::with(['vendedor:id,nombre', 'cliente:id,nombre', 'detalles:id,venta_id,producto,cantidad'])
             ->whereIn('id', $ids)
             ->whereIn('estado', ['pendiente', 'parcial'])
-            ->orderBy('fecha', 'asc')
-            ->get();
+            ->orderBy('fecha', 'asc');
+
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $query->whereIn('vendedor_id', $authUser->vendedorIds());
+        }
+
+        $ventas = $query->get();
 
         if ($ventas->isEmpty()) {
             return redirect('/casadets/pendientes')->with('error', 'Las ventas seleccionadas no están pendientes.');
@@ -464,6 +524,17 @@ class VentaController extends Controller
             'pagos.*.monto'       => 'required|numeric|min:0',
             'pagos.*.descripcion' => 'nullable|string|max:200',
         ]);
+
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $allowed = $authUser->vendedorIds();
+            $unauthorized = Venta::whereIn('id', $data['ventas'])
+                ->whereNotIn('vendedor_id', $allowed)
+                ->exists();
+            if ($unauthorized) {
+                abort(403, 'No tienes permiso para pagar algunas de las ventas seleccionadas.');
+            }
+        }
 
         try {
             $result = app(CobranzaService::class)->registrarPagoMultiple(
@@ -496,6 +567,7 @@ class VentaController extends Controller
      */
     public function updateEstado(Request $request, Venta $venta)
     {
+        $this->authorizeVenta($venta);
         $request->validate([
             'estado' => 'required|in:anulado',
         ]);
@@ -538,6 +610,7 @@ class VentaController extends Controller
      */
     public function destroy(Venta $venta)
     {
+        $this->authorizeVenta($venta);
         DB::transaction(function () use ($venta) {
             // 1. Anular movimientos del ledger (NO borrar)
             $pagoIds = DetallePagoFactura::where('venta_id', $venta->id)
@@ -583,7 +656,13 @@ class VentaController extends Controller
         $hasta = $request->input('hasta', $desde);
         if ($hasta < $desde) $hasta = $desde;
 
-        if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $query->whereIn('vendedor_id', $authUser->vendedorIds());
+        } elseif ($request->filled('vendedor_id')) {
+            $query->where('vendedor_id', $request->vendedor_id);
+        }
+
         if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
         if ($request->filled('estado'))      $query->where('estado', $request->estado);
         if (!$todas) {

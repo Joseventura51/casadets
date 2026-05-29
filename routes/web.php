@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\MovimientoController;
 use App\Http\Controllers\VendedorController;
@@ -12,90 +13,129 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\SaldoFavorController;
 use App\Http\Controllers\ReporteController;
+use App\Http\Controllers\Admin\UsuarioController;
 
-Route::get('/', [HomeController::class, 'index']);
+// ── Autenticación (rutas públicas) ─────────────────────────────────────────
+Route::get('/login',  [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::view('/zendy/letras', 'zendy.letras');
+// ── Rutas protegidas ────────────────────────────────────────────────────────
+Route::middleware(['auth', 'check.activo'])->group(function () {
 
-// Reportes
-Route::get('/reportes',               [ReporteController::class, 'index']);
-Route::get('/reportes/datos',         [ReporteController::class, 'datos']);
-Route::get('/reportes/utilidad-detalle', [ReporteController::class, 'utilidadDetalle']);
-Route::get('/reportes/export-excel',  [ReporteController::class, 'exportExcel']);
-Route::get('/reportes/export-pdf',    [ReporteController::class, 'exportPdf']);
+    Route::get('/', [HomeController::class, 'index'])->middleware('rol:dashboard');
 
-// Movimientos (ingresos / salidas)
-Route::get('/movimientos', [MovimientoController::class, 'index']);
-Route::get('/movimientos/create/{tipo}', [MovimientoController::class, 'create']);
-Route::post('/movimientos', [MovimientoController::class, 'store']);
+    Route::view('/zendy/letras', 'zendy.letras')->middleware('rol:zendy');
 
-// CASADETS — Caja
-Route::get('/casadets/caja', [CajaController::class, 'index']);
-Route::post('/casadets/caja/apertura', [CajaController::class, 'apertura']);
-Route::post('/casadets/caja/cierre', [CajaController::class, 'cierre']);
+    // Reportes
+    Route::middleware('rol:reportes')->group(function () {
+        Route::get('/reportes',                  [ReporteController::class, 'index']);
+        Route::get('/reportes/datos',            [ReporteController::class, 'datos']);
+        Route::get('/reportes/utilidad-detalle', [ReporteController::class, 'utilidadDetalle']);
+        Route::get('/reportes/export-excel',     [ReporteController::class, 'exportExcel']);
+        Route::get('/reportes/export-pdf',       [ReporteController::class, 'exportPdf']);
+    });
 
-// CASADETS — Vendedores
-Route::get('/casadets/vendedores', [VendedorController::class, 'index']);
-Route::get('/casadets/vendedores/create', [VendedorController::class, 'create']);
-Route::post('/casadets/vendedores', [VendedorController::class, 'store']);
-Route::get('/casadets/vendedores/{vendedor}/edit', [VendedorController::class, 'edit']);
-Route::put('/casadets/vendedores/{vendedor}', [VendedorController::class, 'update']);
-Route::delete('/casadets/vendedores/{vendedor}', [VendedorController::class, 'destroy']);
+    // Movimientos
+    Route::middleware('rol:movimientos')->group(function () {
+        Route::get('/movimientos',               [MovimientoController::class, 'index']);
+        Route::get('/movimientos/create/{tipo}', [MovimientoController::class, 'create']);
+        Route::post('/movimientos',              [MovimientoController::class, 'store']);
+    });
 
-// CASADETS — Pendientes
-Route::get('/casadets/pendientes', [VentaController::class, 'pendientes']);
+    // Caja
+    Route::middleware('rol:caja')->group(function () {
+        Route::get('/casadets/caja',              [CajaController::class, 'index']);
+        Route::post('/casadets/caja/apertura',    [CajaController::class, 'apertura']);
+        Route::post('/casadets/caja/cierre',      [CajaController::class, 'cierre']);
+    });
 
-// CASADETS — Ventas
-Route::get('/casadets/ventas/export', [VentaController::class, 'export']);
-Route::get('/casadets/ventas/pago-multiple', [VentaController::class, 'pagoMultiple']);
-Route::post('/casadets/ventas/pago-multiple', [VentaController::class, 'updatePagoMultiple']);
-Route::get('/casadets/ventas', [VentaController::class, 'index']);
-Route::get('/casadets/ventas/create', [VentaController::class, 'create']);
-Route::post('/casadets/ventas', [VentaController::class, 'store']);
-Route::get('/casadets/ventas/import', [VentaImportController::class, 'form']);
-Route::post('/casadets/ventas/import', [VentaImportController::class, 'preview']);
-Route::post('/casadets/ventas/import/confirm', [VentaImportController::class, 'confirm']);
-Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
-Route::get('/casadets/ventas/{venta}/edit', [VentaController::class, 'edit']);
-Route::put('/casadets/ventas/{venta}', [VentaController::class, 'update']);
-Route::get('/casadets/ventas/{venta}/pago', [VentaController::class, 'pago']);
-Route::post('/casadets/ventas/{venta}/pago', [VentaController::class, 'updatePago']);
-Route::post('/casadets/ventas/{venta}/estado', [VentaController::class, 'updateEstado']);
-Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy']);
+    // Vendedores
+    Route::middleware('rol:vendedores')->group(function () {
+        Route::get('/casadets/vendedores',                    [VendedorController::class, 'index']);
+        Route::get('/casadets/vendedores/create',             [VendedorController::class, 'create']);
+        Route::post('/casadets/vendedores',                   [VendedorController::class, 'store']);
+        Route::get('/casadets/vendedores/{vendedor}/edit',    [VendedorController::class, 'edit']);
+        Route::put('/casadets/vendedores/{vendedor}',         [VendedorController::class, 'update']);
+        Route::delete('/casadets/vendedores/{vendedor}',      [VendedorController::class, 'destroy']);
+    });
 
-// CASADETS — Saldos a favor
-Route::get('/casadets/saldos-favor', [SaldoFavorController::class, 'index']);
-Route::get('/casadets/saldos-favor/clientes.json', [SaldoFavorController::class, 'clientesJson']);
-Route::get('/casadets/saldos-favor/notas-credito.json', [SaldoFavorController::class, 'notasCreditoDisponibles']);
-Route::post('/casadets/saldos-favor/crear', [SaldoFavorController::class, 'crear']);
-Route::post('/casadets/saldos-favor/nc/{venta}/convertir', [SaldoFavorController::class, 'convertirNC']);
-Route::get('/casadets/saldos-favor/cliente/{clienteId}/saldos.json', [SaldoFavorController::class, 'saldosCliente']);
-Route::get('/casadets/saldos-favor/cliente/{clienteId}/ventas.json', [SaldoFavorController::class, 'ventasPendientesCliente']);
-Route::post('/casadets/saldos-favor/{saldo}/aplicar', [SaldoFavorController::class, 'aplicar']);
+    // Pendientes
+    Route::get('/casadets/pendientes', [VentaController::class, 'pendientes'])->middleware('rol:pendientes');
 
-// CASADETS — Clientes
-Route::get('/casadets/clientes', [ClienteController::class, 'index']);
-Route::get('/casadets/clientes/create', [ClienteController::class, 'create']);
-Route::post('/casadets/clientes', [ClienteController::class, 'store']);
-Route::get('/casadets/clientes/{cliente}/edit', [ClienteController::class, 'edit']);
-Route::put('/casadets/clientes/{cliente}', [ClienteController::class, 'update']);
-Route::delete('/casadets/clientes/{cliente}', [ClienteController::class, 'destroy']);
+    // Ventas
+    Route::middleware('rol:ventas')->group(function () {
+        Route::get('/casadets/ventas/export',                    [VentaController::class, 'export']);
+        Route::get('/casadets/ventas/pago-multiple',             [VentaController::class, 'pagoMultiple']);
+        Route::post('/casadets/ventas/pago-multiple',            [VentaController::class, 'updatePagoMultiple']);
+        Route::get('/casadets/ventas',                           [VentaController::class, 'index']);
+        Route::get('/casadets/ventas/create',                    [VentaController::class, 'create']);
+        Route::post('/casadets/ventas',                          [VentaController::class, 'store']);
+        Route::get('/casadets/ventas/import',                    [VentaImportController::class, 'form']);
+        Route::post('/casadets/ventas/import',                   [VentaImportController::class, 'preview']);
+        Route::post('/casadets/ventas/import/confirm',           [VentaImportController::class, 'confirm']);
+        Route::get('/casadets/ventas/{venta}',                   [VentaController::class, 'show']);
+        Route::get('/casadets/ventas/{venta}/edit',              [VentaController::class, 'edit']);
+        Route::put('/casadets/ventas/{venta}',                   [VentaController::class, 'update']);
+        Route::get('/casadets/ventas/{venta}/pago',              [VentaController::class, 'pago']);
+        Route::post('/casadets/ventas/{venta}/pago',             [VentaController::class, 'updatePago']);
+        Route::post('/casadets/ventas/{venta}/estado',           [VentaController::class, 'updateEstado']);
+        Route::delete('/casadets/ventas/{venta}',                [VentaController::class, 'destroy']);
+    });
 
-// CASADETS — Productos (CRUD + Kardex + Ajuste)
-Route::get('/casadets/productos', [ProductoController::class, 'index']);
-Route::get('/casadets/productos/create', [ProductoController::class, 'create']);
-Route::post('/casadets/productos', [ProductoController::class, 'store']);
-Route::get('/casadets/productos/{producto}', [ProductoController::class, 'show']);
-Route::get('/casadets/productos/{producto}/edit', [ProductoController::class, 'edit']);
-Route::put('/casadets/productos/{producto}', [ProductoController::class, 'update']);
-Route::post('/casadets/productos/{producto}/ajuste', [ProductoController::class, 'storeAjuste']);
+    // Saldos a favor
+    Route::middleware('rol:saldos-favor')->group(function () {
+        Route::get('/casadets/saldos-favor',                                    [SaldoFavorController::class, 'index']);
+        Route::get('/casadets/saldos-favor/clientes.json',                      [SaldoFavorController::class, 'clientesJson']);
+        Route::get('/casadets/saldos-favor/notas-credito.json',                 [SaldoFavorController::class, 'notasCreditoDisponibles']);
+        Route::post('/casadets/saldos-favor/crear',                             [SaldoFavorController::class, 'crear']);
+        Route::post('/casadets/saldos-favor/nc/{venta}/convertir',              [SaldoFavorController::class, 'convertirNC']);
+        Route::get('/casadets/saldos-favor/cliente/{clienteId}/saldos.json',    [SaldoFavorController::class, 'saldosCliente']);
+        Route::get('/casadets/saldos-favor/cliente/{clienteId}/ventas.json',    [SaldoFavorController::class, 'ventasPendientesCliente']);
+        Route::post('/casadets/saldos-favor/{saldo}/aplicar',                   [SaldoFavorController::class, 'aplicar']);
+    });
 
-// CASADETS — Compras
-Route::get('/casadets/ventas/{venta}/detalles.json', [CompraController::class, 'detallesVenta']);
-Route::get('/casadets/compras', [CompraController::class, 'index']);
-Route::get('/casadets/compras/create', [CompraController::class, 'create']);
-Route::post('/casadets/compras', [CompraController::class, 'store']);
-Route::get('/casadets/compras/{compra}', [CompraController::class, 'show']);
-Route::get('/casadets/compras/{compra}/edit', [CompraController::class, 'edit']);
-Route::put('/casadets/compras/{compra}', [CompraController::class, 'update']);
-Route::delete('/casadets/compras/{compra}', [CompraController::class, 'destroy']);
+    // Clientes
+    Route::middleware('rol:clientes')->group(function () {
+        Route::get('/casadets/clientes',                  [ClienteController::class, 'index']);
+        Route::get('/casadets/clientes/create',           [ClienteController::class, 'create']);
+        Route::post('/casadets/clientes',                 [ClienteController::class, 'store']);
+        Route::get('/casadets/clientes/{cliente}/edit',   [ClienteController::class, 'edit']);
+        Route::put('/casadets/clientes/{cliente}',        [ClienteController::class, 'update']);
+        Route::delete('/casadets/clientes/{cliente}',     [ClienteController::class, 'destroy']);
+    });
+
+    // Productos
+    Route::middleware('rol:productos')->group(function () {
+        Route::get('/casadets/productos',                        [ProductoController::class, 'index']);
+        Route::get('/casadets/productos/create',                 [ProductoController::class, 'create']);
+        Route::post('/casadets/productos',                       [ProductoController::class, 'store']);
+        Route::get('/casadets/productos/{producto}',             [ProductoController::class, 'show']);
+        Route::get('/casadets/productos/{producto}/edit',        [ProductoController::class, 'edit']);
+        Route::put('/casadets/productos/{producto}',             [ProductoController::class, 'update']);
+        Route::post('/casadets/productos/{producto}/ajuste',     [ProductoController::class, 'storeAjuste']);
+    });
+
+    // Compras
+    Route::middleware('rol:compras')->group(function () {
+        Route::get('/casadets/ventas/{venta}/detalles.json',  [CompraController::class, 'detallesVenta']);
+        Route::get('/casadets/compras',                       [CompraController::class, 'index']);
+        Route::get('/casadets/compras/create',                [CompraController::class, 'create']);
+        Route::post('/casadets/compras',                      [CompraController::class, 'store']);
+        Route::get('/casadets/compras/{compra}',              [CompraController::class, 'show']);
+        Route::get('/casadets/compras/{compra}/edit',         [CompraController::class, 'edit']);
+        Route::put('/casadets/compras/{compra}',              [CompraController::class, 'update']);
+        Route::delete('/casadets/compras/{compra}',           [CompraController::class, 'destroy']);
+    });
+
+    // Administración de usuarios (solo Administrador)
+    Route::middleware('rol:admin.usuarios')->prefix('admin')->group(function () {
+        Route::get('/usuarios',                           [UsuarioController::class, 'index']);
+        Route::get('/usuarios/create',                    [UsuarioController::class, 'create']);
+        Route::post('/usuarios',                          [UsuarioController::class, 'store']);
+        Route::get('/usuarios/{usuario}/edit',            [UsuarioController::class, 'edit']);
+        Route::put('/usuarios/{usuario}',                 [UsuarioController::class, 'update']);
+        Route::patch('/usuarios/{usuario}/toggle',        [UsuarioController::class, 'toggleActivo']);
+    });
+
+});

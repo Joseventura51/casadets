@@ -47,7 +47,13 @@ class ReporteController extends Controller
             ->where(fn($q) => $q->whereNull('ventas.documento_tipo')
                 ->orWhere('ventas.documento_tipo', '!=', 'nota_credito'));
 
-        if ($r->filled('vendedor_id')) $q->where('ventas.vendedor_id', $r->vendedor_id);
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $q->whereIn('ventas.vendedor_id', $authUser->vendedorIds());
+        } elseif ($r->filled('vendedor_id')) {
+            $q->where('ventas.vendedor_id', $r->vendedor_id);
+        }
+
         if ($r->filled('metodo_pago')) $q->where('ventas.metodo_pago', $r->metodo_pago);
         if ($r->filled('cliente_id'))  $q->where('ventas.cliente_id',  $r->cliente_id);
 
@@ -66,7 +72,13 @@ class ReporteController extends Controller
             ->where(fn($q) => $q->whereNull('v.documento_tipo')
                 ->orWhere('v.documento_tipo', '!=', 'nota_credito'));
 
-        if ($r->filled('vendedor_id')) $q->where('v.vendedor_id', $r->vendedor_id);
+        $authUser = auth()->user();
+        if ($authUser && $authUser->esVendedor()) {
+            $q->whereIn('v.vendedor_id', $authUser->vendedorIds());
+        } elseif ($r->filled('vendedor_id')) {
+            $q->where('v.vendedor_id', $r->vendedor_id);
+        }
+
         if ($r->filled('metodo_pago')) $q->where('v.metodo_pago', $r->metodo_pago);
         if ($r->filled('cliente_id'))  $q->where('v.cliente_id', $r->cliente_id);
 
@@ -296,6 +308,9 @@ class ReporteController extends Controller
         $periodo        = $r->input('periodo', 'diario');
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
+        $authUser   = auth()->user();
+        $vendorIds  = ($authUser && $authUser->esVendedor()) ? $authUser->vendedorIds() : null;
+
         $ventas = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
             ->leftJoin('vendedores as vend', 'v.vendedor_id', '=', 'vend.id')
@@ -303,7 +318,8 @@ class ReporteController extends Controller
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
-            ->when($r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
+            ->when($vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
             ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw("v.fecha, v.documento_tipo, v.documento_numero,
@@ -328,7 +344,8 @@ class ReporteController extends Controller
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
-            ->when($r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
+            ->when($vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
             ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
@@ -423,12 +440,16 @@ class ReporteController extends Controller
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
         // Reusa la misma lógica de datos pero con colección pequeña para el PDF
+        $authUser  = auth()->user();
+        $vendorIds = ($authUser && $authUser->esVendedor()) ? $authUser->vendedorIds() : null;
+
         $ventasSummary = DB::table('ventas')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('estado', '!=', 'anulado')
             ->whereNull('deleted_at')
             ->where(fn($q) => $q->whereNull('documento_tipo')->orWhere('documento_tipo', '!=', 'nota_credito'))
-            ->when($r->filled('vendedor_id'), fn($q) => $q->where('vendedor_id', $r->vendedor_id))
+            ->when($vendorIds !== null, fn($q) => $q->whereIn('vendedor_id', $vendorIds))
+            ->when($vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('vendedor_id', $r->vendedor_id))
             ->when($r->filled('metodo_pago'), fn($q) => $q->where('metodo_pago', $r->metodo_pago))
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('cliente_id',  $r->cliente_id))
             ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total),0) as total')
@@ -453,7 +474,8 @@ class ReporteController extends Controller
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
-            ->when($r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
+            ->when($vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
             ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
@@ -464,6 +486,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
             ->selectRaw('COALESCE(c.nombre,"Sin cliente") as nombre, COUNT(*) as count, SUM(v.total) as total')
             ->groupBy('v.cliente_id', 'c.nombre')
             ->orderByDesc('total')
@@ -475,6 +498,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
             ->selectRaw('COALESCE(vd.producto,"Manual") as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total')
             ->groupBy('vd.producto')
             ->orderByDesc('total')
