@@ -12,16 +12,21 @@ class CheckRol
     {
         $user = $request->user();
 
+        // Usuario no autenticado
         if (!$user) {
-            return redirect('/login');
+            return redirect()->route('login');
         }
 
+        // Verificar permisos
         foreach ($modulos as $modulo) {
+
             if ($user->puedeVer($modulo)) {
                 return $next($request);
             }
         }
 
-        abort(403, 'No tienes permiso para acceder a esta sección.');
+        // Usuario autenticado pero sin permisos
+        return redirect('/')
+            ->with('error', 'No tienes permisos para acceder a esta sección.');
     }
 }

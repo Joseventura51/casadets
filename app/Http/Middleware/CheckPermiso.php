@@ -12,16 +12,21 @@ class CheckPermiso
     {
         $user = $request->user();
 
+        // Usuario no autenticado
         if (!$user) {
             return redirect('/login');
         }
 
+        // Verificar permisos
         foreach ($permisos as $permiso) {
+
             if ($user->puedeHacer($permiso)) {
                 return $next($request);
             }
         }
 
-        abort(403, 'No tienes permiso para realizar esta acción.');
+        // Usuario autenticado pero sin permisos
+        return redirect('/')
+            ->with('error', 'No tienes permisos para acceder.');
     }
 }
