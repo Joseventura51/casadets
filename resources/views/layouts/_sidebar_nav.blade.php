@@ -144,7 +144,10 @@
     @endif
 
     <!-- ADMINISTRACIÓN -->
-    @if($user && $user->puedeVer('admin.usuarios'))
+    @php
+        $showAdmin = $user && ($user->puedeVer('admin.usuarios') || $user->puedeVer('admin.roles'));
+    @endphp
+    @if($showAdmin)
     <li class="nav-item mt-2">
         <a class="nav-link sidebar-section" data-bs-toggle="collapse" href="#adminMenu">
             <i class="bi bi-gear me-2"></i>Administración
@@ -152,11 +155,20 @@
         </a>
         <div class="collapse {{ request()->is('admin*') ? 'show' : '' }}" id="adminMenu">
             <ul class="nav flex-column ms-3 mt-1">
+                @if($user->puedeVer('admin.usuarios'))
                 <li>
                     <a href="/admin/usuarios" class="nav-link {{ request()->is('admin/usuarios*') ? 'active' : '' }}">
                         <i class="bi bi-people-fill me-2"></i>Usuarios
                     </a>
                 </li>
+                @endif
+                @if($user->puedeVer('admin.roles'))
+                <li>
+                    <a href="/admin/roles" class="nav-link {{ request()->is('admin/roles*') ? 'active' : '' }}">
+                        <i class="bi bi-shield-lock me-2"></i>Roles y permisos
+                    </a>
+                </li>
+                @endif
             </ul>
         </div>
     </li>

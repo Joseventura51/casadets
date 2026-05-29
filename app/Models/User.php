@@ -36,6 +36,8 @@ class User extends Authenticatable
         ];
     }
 
+    // ── Relaciones ──────────────────────────────────────────────────────────
+
     public function rol(): BelongsTo
     {
         return $this->belongsTo(Rol::class);
@@ -45,6 +47,8 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Vendedor::class, 'usuario_vendedor');
     }
+
+    // ── Helpers de rol ──────────────────────────────────────────────────────
 
     public function esAdmin(): bool
     {
@@ -66,27 +70,68 @@ class User extends Authenticatable
         return $this->rol?->nombre === 'Vendedor';
     }
 
+    // ── Sistema de permisos dinámico ─────────────────────────────────────────
+
+    /**
+     * Verifica si el usuario puede VER/ACCEDER a un módulo.
+     * Primero consulta los módulos dinámicos del rol; si el rol aún no tiene
+     * módulos configurados (migración pendiente o rol antiguo), cae al mapa
+     * estático de respaldo para no romper el sistema.
+     */
     public function puedeVer(string $modulo): bool
     {
-        $rol = $this->rol?->nombre;
+        $rol = $this->rol;
 
-        $permisos = [
-            'dashboard'     => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
-            'caja'          => ['Administrador', 'Supervisor', 'Cajero'],
-            'ventas'        => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
-            'pendientes'    => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
-            'compras'       => ['Administrador', 'Supervisor'],
-            'productos'     => ['Administrador', 'Supervisor', 'Cajero'],
-            'clientes'      => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
-            'vendedores'    => ['Administrador', 'Supervisor'],
-            'saldos-favor'  => ['Administrador', 'Supervisor', 'Cajero'],
-            'movimientos'   => ['Administrador', 'Supervisor'],
-            'zendy'         => ['Administrador', 'Supervisor'],
-            'reportes'      => ['Administrador', 'Supervisor', 'Vendedor'],
-            'admin.usuarios'=> ['Administrador'],
+        if ($rol && !empty($rol->modulos)) {
+            return $rol->tieneModulo($modulo);
+        }
+
+        // Fallback estático para roles sin módulos configurados aún
+        $mapa = [
+            'dashboard'      => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
+            'caja'           => ['Administrador', 'Supervisor', 'Cajero'],
+            'ventas'         => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
+            'pendientes'     => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
+            'compras'        => ['Administrador', 'Supervisor'],
+            'productos'      => ['Administrador', 'Supervisor', 'Cajero'],
+            'clientes'       => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
+            'vendedores'     => ['Administrador', 'Supervisor'],
+            'saldos-favor'   => ['Administrador', 'Supervisor', 'Cajero'],
+            'movimientos'    => ['Administrador', 'Supervisor'],
+            'zendy'          => ['Administrador', 'Supervisor'],
+            'reportes'       => ['Administrador', 'Supervisor', 'Vendedor'],
+            'admin.usuarios' => ['Administrador'],
+            'admin.roles'    => ['Administrador'],
         ];
 
-        return in_array($rol, $permisos[$modulo] ?? []);
+        return in_array($rol?->nombre, $mapa[$modulo] ?? []);
+    }
+
+    /**
+     * Verifica si el usuario puede REALIZAR una acción específica.
+     * Formato: 'ventas.crear', 'ventas.editar', 'clientes.eliminar', etc.
+     */
+    public function puedeHacer(string $permiso): bool
+    {
+        $rol = $this->rol;
+
+        if ($rol && !empty($rol->permisos)) {
+            return $rol->tienePermiso($permiso);
+        }
+
+        // Administrador siempre puede todo (fallback para roles sin permisos)
+        return $rol?->nombre === 'Administrador';
+    }
+
+    // ── Restricción por vendedor ─────────────────────────────────────────────
+
+    /**
+     * Indica si este usuario debe ver SOLO los datos de sus vendedores asociados.
+     * Se activa cuando tiene al menos 1 vendedor asignado.
+     */
+    public function debeRestringirPorVendedor(): bool
+    {
+        return $this->vendedores()->exists();
     }
 
     public function vendedorIds(): array

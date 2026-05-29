@@ -1,2 +1,3 @@
 - [SaldoFavor FK architecture](saldo-favor-fk.md) — venta_origen_id is the canonical link from saldos_favor to ventas; never use descripcion LIKE for logic again.
 - [NC recalcularEstado guard](nc-estado-guard.md) — nota_credito documents must be guarded at the top of recalcularEstado() to always stay 'pagado', not rely on math coincidence.
+- [Dynamic permission system](permission-system.md) — roles use JSON modulos/permisos columns; PermisoCatalog defines the full catalog; puedeVer() has static fallback for unconfigured roles.

@@ -14,6 +14,7 @@ use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\SaldoFavorController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\Admin\UsuarioController;
+use App\Http\Controllers\Admin\RolController;
 
 // ── Autenticación (rutas públicas) ─────────────────────────────────────────
 Route::get('/login',  [AuthController::class, 'showLogin'])->name('login');
@@ -128,14 +129,28 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::delete('/casadets/compras/{compra}',           [CompraController::class, 'destroy']);
     });
 
-    // Administración de usuarios (solo Administrador)
-    Route::middleware('rol:admin.usuarios')->prefix('admin')->group(function () {
-        Route::get('/usuarios',                           [UsuarioController::class, 'index']);
-        Route::get('/usuarios/create',                    [UsuarioController::class, 'create']);
-        Route::post('/usuarios',                          [UsuarioController::class, 'store']);
-        Route::get('/usuarios/{usuario}/edit',            [UsuarioController::class, 'edit']);
-        Route::put('/usuarios/{usuario}',                 [UsuarioController::class, 'update']);
-        Route::patch('/usuarios/{usuario}/toggle',        [UsuarioController::class, 'toggleActivo']);
+    // ── Administración ────────────────────────────────────────────────────────
+    Route::prefix('admin')->group(function () {
+
+        // Usuarios
+        Route::middleware('rol:admin.usuarios')->group(function () {
+            Route::get('/usuarios',                    [UsuarioController::class, 'index']);
+            Route::get('/usuarios/create',             [UsuarioController::class, 'create']);
+            Route::post('/usuarios',                   [UsuarioController::class, 'store']);
+            Route::get('/usuarios/{usuario}/edit',     [UsuarioController::class, 'edit']);
+            Route::put('/usuarios/{usuario}',          [UsuarioController::class, 'update']);
+            Route::patch('/usuarios/{usuario}/toggle', [UsuarioController::class, 'toggleActivo']);
+        });
+
+        // Roles
+        Route::middleware('rol:admin.roles')->group(function () {
+            Route::get('/roles',               [RolController::class, 'index']);
+            Route::get('/roles/create',        [RolController::class, 'create']);
+            Route::post('/roles',              [RolController::class, 'store']);
+            Route::get('/roles/{rol}/edit',    [RolController::class, 'edit']);
+            Route::put('/roles/{rol}',         [RolController::class, 'update']);
+            Route::delete('/roles/{rol}',      [RolController::class, 'destroy']);
+        });
     });
 
 });

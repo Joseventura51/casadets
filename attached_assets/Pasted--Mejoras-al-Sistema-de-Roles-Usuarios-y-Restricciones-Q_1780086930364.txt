@@ -1,0 +1,208 @@
+# Mejoras al Sistema de Roles, Usuarios y Restricciones
+
+Quiero mejorar completamente el sistema de roles y permisos.
+
+Actualmente no quiero depender de Tinker para crear roles o administrar permisos.
+
+El único rol que puede crearse manualmente desde Tinker es el rol inicial de “Administrador”. Después de eso, todo debe administrarse directamente desde el sistema.
+
+---
+
+# Administración de Roles desde el Panel
+
+Dentro del módulo:
+
+## Administración → Usuarios
+
+también debe existir una sección para:
+
+* Crear roles
+* Editar roles
+* Eliminar roles
+* Asignar permisos
+* Configurar accesos
+* Asignar módulos visibles
+
+Todo desde interfaz gráfica.
+
+No quiero manejar roles manualmente por código.
+
+---
+
+# Sistema de permisos dinámicos
+
+Cada rol debe poder controlar:
+
+* qué módulos puede ver
+* qué módulos puede usar
+* qué acciones puede realizar
+
+Ejemplo:
+
+| Acción          | Permitir |
+| --------------- | -------- |
+| Ver ventas      | Sí       |
+| Crear ventas    | Sí       |
+| Editar ventas   | No       |
+| Eliminar ventas | No       |
+
+---
+
+# Restricciones por vendedor
+
+Esto es MUY importante.
+
+Los vendedores deben trabajar únicamente con su propia información.
+
+Ejemplo:
+
+## Vendedor
+
+Puede:
+
+* ver sus ventas
+* ver sus clientes
+* ver sus reportes
+* ver sus compras relacionadas
+* ver movimientos asociados
+
+No puede:
+
+* editar ventas antiguas
+* ver ventas de otros vendedores
+* acceder a administración
+* acceder a configuración crítica
+
+---
+
+# Asociación Usuario ↔ Vendedor
+
+Cada usuario debe poder tener asociado:
+
+* un vendedor
+  o
+* múltiples vendedores
+
+Esto servirá para filtrar automáticamente toda la información del sistema.
+
+---
+
+# Restricciones automáticas globales
+
+La lógica debe aplicarse automáticamente en TODOS los módulos.
+
+Ejemplo:
+
+## Ventas
+
+El vendedor solo ve:
+
+* sus ventas
+
+## Compras
+
+Solo ve:
+
+* compras relacionadas con sus productos o vendedor asociado
+
+## Reportes
+
+Solo puede ver:
+
+* reportes relacionados a su vendedor asociado
+
+## Movimientos
+
+Solo movimientos relacionados a su actividad
+
+## Clientes
+
+Solo clientes asociados a sus ventas
+
+---
+
+# Importante
+
+La idea no es programar permisos individuales módulo por módulo manualmente.
+
+La idea es construir una arquitectura global de restricciones basada en:
+
+* rol
+* usuario
+* vendedor asociado
+* permisos
+
+para que el sistema automáticamente filtre la información dependiendo del usuario autenticado.
+
+---
+
+# Middleware y Seguridad
+
+Implementar:
+
+* middleware por roles
+* middleware por permisos
+* filtros automáticos globales
+* policies/gates si aplica
+* protección backend real (no solo frontend)
+
+No basta ocultar botones:
+el backend también debe restringir información.
+
+---
+
+# Menú dinámico
+
+El sidebar debe cambiar automáticamente según el rol.
+
+Ejemplo:
+
+## Administrador
+
+Ve todos los módulos.
+
+## Vendedor
+
+Solo:
+
+* ventas
+* clientes
+* reportes propios
+* movimientos propios
+
+## Cajero
+
+Solo:
+
+* caja
+* ventas
+* comprobantes
+
+---
+
+# Escalabilidad
+
+Tener en cuenta que el sistema tendrá MUCHOS módulos.
+
+Por eso el sistema de permisos debe ser:
+
+* escalable
+* reutilizable
+* centralizado
+* fácil de mantener
+
+Evitar hardcodear permisos por cada módulo individualmente.
+
+---
+
+# Objetivo final
+
+El sistema debe comportarse como un ERP profesional:
+
+* multiusuario
+* multirol
+* restricciones automáticas
+* acceso segmentado
+* reportes filtrados
+* permisos dinámicos
+* administración visual de accesos

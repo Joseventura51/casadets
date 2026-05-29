@@ -9,8 +9,15 @@ class ClienteController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Cliente::withCount('ventas')
-            ->orderBy('nombre');
+        $authUser = auth()->user();
+
+        $query = Cliente::withCount('ventas')->orderBy('nombre');
+
+        // Restricción por vendedor: solo clientes que tengan ventas asociadas a sus vendedores
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
+            $ids = $authUser->vendedorIds();
+            $query->whereHas('ventas', fn ($q) => $q->whereIn('vendedor_id', $ids));
+        }
 
         if ($request->filled('buscar')) {
             $term = '%' . $request->buscar . '%';
@@ -32,6 +39,7 @@ class ClienteController extends Controller
 
     public function store(Request $request)
     {
+        abort_if(!auth()->user()->puedeHacer('clientes.crear'), 403, 'Sin permiso para crear clientes.');
         $data = $this->validar($request);
         Cliente::create($data);
         return redirect('/casadets/clientes')->with('success', 'Cliente registrado.');
@@ -44,6 +52,7 @@ class ClienteController extends Controller
 
     public function update(Request $request, Cliente $cliente)
     {
+        abort_if(!auth()->user()->puedeHacer('clientes.editar'), 403, 'Sin permiso para editar clientes.');
         $data = $this->validar($request, $cliente);
         $cliente->update($data);
         return redirect('/casadets/clientes')->with('success', 'Cliente actualizado.');
@@ -51,6 +60,7 @@ class ClienteController extends Controller
 
     public function destroy(Cliente $cliente)
     {
+        abort_if(!auth()->user()->puedeHacer('clientes.eliminar'), 403, 'Sin permiso para eliminar clientes.');
         $cliente->delete();
         return redirect('/casadets/clientes')->with('success', 'Cliente eliminado.');
     }
