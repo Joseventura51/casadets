@@ -16,6 +16,12 @@
 .filter-input:focus { outline:none; border-color:#86b7fe; box-shadow:0 0 0 2px rgba(13,110,253,.15); }
 .thead-filter td { background:#e9f0fb; padding:.3rem .5rem; border-bottom:2px solid #c8d8f5; }
 .fila-oculta { display:none !important; }
+.pagination { justify-content: center; margin-top: 1rem; }
+.pagination .page-item { margin: 0 .125rem; }
+.pagination .page-link { min-width: 2.4rem; padding: .4rem .75rem; }
+.pagination .page-item.active .page-link { background-color: #0d6efd; border-color: #0d6efd; }
+.pagination .page-link:hover { background-color: #e7f1ff; }
+.pagination .page-item.disabled .page-link { color: #adb5bd; }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -75,12 +81,12 @@
 
         <div style="font-size:.8rem;color:#6c757d;padding-bottom:.1rem;">
             @if($todas)
-                <span class="badge bg-secondary">Todas las fechas · {{ $ventas->count() }} ventas</span>
+                <span class="badge bg-secondary">Todas las fechas · {{ $ventas->total() }} ventas</span>
             @else
                 <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
                     {{ \Carbon\Carbon::parse($desde)->format('d/m/Y') }}
                     @if($desde !== $hasta) — {{ \Carbon\Carbon::parse($hasta)->format('d/m/Y') }} @endif
-                    · {{ $ventas->count() }} venta(s)
+                    · {{ $ventas->total() }} venta(s)
                 </span>
             @endif
             <span id="contadorFiltro" style="display:none;">
@@ -91,6 +97,11 @@
     </div>
 </form>
 
+<div id="ventasContainer">
+<form method="GET" action="/casadets/ventas" id="formFiltros">
+    <input type="hidden" name="desde" value="{{ $desde }}">
+    <input type="hidden" name="hasta" value="{{ $hasta }}">
+    <input type="hidden" name="todas" value="{{ $todas ? '1' : '' }}">
 <div class="card">
     <div class="table-responsive">
         <table class="table mb-0 align-middle" id="tablaVentas">
@@ -107,31 +118,34 @@
                 </tr>
                 <tr class="thead-filter">
                     <td>
-                        <select id="fEstado" class="filter-input">
+                        <select id="fEstado" name="estado" class="filter-input">
                             <option value="">Todos</option>
-                            <option value="pendiente">Pendiente</option>
-                            <option value="parcial">Parcial</option>
-                            <option value="pagado">Pagado</option>
-                            <option value="anulado">Anulado</option>
-                            <option value="canjeada">Ref. fiscal</option>
+                            <option value="pendiente" {{ isset($estado) && $estado === 'pendiente' ? 'selected' : '' }}>Pendiente</option>
+                            <option value="parcial" {{ isset($estado) && $estado === 'parcial' ? 'selected' : '' }}>Parcial</option>
+                            <option value="pagado" {{ isset($estado) && $estado === 'pagado' ? 'selected' : '' }}>Pagado</option>
+                            <option value="anulado" {{ isset($estado) && $estado === 'anulado' ? 'selected' : '' }}>Anulado</option>
+                            <option value="canjeada" {{ isset($estado) && $estado === 'canjeada' ? 'selected' : '' }}>Ref. fiscal</option>
                         </select>
                     </td>
-                    <td><input type="date" id="fFecha" class="filter-input" style="font-size:.76rem;"></td>
-                    <td><input type="text" id="fVendedor"  class="filter-input" placeholder="Buscar…"></td>
-                    <td><input type="text" id="fCliente"   class="filter-input" placeholder="Nombre o RUC…"></td>
+                    <td><input type="date" id="fFecha" name="fecha" value="{{ $fecha ?? '' }}" class="filter-input" style="font-size:.76rem;"></td>
+                    <td><input type="text" id="fVendedor" name="vendedor" value="{{ $vendedor ?? '' }}" class="filter-input" placeholder="Buscar…"></td>
+                    <td><input type="text" id="fCliente" name="cliente" value="{{ $cliente ?? '' }}" class="filter-input" placeholder="Nombre o RUC…"></td>
                     <td>
-                        <select id="fPago" class="filter-input">
+                        <select id="fPago" name="pago" class="filter-input">
                             <option value="">Todos</option>
                             @foreach(['efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'] as $k=>$lbl)
-                                <option value="{{ $k }}">{{ $lbl }}</option>
+                                <option value="{{ $k }}" {{ isset($pago) && $pago === $k ? 'selected' : '' }}>{{ $lbl }}</option>
                             @endforeach
                         </select>
                     </td>
-                    <td><input type="text" id="fDocumento" class="filter-input" placeholder="F001-001…"></td>
-                    <td><input type="text" id="fTotal"     class="filter-input text-end" placeholder="84.48"></td>
+                    <td><input type="text" id="fDocumento" name="documento" value="{{ $documento ?? '' }}" class="filter-input" placeholder="F001-001…"></td>
+                    <td><input type="text" id="fTotal" name="total" value="{{ $total ?? '' }}" class="filter-input text-end" placeholder="84.48"></td>
                     <td class="text-end">
-                        <button id="btnLimpiar" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Limpiar filtros" style="font-size:.75rem;">
+                        <button type="button" id="btnLimpiar" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Limpiar filtros" style="font-size:.75rem;">
                             <i class="bi bi-x-lg"></i>
+                        </button>
+                        <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2 ms-1" title="Aplicar filtros" style="font-size:.75rem;">
+                            Buscar
                         </button>
                     </td>
                 </tr>
@@ -150,7 +164,6 @@
                     data-cliente="{{ strtolower($clienteTxt) }}"
                     data-estado="{{ $estado }}"
                     data-fecha="{{ $v->fecha->format('Y-m-d') }}"
-                    data-pago="{{ strtolower($v->metodo_pago ?? '') }}"
                     data-documento="{{ strtolower(($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '')) }}"
                     data-total="{{ $esRefFiscal ? '' : number_format($v->total, 2) }}"
                     data-cobrado="{{ number_format($v->total_cobrado, 2) }}">
@@ -242,6 +255,20 @@
         </table>
     </div>
 </div>
+</form>
+
+@if($ventas->hasPages())
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+        {{ $ventas->withQueryString()->links('pagination::bootstrap-5') }}
+    </div>
+    <div class="text-muted small">
+        Mostrando {{ $ventas->count() }} de {{ $ventas->total() }} ventas
+    </div>
+</div>
+@endif
+
+</div>
 
 <div id="filaNoResultados" class="text-center text-muted py-4" style="display:none;">
     <i class="bi bi-search me-1"></i> Sin resultados para los filtros aplicados.
@@ -255,7 +282,8 @@ document.querySelectorAll('.select-estado').forEach(sel => {
 });
 
 // ── Filtrado JS en vivo (sobre las filas ya cargadas) ────────────
-const filtros = {
+let formFiltros    = document.getElementById('formFiltros');
+let filtros = {
     estado:    document.getElementById('fEstado'),
     vendedor:  document.getElementById('fVendedor'),
     cliente:   document.getElementById('fCliente'),
@@ -263,13 +291,13 @@ const filtros = {
     documento: document.getElementById('fDocumento'),
     total:     document.getElementById('fTotal'),
 };
-const fFecha = document.getElementById('fFecha');
+let fFecha = document.getElementById('fFecha');
 
-const filas        = document.querySelectorAll('.fila-venta');
-const cntVisible   = document.getElementById('cntVisible');
-const contador     = document.getElementById('contadorFiltro');
-const noResultados = document.getElementById('filaNoResultados');
-const totalVisible = document.getElementById('totalVisible');
+    let filas        = document.querySelectorAll('.fila-venta');
+    let cntVisible   = document.getElementById('cntVisible');
+    let contador     = document.getElementById('contadorFiltro');
+    let noResultados = document.getElementById('filaNoResultados');
+    let totalVisible = document.getElementById('totalVisible');
 const filtrosStorageKey = 'casadets.ventas.filtros-tabla';
 
 function normalizar(str) {
@@ -319,42 +347,32 @@ function aplicarFiltros() {
 }
 
 function guardarFiltrosTabla() {
-    const data = { fecha: fFecha.value };
-    for (const [k, el] of Object.entries(filtros)) data[k] = el.value;
-    sessionStorage.setItem(filtrosStorageKey, JSON.stringify(data));
+    // no-op: do not persist filters across pages (avoid 'marked' previous searches)
 }
 
 function restaurarFiltrosTabla() {
-    try {
-        const data = JSON.parse(sessionStorage.getItem(filtrosStorageKey) || '{}');
-        for (const [k, el] of Object.entries(filtros)) {
-            if (data[k] !== undefined) el.value = data[k];
-        }
-        if (data.fecha !== undefined) fFecha.value = data.fecha;
-    } catch (_) {}
-}
-
-function aplicarYGuardarFiltros() {
-    guardarFiltrosTabla();
-    requestAnimationFrame(aplicarFiltros);
+    // no-op: do not restore persisted filters
 }
 
 restaurarFiltrosTabla();
-aplicarFiltros();
+formFiltros?.addEventListener('submit', guardarFiltrosTabla);
 
-Object.values(filtros).forEach(el => el.addEventListener('input', aplicarYGuardarFiltros));
-fFecha.addEventListener('input', aplicarYGuardarFiltros);
+[filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => {
+    const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+    fetchFiltersAjax(false);
+}));
+fFecha.addEventListener('change', () => { const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = ''; fetchFiltersAjax(false); });
 
 document.getElementById('btnLimpiar').addEventListener('click', () => {
     Object.values(filtros).forEach(el => el.value = '');
     fFecha.value = '';
-    sessionStorage.removeItem(filtrosStorageKey);
-    aplicarFiltros();
+    const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
     actualizarExport();
+    formFiltros?.submit();
 });
 
 // Actualizar href de exportar con el rango actual
-const btnExportar = document.getElementById('btnExportar');
+let btnExportar = document.getElementById('btnExportar');
 const fDesde = document.getElementById('fDesde');
 const fHasta = document.getElementById('fHasta');
 function actualizarExport() {
@@ -393,5 +411,125 @@ if (fHasta) fHasta.addEventListener('change', actualizarExport);
 Object.values(filtros).forEach(el => el.addEventListener('input', actualizarExport));
 fFecha.addEventListener('input', actualizarExport);
 actualizarExport();
+
+// ── AJAX live-search (debounced) ─────────────────────────────
+let ajaxController = null;
+function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function rebindTableBehaviors() {
+    // refresh DOM references
+    formFiltros = document.getElementById('formFiltros');
+    filtros = {
+        estado:    document.getElementById('fEstado'),
+        vendedor:  document.getElementById('fVendedor'),
+        cliente:   document.getElementById('fCliente'),
+        pago:      document.getElementById('fPago'),
+        documento: document.getElementById('fDocumento'),
+        total:     document.getElementById('fTotal'),
+    };
+    fFecha = document.getElementById('fFecha');
+
+    filas = document.querySelectorAll('.fila-venta');
+    cntVisible = document.getElementById('cntVisible');
+    contador = document.getElementById('contadorFiltro');
+    noResultados = document.getElementById('filaNoResultados');
+    totalVisible = document.getElementById('totalVisible');
+
+    document.querySelectorAll('.select-estado').forEach(sel => {
+        sel.addEventListener('change', function() { this.className = 'select-estado est-' + this.value; });
+    });
+
+    // refresh export button and update its href
+    btnExportar = document.getElementById('btnExportar') || btnExportar;
+    actualizarExport();
+
+    // reattach listeners
+    Object.values(filtros).forEach(el => el?.addEventListener('input', actualizarExport));
+    fFecha?.addEventListener('input', actualizarExport);
+    [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => el?.addEventListener('input', debouncedFetch));
+    [filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => {
+        // changing select should apply within current date range — clear 'todas'
+        const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+        fetchFiltersAjax(false);
+    }));
+    fFecha?.addEventListener('change', () => {
+        const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+        fetchFiltersAjax(false);
+    });
+
+    const btnLim = document.getElementById('btnLimpiar');
+    btnLim?.addEventListener('click', () => {
+        Object.values(filtros).forEach(el => el.value = '');
+        if (fFecha) fFecha.value = '';
+        const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+        actualizarExport();
+        formFiltros?.submit();
+    });
+
+    // Reattach pagination AJAX listeners: capture page parameter and use AJAX instead of full reload
+    document.querySelectorAll('.pagination a.page-link').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const href = link.href || link.getAttribute('href');
+            if (!href) return;
+            
+            const url = new URL(href, window.location.origin);
+            const pageParam = url.searchParams.get('page');
+            if (pageParam) {
+                fetchFiltersAjax(false, parseInt(pageParam));
+            }
+        });
+    });
+}
+
+async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
+    if (!formFiltros) return;
+    const fd = new FormData(formFiltros);
+    if (forceTodas) {
+        fd.set('todas', '1');
+        fd.set('page', '1');  // Reset to page 1 when searching globally
+    } else if (pageNum !== null) {
+        fd.set('page', pageNum.toString());
+    }
+    const url = formFiltros.action + '?' + new URLSearchParams(fd).toString();
+    if (ajaxController) ajaxController.abort();
+    ajaxController = new AbortController();
+    try {
+        const res = await fetch(url, { signal: ajaxController.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const text = await res.text();
+        const tmp = document.createElement('div');
+        tmp.innerHTML = text;
+        const newContainer = tmp.querySelector('#ventasContainer');
+        const oldContainer = document.getElementById('ventasContainer');
+        if (newContainer && oldContainer) {
+            oldContainer.replaceWith(newContainer);
+            rebindTableBehaviors();
+        }
+    } catch (err) {
+        if (err.name !== 'AbortError') console.error('AJAX filter error', err);
+    } finally {
+        ajaxController = null;
+    }
+}
+
+const debouncedFetch = debounce(() => {
+    if (formFiltros) {
+        const h = formFiltros.querySelector('input[name="todas"]');
+        if (h) h.value = '1';
+    }
+    fetchFiltersAjax(true);
+}, 200);
+
+// Wire text inputs to live AJAX fetch
+[filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => {
+    el?.addEventListener('input', debouncedFetch);
+});
+
+// Keep select and date change behavior to submit immediately (server-side)
+[filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => fetchFiltersAjax()));
+fFecha.addEventListener('change', () => fetchFiltersAjax());
 </script>
 @endsection

@@ -11,7 +11,10 @@
     $ventaPagada    = $venta->estado === 'pagado';
 
     $metodosActuales = array_filter(explode(',', $venta->metodo_pago ?? ''));
-    $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['ninguno'];
+    $primerosMetodos = !empty($metodosActuales) ? $metodosActuales : ['efectivo'];
+    if ($primerosMetodos === ['ninguno']) {
+        $primerosMetodos = ['efectivo'];
+    }
 @endphp
 
 <style>
@@ -502,15 +505,15 @@
 </div>{{-- /row --}}
 
 <script>
-const METODOS        = @json($metodos);
-const METODO_LABELS  = @json($metodoLabels);
-const TOTAL_REAL     = {{ (float) $totalVenta }};
-const YA_PAGADO      = {{ (float) $yaPagedo }};
-const SALDO_PENDIENTE = {{ (float) $saldoPendiente }};
-const VENTA_PAGADA    = {{ $ventaPagada ? 'true' : 'false' }};
-const VENTA_ID        = {{ $venta->id }};
+const METODOS        = JSON.parse(`{!! json_encode($metodos, JSON_UNESCAPED_UNICODE) !!}`);
+const METODO_LABELS  = JSON.parse(`{!! json_encode($metodoLabels, JSON_UNESCAPED_UNICODE) !!}`);
+const TOTAL_REAL     = Number(`{!! json_encode((float) $totalVenta, JSON_UNESCAPED_UNICODE) !!}`);
+const YA_PAGADO      = Number(`{!! json_encode((float) $yaPagedo, JSON_UNESCAPED_UNICODE) !!}`);
+const SALDO_PENDIENTE = Number(`{!! json_encode((float) $saldoPendiente, JSON_UNESCAPED_UNICODE) !!}`);
+const VENTA_PAGADA    = JSON.parse(`{!! json_encode($ventaPagada, JSON_UNESCAPED_UNICODE) !!}`);
+const VENTA_ID        = Number(`{!! json_encode($venta->id, JSON_UNESCAPED_UNICODE) !!}`);
 const METODOS_CON_DESC = ['transferencia', 'tarjeta', 'yape', 'plin'];
-let pagoIdx = {{ count($primerosMetodos) }};
+let pagoIdx = Number(`{!! json_encode(count($primerosMetodos), JSON_UNESCAPED_UNICODE) !!}`);
 let saldoAdicionalSel = 0;
 
 // ── Toggle de tarjeta de vale ──────────────────────────────────

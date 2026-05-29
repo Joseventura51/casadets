@@ -29,6 +29,14 @@ class VentaController extends Controller
         $hasta = $request->input('hasta', $desde);
         if ($hasta < $desde) $hasta = $desde;
 
+        $estado    = $request->input('estado');
+        $fecha     = $request->input('fecha');
+        $vendedor  = $request->input('vendedor');
+        $cliente   = $request->input('cliente');
+        $pago      = $request->input('pago');
+        $documento = $request->input('documento');
+        $total     = $request->input('total');
+
         $query = Venta::with([
                 'vendedor:id,nombre',
                 'cliente:id,nombre,documento',
@@ -43,6 +51,40 @@ class VentaController extends Controller
                   ->whereDate('fecha', '<=', $hasta);
         }
 
+        if ($estado) {
+            $query->where('estado', $estado);
+        }
+
+        if ($fecha) {
+            $query->whereDate('fecha', $fecha);
+        }
+
+        if ($vendedor) {
+            $query->whereHas('vendedor', fn ($q) => $q->where('nombre', 'like', '%' . $vendedor . '%'));
+        }
+
+        if ($cliente) {
+            $query->whereHas('cliente', fn ($q) => $q->where(function ($q) use ($cliente) {
+                $q->where('nombre', 'like', '%' . $cliente . '%')
+                  ->orWhere('documento', 'like', '%' . $cliente . '%');
+            }));
+        }
+
+        if ($pago) {
+            $query->where('metodo_pago', 'like', '%' . $pago . '%');
+        }
+
+        if ($documento) {
+            $query->where(function ($q) use ($documento) {
+                $q->where('documento_tipo', 'like', '%' . $documento . '%')
+                  ->orWhere('documento_numero', 'like', '%' . $documento . '%');
+            });
+        }
+
+        if ($total) {
+            $query->where('total', 'like', '%' . $total . '%');
+        }
+
         $ventas = $query
             ->orderByRaw("CASE WHEN documento_tipo='factura'  THEN 0
                                WHEN documento_tipo='boleta'   THEN 1
@@ -52,7 +94,8 @@ class VentaController extends Controller
             ->orderBy('documento_numero')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc')
-            ->get();
+            ->paginate(20)
+            ->withQueryString();
 
         $vendedores = Vendedor::select('id', 'nombre')
             ->where('activo', true)
@@ -61,7 +104,10 @@ class VentaController extends Controller
 
         $todas = $request->boolean('todas');
 
-        return view('casadets.ventas.index', compact('ventas', 'vendedores', 'desde', 'hasta', 'todas'));
+        return view('casadets.ventas.index', compact(
+            'ventas', 'vendedores', 'desde', 'hasta', 'todas',
+            'estado', 'fecha', 'vendedor', 'cliente', 'pago', 'documento', 'total'
+        ));
     }
 
     /* ─── Detalle ──────────────────────────────────────────────── */
