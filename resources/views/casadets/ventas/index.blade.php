@@ -144,9 +144,6 @@
                         <button type="button" id="btnLimpiar" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Limpiar filtros" style="font-size:.75rem;">
                             <i class="bi bi-x-lg"></i>
                         </button>
-                        <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2 ms-1" title="Aplicar filtros" style="font-size:.75rem;">
-                            Buscar
-                        </button>
                     </td>
                 </tr>
             </thead>
@@ -455,10 +452,7 @@ function rebindTableBehaviors() {
         const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
         fetchFiltersAjax(false);
     }));
-    fFecha?.addEventListener('change', () => {
-        const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
-        fetchFiltersAjax(false);
-    });
+    // fFecha is outside #ventasContainer so it is never replaced — do NOT re-add its listener here
 
     const btnLim = document.getElementById('btnLimpiar');
     btnLim?.addEventListener('click', () => {
@@ -528,8 +522,6 @@ const debouncedFetch = debounce(() => {
     el?.addEventListener('input', debouncedFetch);
 });
 
-// Keep select and date change behavior to submit immediately (server-side)
-[filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => fetchFiltersAjax()));
-fFecha.addEventListener('change', () => fetchFiltersAjax());
+// Select and date listeners are registered above (lines 360-364) — do not duplicate here
 </script>
 @endsection
