@@ -1,0 +1,151 @@
+Internal Server Error
+
+Copy as Markdown
+Illuminate\Database\QueryException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+SQLSTATE[42S22]: Column not found: 1054 Unknown column 'modulos' in 'field list' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: bd_casadets, SQL: insert into `roles` (`nombre`, `descripcion`, `modulos`, `permisos`, `updated_at`, `created_at`) values (Caja casadet's, ?, ["0","1","0","1","2","3","5","6","7","8"], ["ventas.crear","ventas.importar","ventas.pago","compras.crear","compras.editar","clientes.crear","clientes.editar","caja.abrir","caja.cerrar","movimientos.crear","saldos.crear","saldos.aplicar"], 2026-05-29 16:43:41, 2026-05-29 16:43:41))
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 42S22
+500
+POST
+http://127.0.0.1:8000/admin/roles
+
+Exception trace
+15 vendor frames
+
+Illuminate\Database\Eloquent\Model::__callStatic(string, array)
+app\Http\Controllers\Admin\RolController.php:28
+
+23    }
+24
+25    public function store(Request $request)
+26    {
+27        $data = $this->validar($request);
+28        Rol::create($data);
+29        return redirect('/admin/roles')->with('success', 'Rol creado correctamente.');
+30    }
+31
+32    public function edit(Rol $rol)
+33    {
+34        $catalog = PermisoCatalog::class;
+35        return view('admin.roles.edit', compact('rol', 'catalog'));
+36    }
+37
+38    public function update(Request $request, Rol $rol)
+39    {
+40
+5 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckRol.php:21
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-3 of 3
+mysql
+select * from `sessions` where `id` = 'jg23x5LuOs0oI4Vf2GOmHewjQmEKY0tY1b1SNeqT' limit 1
+10.96ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.57ms
+mysql
+select * from `roles` where `roles`.`id` = 1 limit 1
+0.47ms
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+content-length
+594
+cache-control
+max-age=0
+sec-ch-ua
+"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+dnt
+1
+upgrade-insecure-requests
+1
+content-type
+application/x-www-form-urlencoded
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+origin
+http://127.0.0.1:8000
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/admin/roles/create
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6Ik9SVy9iOVRTZzU1Ky9qWW56Q25kZFE9PSIsInZhbHVlIjoiZmt5U053OURYOGlyTGRRa09ZMHZ2S0o1VHRrTHZaYStjdmNyb29iNFhpd0krL0paRlJGamRCN1hJWFRhNXhoNFRBL0JPZUdVRkNlWWNNeEk1SmZyRXA4OWNWYU00clVIZC9haGxlOUZveTZPaE9MYVJyeW82VXNVUnd1UW0zaGMiLCJtYWMiOiI3Y2FhMmNmMzZiMmE4YThiN2YwNTE3OGZjZjRiNTk2MmQxOWJiYzE4ZGQ4ZDIzZTI0MTc2YzRkNGU3MzQyOGQ5IiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6IjFxejdIUGw2SUQ5amVnRTlON2dxSWc9PSIsInZhbHVlIjoia0pQeThUSzFXWEVMVE02N2tsV3B6aEFOL1drNEMwei8xRng1V2ZYNmZONFRpaXJBbitpZGdaQnhZcnF1VkwzTm5MaWQ0QU82bE9aanNoZ05vZUE3MWs2cW04Q0xCMWlGd21DdzBlKyt2TnVvTWEwQU4veU9YQkpvSG5OeVBQZVIiLCJtYWMiOiI2YmU5OTU2ZTE1NTFiMTcwMjY3YTM4YzE2YjgxNGRmNTE1MmU3NzhjYWU3M2E0NTBlMjY4ZGFlNmM2YzZiMDIwIiwidGFnIjoiIn0%3D
+Body
+{
+    "_token": "vz1zHZyk7G3hG9P5piaICLf8gFgFiS1Z8BMXhhoK",
+    "nombre": "Caja casadet's",
+    "descripcion": null,
+    "modulos": [
+        "0",
+        "1",
+        "0",
+        "1",
+        "2",
+        "3",
+        "5",
+        "6",
+        "7",
+        "8"
+    ],
+    "permisos": [
+        "ventas.crear",
+        "ventas.importar",
+        "ventas.pago",
+        "compras.crear",
+        "compras.editar",
+        "clientes.crear",
+        "clientes.editar",
+        "caja.abrir",
+        "caja.cerrar",
+        "movimientos.crear",
+        "saldos.crear",
+        "saldos.aplicar"
+    ]
+}
+Routing
+controller
+App\Http\Controllers\Admin\RolController@store
+middleware
+web, auth, check.activo, rol:admin.roles
+Routing parameters
+// No routing parameters
