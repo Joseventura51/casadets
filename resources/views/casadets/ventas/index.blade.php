@@ -171,17 +171,15 @@
                                 📋 Ref. fiscal
                             </span>
                         @else
-                        <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
-                            @csrf
-                            <input type="hidden" name="estado" class="hEstadoFila" value="{{ $estado }}">
                             <select class="select-estado est-{{ $estado }}"
-                                    onchange="this.previousElementSibling.value=this.value; this.form.submit()">
+                                    data-url="/casadets/ventas/{{ $v->id }}/estado"
+                                    data-original="{{ $estado }}"
+                                    onchange="cambiarEstadoFila(this)">
                                 <option value="pendiente" {{ $estado==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
                                 <option value="parcial"   {{ $estado==='parcial'  ?'selected':'' }}>◑ Parcial</option>
                                 <option value="pagado"    {{ $estado==='pagado'   ?'selected':'' }}>✓ Pagado</option>
                                 <option value="anulado"   {{ $estado==='anulado'  ?'selected':'' }}>✕ Anulado</option>
                             </select>
-                        </form>
                         @endif
                     </td>
                     <td>{{ $v->fecha->format('d/m/Y') }}</td>
@@ -274,11 +272,39 @@
 </div>
 
 <script>
-document.querySelectorAll('.select-estado').forEach(sel => {
-    sel.addEventListener('change', function() {
-        this.className = 'select-estado est-' + this.value;
+const _csrf = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
+function cambiarEstadoFila(sel) {
+    const nuevo    = sel.value;
+    const original = sel.dataset.original;
+    sel.className  = 'select-estado est-' + nuevo;
+    fetch(sel.dataset.url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRF-TOKEN': _csrf,
+        },
+        body: '_method=POST&estado=' + encodeURIComponent(nuevo),
+    }).then(r => {
+        if (r.ok) {
+            sel.dataset.original = nuevo;
+            // actualizar clase de la fila
+            const tr = sel.closest('tr');
+            if (tr) {
+                tr.classList.remove('fila-pagado','fila-parcial','fila-anulado','fila-canjeada');
+                const mapa = {pagado:'fila-pagado',parcial:'fila-parcial',anulado:'fila-anulado',canjeada:'fila-canjeada'};
+                if (mapa[nuevo]) tr.classList.add(mapa[nuevo]);
+                tr.dataset.estado = nuevo;
+            }
+        } else {
+            sel.value     = original;
+            sel.className = 'select-estado est-' + original;
+        }
+    }).catch(() => {
+        sel.value     = original;
+        sel.className = 'select-estado est-' + original;
     });
-});
+}
 
 // ── Filtrado JS en vivo (sobre las filas ya cargadas) ────────────
 let formFiltros    = document.getElementById('formFiltros');
@@ -441,9 +467,7 @@ function rebindTableBehaviors() {
     noResultados = document.getElementById('filaNoResultados');
     totalVisible = document.getElementById('totalVisible');
 
-    document.querySelectorAll('.select-estado').forEach(sel => {
-        sel.addEventListener('change', function() { this.className = 'select-estado est-' + this.value; });
-    });
+    // select-estado rows now use cambiarEstadoFila(this) via onchange — no listener needed here
 
     // refresh export button and update its href
     btnExportar = document.getElementById('btnExportar') || btnExportar;

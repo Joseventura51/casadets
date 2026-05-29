@@ -147,17 +147,15 @@
                     </td>
                     <td>
                         @php $estV = $v->estado ?? 'pendiente'; @endphp
-                        <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
-                            @csrf
-                            <input type="hidden" name="estado" value="{{ $estV }}">
                             <select class="select-estado est-{{ $estV }}"
-                                onchange="this.previousElementSibling.value=this.value; this.form.submit()">
+                                data-url="/casadets/ventas/{{ $v->id }}/estado"
+                                data-original="{{ $estV }}"
+                                onchange="cambiarEstadoFila(this)">
                                 <option value="pendiente" {{ $estV==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
                                 <option value="parcial"   {{ $estV==='parcial'  ?'selected':'' }}>◑ Parcial</option>
                                 <option value="pagado"    {{ $estV==='pagado'   ?'selected':'' }}>✔ Pagado</option>
                                 <option value="anulado"   {{ $estV==='anulado'  ?'selected':'' }}>✕ Anulado</option>
                             </select>
-                        </form>
                     </td>
                     <td>
                         @if($dias >= 10)
@@ -258,9 +256,37 @@
 </div>
 
 <script>
-document.querySelectorAll('.select-estado').forEach(sel => {
-    sel.addEventListener('change', function() { this.className = 'select-estado est-' + this.value; });
-});
+const _csrf = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+
+function cambiarEstadoFila(sel) {
+    const nuevo    = sel.value;
+    const original = sel.dataset.original;
+    sel.className  = 'select-estado est-' + nuevo;
+    fetch(sel.dataset.url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRF-TOKEN': _csrf,
+        },
+        body: 'estado=' + encodeURIComponent(nuevo),
+    }).then(r => {
+        if (r.ok) {
+            sel.dataset.original = nuevo;
+            const tr = sel.closest('tr');
+            if (tr) {
+                tr.classList.remove('fila-pagado','fila-parcial','fila-anulado');
+                const mapa = {pagado:'fila-pagado',parcial:'fila-parcial',anulado:'fila-anulado'};
+                if (mapa[nuevo]) tr.classList.add(mapa[nuevo]);
+            }
+        } else {
+            sel.value     = original;
+            sel.className = 'select-estado est-' + original;
+        }
+    }).catch(() => {
+        sel.value     = original;
+        sel.className = 'select-estado est-' + original;
+    });
+}
 
 // ── Búsqueda en vivo ───────────────────────────────────────────
 const filtros = {
