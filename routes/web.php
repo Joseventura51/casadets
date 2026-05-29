@@ -11,11 +11,17 @@ use App\Http\Controllers\CompraController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\SaldoFavorController;
+use App\Http\Controllers\ReporteController;
 
 Route::get('/', [HomeController::class, 'index']);
 
 Route::view('/zendy/letras', 'zendy.letras');
-Route::view('/reportes', 'reportes');
+
+// Reportes
+Route::get('/reportes',               [ReporteController::class, 'index']);
+Route::get('/reportes/datos',         [ReporteController::class, 'datos']);
+Route::get('/reportes/utilidad-detalle', [ReporteController::class, 'utilidadDetalle']);
+Route::get('/reportes/export-excel',  [ReporteController::class, 'exportExcel']);
 
 // Movimientos (ingresos / salidas)
 Route::get('/movimientos', [MovimientoController::class, 'index']);
