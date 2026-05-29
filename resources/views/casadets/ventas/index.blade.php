@@ -355,10 +355,14 @@ restaurarFiltrosTabla();
 formFiltros?.addEventListener('submit', guardarFiltrosTabla);
 
 [filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => {
-    const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+    // Do NOT clear 'todas' — Estado/Pago are orthogonal to the date range
     fetchFiltersAjax(false);
 }));
-fFecha.addEventListener('change', () => { const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = ''; fetchFiltersAjax(false); });
+fFecha.addEventListener('change', () => {
+    // Filtering by a specific date implies leaving "all dates" mode
+    const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+    fetchFiltersAjax(false);
+});
 
 document.getElementById('btnLimpiar').addEventListener('click', () => {
     Object.values(filtros).forEach(el => el.value = '');
@@ -448,8 +452,7 @@ function rebindTableBehaviors() {
     fFecha?.addEventListener('input', actualizarExport);
     [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => el?.addEventListener('input', debouncedFetch));
     [filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => {
-        // changing select should apply within current date range — clear 'todas'
-        const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+        // Do NOT clear 'todas' — Estado/Pago are orthogonal to the date range
         fetchFiltersAjax(false);
     }));
     // fFecha is outside #ventasContainer so it is never replaced — do NOT re-add its listener here
