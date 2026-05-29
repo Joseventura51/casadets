@@ -173,7 +173,9 @@
                         @else
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
                             @csrf
-                            <select name="estado" class="select-estado est-{{ $estado }}" onchange="this.form.submit()">
+                            <input type="hidden" name="estado" class="hEstadoFila" value="{{ $estado }}">
+                            <select class="select-estado est-{{ $estado }}"
+                                    onchange="this.previousElementSibling.value=this.value; this.form.submit()">
                                 <option value="pendiente" {{ $estado==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
                                 <option value="parcial"   {{ $estado==='parcial'  ?'selected':'' }}>◑ Parcial</option>
                                 <option value="pagado"    {{ $estado==='pagado'   ?'selected':'' }}>✓ Pagado</option>

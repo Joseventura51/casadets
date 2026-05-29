@@ -149,8 +149,9 @@
                         @php $estV = $v->estado ?? 'pendiente'; @endphp
                         <form action="/casadets/ventas/{{ $v->id }}/estado" method="POST">
                             @csrf
-                            <select name="estado" class="select-estado est-{{ $estV }}"
-                                onchange="this.form.submit()">
+                            <input type="hidden" name="estado" value="{{ $estV }}">
+                            <select class="select-estado est-{{ $estV }}"
+                                onchange="this.previousElementSibling.value=this.value; this.form.submit()">
                                 <option value="pendiente" {{ $estV==='pendiente'?'selected':'' }}>⏳ Pendiente</option>
                                 <option value="parcial"   {{ $estV==='parcial'  ?'selected':'' }}>◑ Parcial</option>
                                 <option value="pagado"    {{ $estV==='pagado'   ?'selected':'' }}>✔ Pagado</option>
