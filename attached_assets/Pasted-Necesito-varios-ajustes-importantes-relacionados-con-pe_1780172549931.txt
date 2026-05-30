@@ -1,0 +1,202 @@
+Necesito varios ajustes importantes relacionados con permisos, vendedores, movimientos, reportes y visualización de datos.
+
+### 1. Ocultar acciones según permisos
+
+Actualmente los permisos bloquean acciones, pero también quiero que la interfaz se adapte al usuario.
+
+En todas las vistas del sistema se deben ocultar los botones y acciones para las que el usuario no tenga permiso.
+
+Por ejemplo, en Ventas:
+
+* Ocultar "Editar" si no tiene permiso para editar ventas.
+* Ocultar "Eliminar" si no tiene permiso para eliminar ventas.
+* Ocultar "Importar" si no tiene permiso para importar ventas.
+
+Aplicar la misma lógica en todos los módulos del sistema.
+
+La validación de permisos debe mantenerse en backend, pero además la interfaz debe ocultar las opciones no autorizadas.
+
+---
+
+### 2. Referencias fiscales en ventas
+
+Revisar el manejo de referencias fiscales dentro del módulo de ventas.
+
+Las ventas generadas únicamente como referencia fiscal no deben afectar:
+
+* Utilidad.
+* Reportes financieros.
+* Ingresos.
+* Indicadores económicos.
+* Reportes por vendedor.
+* Reportes de caja.
+
+Deben mantenerse registradas para fines de control y trazabilidad, pero deben excluirse automáticamente de todos los cálculos financieros y estadísticas del sistema.
+
+Además, cuando una venta sea una referencia fiscal:
+
+* No debe mostrarse el botón "Verificar pago".
+* No debe permitir registrar pagos.
+* No debe generar saldos pendientes.
+* No debe aparecer dentro de las ventas pendientes por cobrar.
+* No debe participar en cálculos de deuda de clientes.
+* No debe afectar la utilidad ni los reportes de rentabilidad.
+
+En términos prácticos, una referencia fiscal debe comportarse como un registro documental de control y no como una venta comercial que genere ingresos, cobranza o utilidad.
+
+---
+
+### 3. Movimientos vinculados obligatoriamente a vendedor
+
+En el módulo de Movimientos agregar un campo de vendedor.
+
+Cuando se registre un movimiento de tipo salida, debe ser obligatorio seleccionar un vendedor.
+
+Los movimientos de salida deben quedar relacionados con un vendedor específico para posteriormente poder calcular utilidades y reportes filtrados por vendedor.
+
+Los movimientos de ingreso no requieren selección manual de vendedor, ya que actualmente los ingresos provenientes de cobranzas de ventas ya quedan vinculados automáticamente al vendedor correspondiente mediante la venta asociada y ya aparecen correctamente reflejados en el reporte de movimientos.
+
+La intención es evitar duplicidad de información y mantener una única fuente de relación entre cobranzas y vendedores.
+
+---
+
+### 4. Integración con el módulo de Reportes de Utilidad
+
+El módulo de utilidad ya existe y debe comenzar a utilizar la relación con vendedores.
+
+La utilidad mostrada debe considerar:
+
+* Ventas del vendedor.
+* Compras relacionadas.
+* Movimientos asociados.
+* Saldos a favor relacionados.
+
+Todo debe poder filtrarse correctamente por vendedor.
+
+Al ingresar al detalle de utilidad debe ser posible identificar claramente qué ventas, compras y movimientos generaron dicha utilidad.
+
+---
+
+### 5. Restricción de información por vendedor asignado
+
+Cuando a un usuario se le asigna uno o más vendedores, ese usuario solo debe visualizar información relacionada con los vendedores asignados.
+
+Aplicar esta restricción en todos los módulos.
+
+#### Ventas
+
+Solo podrá ver ventas donde el vendedor pertenezca a su lista de vendedores asignados.
+
+#### Compras
+
+Solo podrá ver compras relacionadas con ventas de sus vendedores asignados.
+
+#### Saldos a favor
+
+Solo podrá ver saldos a favor asociados a ventas de sus vendedores asignados.
+
+#### Movimientos
+
+Solo podrá ver movimientos que cumplan alguna de estas condiciones:
+
+* Estén asignados directamente a uno de sus vendedores.
+* Estén vinculados a una venta cuyo vendedor le pertenece.
+
+#### Reportes
+
+Todos los reportes deben respetar automáticamente este filtro.
+
+El usuario nunca debe poder visualizar información de vendedores que no le hayan sido asignados.
+
+---
+
+### 6. Arquitectura recomendada
+
+Implementar un Scope o filtro centralizado para vendedores asignados al usuario autenticado.
+
+La idea es evitar repetir lógica en cada controlador y garantizar que todas las consultas respeten automáticamente los vendedores asignados.
+
+Esto debe aplicarse a:
+
+* Ventas.
+* Compras.
+* Movimientos.
+* Saldos a favor.
+* Reportes.
+* Dashboard.
+* Cualquier módulo futuro que dependa de vendedores.
+
+La seguridad debe aplicarse tanto en la interfaz como en las consultas del backend.
+
+---
+
+### 7. Administración de usuarios y roles
+
+Continuar mejorando el sistema de roles para que no sea necesario utilizar Tinker para crear roles nuevos.
+
+Desde el módulo de Administración de Usuarios debe ser posible:
+
+* Crear roles.
+* Editar roles.
+* Activar o desactivar roles.
+* Asignar permisos.
+* Asignar vendedores a los usuarios.
+
+El rol Administrador puede seguir siendo creado manualmente, pero todos los demás roles deben poder administrarse completamente desde la interfaz.
+
+Ejemplos:
+
+* Un vendedor podrá ver únicamente sus ventas.
+* No podrá editar ni eliminar ventas si no tiene permisos.
+* Solo podrá ver compras, movimientos, saldos a favor y reportes relacionados con los vendedores que tenga asignados.
+* Los cajeros tendrán acceso únicamente a las funciones de caja que se les otorguen.
+
+Toda la seguridad debe validarse tanto visualmente (ocultando opciones) como en backend (evitando accesos directos por URL).
+
+---
+
+### 8. Dashboard visual en el módulo de Reportes usando Chart.js
+
+Quiero comenzar a transformar el módulo de Reportes en un dashboard visual utilizando Chart.js.
+
+Los gráficos deben complementar las tablas existentes, no reemplazarlas.
+
+Todos los gráficos deben respetar los filtros actuales del sistema:
+
+* Día.
+* Semana.
+* Mes.
+* Vendedor (cuando aplique).
+* Estado.
+* Cualquier filtro existente en reportes.
+
+Además, los gráficos deben respetar automáticamente las restricciones de vendedores asignados a cada usuario.
+
+Inicialmente implementar:
+
+* Ventas por día.
+* Ventas por mes.
+* Compras por día.
+* Compras por mes.
+* Utilidad por vendedor.
+* Ingresos vs gastos.
+* Cobranza vs deuda pendiente.
+* Top productos vendidos.
+* Distribución de ventas por método de pago.
+* Evolución de la utilidad en el tiempo.
+
+Visualmente quiero algo moderno y profesional, similar a un dashboard gerencial.
+
+Los indicadores financieros más importantes deben mostrarse como tarjetas KPI en la parte superior:
+
+* Ventas del día.
+* Ventas del mes.
+* Compras del mes.
+* Utilidad del mes.
+* Deuda pendiente.
+* Saldos a favor disponibles.
+* Movimientos del día.
+
+Posteriormente los gráficos deben mostrarse organizados en secciones para facilitar el análisis financiero y comercial.
+
+El objetivo es convertir el módulo de Reportes en el centro principal de análisis del sistema, permitiendo visualizar rápidamente el rendimiento de ventas, compras, utilidad, cobranzas y desempeño de vendedores.

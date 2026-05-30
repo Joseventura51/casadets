@@ -18,6 +18,7 @@ class Movimiento extends Model
         'referencia_tipo',
         'referencia_id',
         'cliente_id',
+        'vendedor_id',
         'user_id',
         'documento_tipo',
         'documento_numero',
@@ -37,9 +38,16 @@ class Movimiento extends Model
         'origen'  => 'manual',
     ];
 
+    // ── Relaciones ──────────────────────────────────────────────────────────
+
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    public function vendedor(): BelongsTo
+    {
+        return $this->belongsTo(Vendedor::class);
     }
 
     /**
@@ -49,6 +57,8 @@ class Movimiento extends Model
     {
         return $this->belongsTo(Pago::class, 'referencia_id');
     }
+
+    // ── Atributos ───────────────────────────────────────────────────────────
 
     /**
      * Retorna el Pago SOLO cuando este movimiento referencia un pago real.
@@ -62,17 +72,13 @@ class Movimiento extends Model
         return $this->getRelationValue('pago');
     }
 
-    /**
-     * ¿Este movimiento está anulado?
-     */
+    /** ¿Este movimiento está anulado? */
     public function getEsAnuladoAttribute(): bool
     {
         return $this->estado === 'anulado';
     }
 
-    /**
-     * ¿Afecta el balance de caja? (activo + tipo financiero)
-     */
+    /** ¿Afecta el balance de caja? (activo + tipo financiero) */
     public function getAfectaBalanceAttribute(): bool
     {
         return $this->estado === 'activo'

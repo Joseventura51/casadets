@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Movimiento;
+use App\Models\Vendedor;
+use App\Services\VendedorScope;
 use Illuminate\Http\Request;
 
 class MovimientoController extends Controller
@@ -14,11 +16,15 @@ class MovimientoController extends Controller
 
         $query = Movimiento::with([
                 'cliente:id,nombre,documento',
+                'vendedor:id,nombre',
                 'pago.metodos',
                 'pago.detalles.venta',
             ])
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
+
+        // Restricción por vendedor asignado al usuario
+        VendedorScope::aplicarMovimientos($query);
 
         if ($request->filled('tipo'))        $query->where('tipo', $request->tipo);
         if ($request->filled('subtipo'))     $query->where('subtipo', $request->subtipo);
@@ -72,12 +78,12 @@ class MovimientoController extends Controller
     private function rangoPeriodo(string $periodo, Request $request): array
     {
         return match ($periodo) {
-            'ayer' => [today()->subDay()->toDateString(), today()->subDay()->toDateString()],
+            'ayer'   => [today()->subDay()->toDateString(), today()->subDay()->toDateString()],
             'semana' => [today()->startOfWeek()->toDateString(), today()->toDateString()],
-            'mes' => [today()->startOfMonth()->toDateString(), today()->toDateString()],
-            'todo' => ['1900-01-01', today()->toDateString()],
-            'rango' => $this->rangoPersonalizado($request),
-            default => [today()->toDateString(), today()->toDateString()],
+            'mes'    => [today()->startOfMonth()->toDateString(), today()->toDateString()],
+            'todo'   => ['1900-01-01', today()->toDateString()],
+            'rango'  => $this->rangoPersonalizado($request),
+            default  => [today()->toDateString(), today()->toDateString()],
         };
     }
 
@@ -85,22 +91,27 @@ class MovimientoController extends Controller
     {
         $desde = $request->input('desde', today()->toDateString());
         $hasta = $request->input('hasta', $desde);
-
         if ($hasta < $desde) {
             $hasta = $desde;
         }
-
         return [$desde, $hasta];
     }
 
     public function create(string $tipo)
     {
-        return view('movimientos.create', compact('tipo'));
+        // Los vendedores solo se necesitan para salidas manuales
+        $vendedores = ($tipo === 'salida')
+            ? Vendedor::where('activo', true)->orderBy('nombre')->get(['id', 'nombre'])
+            : collect();
+
+        return view('movimientos.create', compact('tipo', 'vendedores'));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
+        $esSalida = $request->input('tipo') === 'salida';
+
+        $rules = [
             'tipo'             => 'required|in:ingreso,salida',
             'categoria'        => 'required|string|max:255',
             'empresa'          => 'nullable|string|in:casadets,zendy',
@@ -110,18 +121,22 @@ class MovimientoController extends Controller
             'monto'            => 'required|numeric|min:0.01',
             'fecha'            => 'required|date',
             'observaciones'    => 'nullable|string',
-        ]);
+            'vendedor_id'      => $esSalida ? 'required|exists:vendedores,id' : 'nullable|exists:vendedores,id',
+        ];
+
+        $request->validate($rules);
 
         Movimiento::create(array_merge(
             $request->only([
                 'tipo', 'categoria', 'metodo_pago', 'documento_tipo',
-                'documento_numero', 'monto', 'fecha', 'observaciones',
+                'documento_numero', 'monto', 'fecha', 'observaciones', 'vendedor_id',
             ]),
             [
                 'subtipo' => 'manual',
                 'origen'  => 'manual',
                 'estado'  => 'activo',
                 'empresa' => $request->input('empresa', 'casadets'),
+                'user_id' => auth()->id(),
             ]
         ));
 

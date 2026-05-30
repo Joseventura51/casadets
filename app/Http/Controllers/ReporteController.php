@@ -44,11 +44,12 @@ class ReporteController extends Controller
             ->whereBetween('ventas.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('ventas.estado', '!=', 'anulado')
             ->whereNull('ventas.deleted_at')
+            ->where('ventas.es_referencia_fiscal', false)
             ->where(fn($q) => $q->whereNull('ventas.documento_tipo')
                 ->orWhere('ventas.documento_tipo', '!=', 'nota_credito'));
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $q->whereIn('ventas.vendedor_id', $authUser->vendedorIds());
         } elseif ($r->filled('vendedor_id')) {
             $q->where('ventas.vendedor_id', $r->vendedor_id);
@@ -69,11 +70,12 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->where('v.es_referencia_fiscal', false)
             ->where(fn($q) => $q->whereNull('v.documento_tipo')
                 ->orWhere('v.documento_tipo', '!=', 'nota_credito'));
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $q->whereIn('v.vendedor_id', $authUser->vendedorIds());
         } elseif ($r->filled('vendedor_id')) {
             $q->where('v.vendedor_id', $r->vendedor_id);
@@ -309,7 +311,7 @@ class ReporteController extends Controller
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
         $authUser   = auth()->user();
-        $vendorIds  = ($authUser && $authUser->esVendedor()) ? $authUser->vendedorIds() : null;
+        $vendorIds  = ($authUser && $authUser->debeRestringirPorVendedor()) ? $authUser->vendedorIds() : null;
 
         $ventas = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
@@ -441,7 +443,7 @@ class ReporteController extends Controller
 
         // Reusa la misma lógica de datos pero con colección pequeña para el PDF
         $authUser  = auth()->user();
-        $vendorIds = ($authUser && $authUser->esVendedor()) ? $authUser->vendedorIds() : null;
+        $vendorIds = ($authUser && $authUser->debeRestringirPorVendedor()) ? $authUser->vendedorIds() : null;
 
         $ventasSummary = DB::table('ventas')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])

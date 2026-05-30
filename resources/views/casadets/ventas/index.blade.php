@@ -30,15 +30,19 @@
         <p class="text-muted mb-0">Registro de ventas por vendedor.</p>
     </div>
     <div class="d-flex gap-2">
+        @if(auth()->user()->puedeHacer('ventas.importar'))
         <a href="/casadets/ventas/import" class="btn btn-outline-success">
             <i class="bi bi-file-earmark-spreadsheet"></i> Importar Excel
         </a>
+        @endif
         <a id="btnExportar" href="/casadets/ventas/export" class="btn btn-outline-secondary" data-todas="{{ $todas ? '1' : '0' }}">
             <i class="bi bi-download"></i> Exportar Excel
         </a>
+        @if(auth()->user()->puedeHacer('ventas.crear'))
         <a href="/casadets/ventas/create" class="btn btn-primary">
             <i class="bi bi-plus-lg"></i> Nueva venta
         </a>
+        @endif
     </div>
 </div>
 
@@ -154,7 +158,8 @@
                     $estado      = $v->estado ?? 'pendiente';
                     $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
-                    $esRefFiscal = $estado === 'canjeada';
+                    $esRefFiscal = ($v->es_referencia_fiscal ?? false) || $estado === 'canjeada';
+                    $authU       = auth()->user();
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
@@ -225,14 +230,20 @@
                     <td class="text-end">
                         <div class="d-flex justify-content-end gap-1 flex-wrap">
                             <a href="/casadets/ventas/{{ $v->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
+                            @if($authU->puedeHacer('ventas.editar'))
                             <a href="/casadets/ventas/{{ $v->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
+                            @endif
+                            @if(!$esRefFiscal && $authU->puedeHacer('ventas.pago'))
                             <a href="/casadets/ventas/{{ $v->id }}/pago" class="btn btn-sm btn-outline-success" title="Verificar pago">
                                 <i class="bi bi-cash-stack"></i>
                             </a>
+                            @endif
+                            @if($authU->puedeHacer('ventas.eliminar'))
                             <form action="/casadets/ventas/{{ $v->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar venta?')">
                                 @csrf @method('DELETE')
                                 <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
                             </form>
+                            @endif
                         </div>
                     </td>
                 </tr>

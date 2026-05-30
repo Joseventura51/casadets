@@ -26,6 +26,25 @@
                            class="form-control" placeholder="ej: Pago proveedor, Alquiler, Servicios..." required>
                 </div>
 
+                {{-- Vendedor: obligatorio solo para SALIDAS manuales --}}
+                @if($tipo === 'salida')
+                <div class="col-12">
+                    <label class="form-label">Vendedor <span class="text-danger">*</span></label>
+                    <select name="vendedor_id" class="form-select" required>
+                        <option value="">— Seleccionar vendedor —</option>
+                        @foreach($vendedores as $v)
+                            <option value="{{ $v->id }}" {{ old('vendedor_id') == $v->id ? 'selected' : '' }}>
+                                {{ $v->nombre }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <div class="form-text text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Las salidas deben asociarse al vendedor responsable.
+                    </div>
+                </div>
+                @endif
+
                 <div class="col-md-4">
                     <label class="form-label">Monto (S/) <span class="text-danger">*</span></label>
                     <input type="number" name="monto" value="{{ old('monto') }}"

@@ -8,7 +8,7 @@
 @endphp
 
 @php
-    $esCanjeadaFiscal = $venta->estado === 'canjeada';
+    $esCanjeadaFiscal = ($venta->es_referencia_fiscal ?? false) || $venta->estado === 'canjeada';
     // Extraer proformas vinculadas desde observaciones
     $proformasVinculadas = '';
     if ($esCanjeadaFiscal && $venta->observaciones && str_contains($venta->observaciones, 'Cubre proformas:')) {
@@ -55,14 +55,16 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="mb-0">Venta #{{ $venta->id }}</h3>
     <div class="d-flex gap-2">
-        @if(!$esCanjeadaFiscal)
+        @if(!$esCanjeadaFiscal && auth()->user()->puedeHacer('ventas.pago'))
         <a href="/casadets/ventas/{{ $venta->id }}/pago" class="btn btn-outline-success btn-sm">
             <i class="bi bi-cash-stack me-1"></i>Verificar pago
         </a>
         @endif
+        @if(auth()->user()->puedeHacer('ventas.editar'))
         <a href="/casadets/ventas/{{ $venta->id }}/edit" class="btn btn-primary btn-sm">
             <i class="bi bi-pencil me-1"></i>Editar
         </a>
+        @endif
         <a href="/casadets/ventas" class="btn btn-outline-secondary btn-sm">← Volver</a>
     </div>
 </div>

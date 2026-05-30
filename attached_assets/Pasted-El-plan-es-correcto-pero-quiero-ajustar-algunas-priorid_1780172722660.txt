@@ -1,0 +1,119 @@
+El plan es correcto, pero quiero ajustar algunas prioridades y consideraciones antes de implementarlo.
+
+### Prioridad 1 — Restricción de datos por vendedor
+
+Este bloque debe ejecutarse antes que los gráficos y antes que la mayoría de mejoras visuales.
+
+Necesito que la restricción por vendedor quede completamente resuelta primero porque todos los reportes, KPIs, utilidades y gráficos dependerán de ella.
+
+La idea es que exista una única fuente de verdad para el filtrado por vendedores asignados.
+
+Por favor implementar el servicio o Scope centralizado y aplicarlo a:
+
+* Ventas.
+* Compras.
+* Movimientos.
+* Saldos a favor.
+* Reportes.
+* Dashboard.
+* Cualquier consulta de utilidad.
+
+Antes de continuar con los gráficos quiero asegurarme de que ningún usuario pueda visualizar información de vendedores que no tenga asignados.
+
+---
+
+### Prioridad 2 — Referencias fiscales
+
+Agregar el campo:
+
+```php
+es_referencia_fiscal
+```
+
+y excluir completamente estas ventas de:
+
+* Utilidad.
+* KPIs financieros.
+* Dashboard.
+* Reportes financieros.
+* Deudas.
+* Cobranza.
+* Caja.
+* Reportes por vendedor.
+
+Además:
+
+* Ocultar "Verificar pago".
+* Bloquear registro de pagos.
+* No generar deuda.
+* No generar saldos pendientes.
+
+Estas ventas deben existir únicamente para control documental.
+
+---
+
+### Prioridad 3 — Movimientos vinculados a vendedor
+
+Agregar:
+
+```php
+vendedor_id
+```
+
+en movimientos.
+
+Cuando el movimiento sea de tipo salida debe ser obligatorio.
+
+Importante: las cobranzas de ventas ya obtienen el vendedor desde la venta asociada, por lo que no debe pedirse vendedor manualmente en ingresos relacionados con ventas.
+
+---
+
+### Prioridad 4 — Seguridad visual
+
+Una vez que los filtros y restricciones estén funcionando correctamente, ocultar botones según permisos.
+
+Esto debe aplicarse en todos los módulos para evitar mostrar opciones que el usuario no podrá utilizar.
+
+---
+
+### Prioridad 5 — Dashboard de Reportes con Chart.js
+
+Después de completar los puntos anteriores, comenzar la construcción del dashboard visual.
+
+No quiero únicamente gráficos.
+
+Quiero un dashboard gerencial completo compuesto por:
+
+#### KPIs superiores
+
+* Ventas del día.
+* Ventas del mes.
+* Compras del mes.
+* Utilidad del mes.
+* Deuda pendiente.
+* Saldos a favor disponibles.
+* Movimientos del día.
+
+#### Gráficos
+
+* Ventas por día.
+* Ventas por mes.
+* Compras por día.
+* Compras por mes.
+* Utilidad por vendedor.
+* Ingresos vs gastos.
+* Cobranza vs deuda pendiente.
+* Top productos vendidos.
+* Distribución por método de pago.
+* Evolución de utilidad.
+
+Todos los gráficos deben respetar automáticamente:
+
+* filtros de fecha,
+* filtros actuales del reporte,
+* vendedores asignados al usuario,
+* exclusión de referencias fiscales.
+
+La información mostrada en KPIs, tablas y gráficos debe coincidir exactamente para evitar diferencias entre reportes y dashboard.
+
+Mi prioridad principal es que la información sea correcta y consistente; la parte visual viene después.
