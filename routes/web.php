@@ -24,7 +24,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 // ── Rutas protegidas ────────────────────────────────────────────────────────
 Route::middleware(['auth', 'check.activo'])->group(function () {
 
-    Route::get('/', [HomeController::class, 'index'])->middleware('rol:dashboard');
+    Route::get('/', [HomeController::class, 'index'])->middleware('auth');
 
     Route::view('/zendy/letras', 'zendy.letras')->middleware('rol:zendy');
 

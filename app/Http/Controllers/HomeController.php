@@ -92,7 +92,7 @@ class HomeController extends Controller
             ->limit(5)
             ->get();
 
-        return view('/', compact(
+        return view('/home', compact(
             'cobradoMes',
             'otrosIngresosMes',
             'salidasMes',
