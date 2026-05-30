@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\SaldoFavor;
 use App\Models\Venta;
 use App\Services\CobranzaService;
+use App\Services\VendedorScope;
 use Illuminate\Http\Request;
 
 class SaldoFavorController extends Controller
@@ -19,8 +20,12 @@ class SaldoFavorController extends Controller
         $saldosActivos = SaldoFavor::with(['cliente', 'pago', 'ventaOrigen'])
             ->whereIn('estado', ['disponible', 'parcialmente_usado'])
             ->where('monto_disponible', '>', 0)
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
+
+        // Restricción por vendedor asignado al usuario
+        VendedorScope::aplicarSaldos($saldosActivos);
+
+        $saldosActivos = $saldosActivos->get();
 
         // Agrupar por cliente (en memoria, sin N+1)
         $saldosPorCliente = $saldosActivos->groupBy('cliente_id');

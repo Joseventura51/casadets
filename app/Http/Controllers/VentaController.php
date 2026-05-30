@@ -47,7 +47,7 @@ class VentaController extends Controller
                      'documento_tipo', 'documento_numero', 'observaciones');
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $query->whereIn('vendedor_id', $authUser->vendedorIds());
         }
 
@@ -120,7 +120,7 @@ class VentaController extends Controller
     private function authorizeVenta(Venta $venta): void
     {
         $user = auth()->user();
-        if ($user && $user->esVendedor()) {
+        if ($user && $user->debeRestringirPorVendedor()) {
             $ids = $user->vendedorIds();
             if (!in_array($venta->vendedor_id, $ids)) {
                 abort(403, 'No tienes permiso para acceder a esta venta.');
@@ -153,7 +153,7 @@ class VentaController extends Controller
     public function store(Request $request)
     {
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $allowed = $authUser->vendedorIds();
             if (!in_array((int) $request->input('vendedor_id'), $allowed)) {
                 abort(403, 'No puedes crear ventas para este vendedor.');
@@ -244,7 +244,7 @@ class VentaController extends Controller
     {
         $this->authorizeVenta($venta);
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $allowed = $authUser->vendedorIds();
             if (!in_array((int) $request->input('vendedor_id'), $allowed)) {
                 abort(403, 'No puedes reasignar esta venta a un vendedor que no te pertenece.');
@@ -352,7 +352,7 @@ class VentaController extends Controller
             ->whereDate('fecha', '<=', today());
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $query->whereIn('vendedor_id', $authUser->vendedorIds());
         }
 
@@ -417,7 +417,7 @@ class VentaController extends Controller
 
         if (!empty($ventasAdicionales)) {
             $authUser2 = auth()->user();
-            if ($authUser2 && $authUser2->esVendedor()) {
+            if ($authUser2 && $authUser2->debeRestringirPorVendedor()) {
                 $allowed2 = $authUser2->vendedorIds();
                 $unauthorized = Venta::whereIn('id', $ventasAdicionales)
                     ->whereNotIn('vendedor_id', $allowed2)
@@ -499,7 +499,7 @@ class VentaController extends Controller
             ->orderBy('fecha', 'asc');
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $query->whereIn('vendedor_id', $authUser->vendedorIds());
         }
 
@@ -526,7 +526,7 @@ class VentaController extends Controller
         ]);
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $allowed = $authUser->vendedorIds();
             $unauthorized = Venta::whereIn('id', $data['ventas'])
                 ->whereNotIn('vendedor_id', $allowed)
@@ -657,7 +657,7 @@ class VentaController extends Controller
         if ($hasta < $desde) $hasta = $desde;
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->esVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorVendedor()) {
             $query->whereIn('vendedor_id', $authUser->vendedorIds());
         } elseif ($request->filled('vendedor_id')) {
             $query->where('vendedor_id', $request->vendedor_id);

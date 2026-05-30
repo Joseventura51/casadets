@@ -22,13 +22,17 @@ class Venta extends Model
         'observaciones',
         'fecha',
         'estado',
+        'es_referencia_fiscal',
     ];
 
     protected $casts = [
-        'fecha'  => 'date',
-        'total'  => 'decimal:2',
-        'pagado' => 'decimal:2',
+        'fecha'                => 'date',
+        'total'                => 'decimal:2',
+        'pagado'               => 'decimal:2',
+        'es_referencia_fiscal' => 'boolean',
     ];
+
+    // ── Relaciones ──────────────────────────────────────────────────────────
 
     public function vendedor(): BelongsTo
     {
@@ -57,6 +61,22 @@ class Venta extends Model
                     ->withTimestamps();
     }
 
+    // ── Scopes ───────────────────────────────────────────────────────────────
+
+    /** Excluye referencias fiscales de cualquier cálculo financiero */
+    public function scopeNoFiscal($query)
+    {
+        return $query->where('es_referencia_fiscal', false);
+    }
+
+    /** Solo referencias fiscales */
+    public function scopeEsFiscal($query)
+    {
+        return $query->where('es_referencia_fiscal', true);
+    }
+
+    // ── Atributos calculados ─────────────────────────────────────────────────
+
     /**
      * Compras vinculadas a esta venta (vía detalles).
      * Requiere haber precargado: with('detalles.compras') en el controller.
@@ -76,16 +96,28 @@ class Venta extends Model
 
     public function getSaldoPendienteAttribute(): float
     {
+        // Las referencias fiscales no generan deuda
+        if ($this->es_referencia_fiscal) {
+            return 0.0;
+        }
         return max(0, (float) $this->total - $this->total_cobrado);
     }
 
+    // ── Lógica de negocio ────────────────────────────────────────────────────
+
     /**
      * Recalcula y persiste el estado según lo pagado.
-     * Usa round() en lugar de offset manual para evitar errores de punto flotante.
      */
     public function recalcularEstado(): void
     {
         if ($this->estado === 'anulado') {
+            return;
+        }
+
+        // Las referencias fiscales siempre están en estado 'pagado':
+        // no generan deuda ni cobranza.
+        if ($this->es_referencia_fiscal) {
+            $this->update(['estado' => 'pagado']);
             return;
         }
 

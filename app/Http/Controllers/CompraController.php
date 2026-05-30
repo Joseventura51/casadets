@@ -9,6 +9,7 @@ use App\Models\StockMovimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use Illuminate\Http\Request;
+use App\Services\VendedorScope;
 use Illuminate\Support\Facades\DB;
 
 class CompraController extends Controller
@@ -27,6 +28,9 @@ class CompraController extends Controller
             ->select('id', 'empresa', 'documento_tipo', 'documento_numero', 'fecha', 'metodo_pago', 'monto_total', 'observaciones')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
+
+        // Restricción por vendedor asignado al usuario
+        VendedorScope::aplicarCompras($query);
 
         if ($request->filled('empresa')) {
             $query->where('empresa', 'like', '%' . $request->empresa . '%');
