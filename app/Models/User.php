@@ -119,8 +119,35 @@ class User extends Authenticatable
             return $rol->tienePermiso($permiso);
         }
 
-        // Administrador siempre puede todo (fallback para roles sin permisos)
-        return $rol?->nombre === 'Administrador';
+        // Fallback estático para roles sin permisos configurados aún
+        $defaults = [
+            'ventas.crear'         => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
+            'ventas.editar'        => ['Administrador', 'Supervisor', 'Cajero'],
+            'ventas.eliminar'      => ['Administrador', 'Supervisor'],
+            'ventas.pago'          => ['Administrador', 'Supervisor', 'Cajero'],
+            'ventas.anular'        => ['Administrador', 'Supervisor'],
+            'ventas.importar'      => ['Administrador', 'Supervisor'],
+            'productos.crear'      => ['Administrador', 'Supervisor'],
+            'productos.editar'     => ['Administrador', 'Supervisor'],
+            'productos.eliminar'   => ['Administrador', 'Supervisor'],
+            'compras.crear'        => ['Administrador', 'Supervisor'],
+            'compras.editar'       => ['Administrador', 'Supervisor'],
+            'compras.eliminar'     => ['Administrador', 'Supervisor'],
+            'clientes.crear'       => ['Administrador', 'Supervisor', 'Cajero'],
+            'clientes.editar'      => ['Administrador', 'Supervisor', 'Cajero'],
+            'clientes.eliminar'    => ['Administrador', 'Supervisor'],
+            'vendedores.crear'     => ['Administrador', 'Supervisor'],
+            'vendedores.editar'    => ['Administrador', 'Supervisor'],
+            'movimientos.crear'    => ['Administrador', 'Supervisor', 'Cajero'],
+            'movimientos.editar'   => ['Administrador', 'Supervisor'],
+            'movimientos.anular'   => ['Administrador', 'Supervisor'],
+            'caja.apertura'        => ['Administrador', 'Supervisor', 'Cajero'],
+            'caja.cierre'          => ['Administrador', 'Supervisor', 'Cajero'],
+            'saldos.usar'          => ['Administrador', 'Supervisor', 'Cajero'],
+            'reportes.ver'         => ['Administrador', 'Supervisor', 'Vendedor'],
+        ];
+
+        return in_array($rol?->nombre, $defaults[$permiso] ?? ['Administrador']);
     }
 
     // ── Restricción por vendedor ─────────────────────────────────────────────

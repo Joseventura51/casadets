@@ -10,6 +10,7 @@ use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Models\Vendedor;
 use App\Services\CobranzaService;
+use App\Services\VendedorScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -46,10 +47,7 @@ class VentaController extends Controller
                      'total', 'metodo_pago',
                      'documento_tipo', 'documento_numero', 'observaciones');
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $query->whereIn('vendedor_id', $authUser->vendedorIds());
-        }
+        VendedorScope::aplicar($query);
 
         if (!$request->boolean('todas')) {
             $query->whereDate('fecha', '>=', $desde)
@@ -119,12 +117,9 @@ class VentaController extends Controller
 
     private function authorizeVenta(Venta $venta): void
     {
-        $user = auth()->user();
-        if ($user && $user->debeRestringirPorVendedor()) {
-            $ids = $user->vendedorIds();
-            if (!in_array($venta->vendedor_id, $ids)) {
-                abort(403, 'No tienes permiso para acceder a esta venta.');
-            }
+        $ids = VendedorScope::ids();
+        if ($ids !== null && !in_array($venta->vendedor_id, $ids)) {
+            abort(403, 'No tienes permiso para acceder a esta venta.');
         }
     }
 
@@ -152,24 +147,24 @@ class VentaController extends Controller
 
     public function store(Request $request)
     {
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $allowed = $authUser->vendedorIds();
-            if (!in_array((int) $request->input('vendedor_id'), $allowed)) {
-                abort(403, 'No puedes crear ventas para este vendedor.');
-            }
+        abort_if(!auth()->user()?->puedeHacer('ventas.crear'), 403, 'No tienes permiso para crear ventas.');
+
+        $ids = VendedorScope::ids();
+        if ($ids !== null && !in_array((int) $request->input('vendedor_id'), $ids)) {
+            abort(403, 'No puedes crear ventas para este vendedor.');
         }
 
         $data = $request->validate([
-            'vendedor_id'      => 'required|exists:vendedores,id',
-            'cliente_id'       => 'nullable|exists:clientes,id',
-            'metodo_pago'      => 'nullable|string|max:100',
-            'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
-            'documento_numero' => ['nullable', 'string', 'max:255',
+            'vendedor_id'          => 'required|exists:vendedores,id',
+            'cliente_id'           => 'nullable|exists:clientes,id',
+            'metodo_pago'          => 'nullable|string|max:100',
+            'documento_tipo'       => 'nullable|in:boleta,factura,proforma',
+            'documento_numero'     => ['nullable', 'string', 'max:255',
                 Rule::unique('ventas')->where(fn ($q) => $q->where('documento_tipo', $request->documento_tipo))],
-            'observaciones'    => 'nullable|string',
-            'fecha'            => 'required|date',
-            'productos'        => 'required|array|min:1',
+            'observaciones'        => 'nullable|string',
+            'fecha'                => 'required|date',
+            'es_referencia_fiscal' => 'boolean',
+            'productos'            => 'required|array|min:1',
             'productos.*.producto'        => 'required|string|max:255',
             'productos.*.cantidad'        => 'required|numeric|min:0.01',
             'productos.*.precio_unitario' => 'required|numeric|min:0',
@@ -184,13 +179,14 @@ class VentaController extends Controller
 
             // Venta creada en estado pendiente — metodo_pago NULL hasta que CobranzaService lo asigne
             $venta = Venta::create([
-                'vendedor_id'      => $data['vendedor_id'],
-                'cliente_id'       => $data['cliente_id'] ?? null,
-                'total'            => $total,
-                'documento_tipo'   => $data['documento_tipo'] ?? null,
-                'documento_numero' => $data['documento_numero'] ?? null,
-                'observaciones'    => $data['observaciones'] ?? null,
-                'fecha'            => $data['fecha'],
+                'vendedor_id'          => $data['vendedor_id'],
+                'cliente_id'           => $data['cliente_id'] ?? null,
+                'total'                => $total,
+                'documento_tipo'       => $data['documento_tipo'] ?? null,
+                'documento_numero'     => $data['documento_numero'] ?? null,
+                'observaciones'        => $data['observaciones'] ?? null,
+                'fecha'                => $data['fecha'],
+                'es_referencia_fiscal' => $data['es_referencia_fiscal'] ?? false,
             ]);
 
             foreach ($data['productos'] as $p) {
@@ -242,26 +238,26 @@ class VentaController extends Controller
 
     public function update(Request $request, Venta $venta)
     {
+        abort_if(!auth()->user()?->puedeHacer('ventas.editar'), 403, 'No tienes permiso para editar ventas.');
         $this->authorizeVenta($venta);
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $allowed = $authUser->vendedorIds();
-            if (!in_array((int) $request->input('vendedor_id'), $allowed)) {
-                abort(403, 'No puedes reasignar esta venta a un vendedor que no te pertenece.');
-            }
+
+        $ids = VendedorScope::ids();
+        if ($ids !== null && !in_array((int) $request->input('vendedor_id'), $ids)) {
+            abort(403, 'No puedes reasignar esta venta a un vendedor que no te pertenece.');
         }
 
         $data = $request->validate([
-            'vendedor_id'      => 'required|exists:vendedores,id',
-            'cliente_id'       => 'nullable|exists:clientes,id',
-            'documento_tipo'   => 'nullable|in:boleta,factura,proforma',
-            'documento_numero' => ['nullable', 'string', 'max:255',
+            'vendedor_id'          => 'required|exists:vendedores,id',
+            'cliente_id'           => 'nullable|exists:clientes,id',
+            'documento_tipo'       => 'nullable|in:boleta,factura,proforma',
+            'documento_numero'     => ['nullable', 'string', 'max:255',
                 Rule::unique('ventas')
                     ->where(fn($q) => $q->where('documento_tipo', $request->documento_tipo))
                     ->ignore($venta->id)],
-            'fecha'            => 'required|date',
-            'observaciones'    => 'nullable|string',
-            'productos'        => 'required|array|min:1',
+            'fecha'                => 'required|date',
+            'observaciones'        => 'nullable|string',
+            'es_referencia_fiscal' => 'boolean',
+            'productos'            => 'required|array|min:1',
             'productos.*.id'             => 'nullable|integer',
             'productos.*.producto'       => 'required|string|max:255',
             'productos.*.cantidad'       => 'required|numeric|min:0.01',
@@ -275,13 +271,14 @@ class VentaController extends Controller
             );
 
             $venta->update([
-                'vendedor_id'      => $data['vendedor_id'],
-                'cliente_id'       => $data['cliente_id'] ?? null,
-                'documento_tipo'   => $data['documento_tipo'] ?? null,
-                'documento_numero' => $data['documento_numero'] ?? null,
-                'fecha'            => $data['fecha'],
-                'observaciones'    => $data['observaciones'] ?? null,
-                'total'            => $nuevoTotal,
+                'vendedor_id'          => $data['vendedor_id'],
+                'cliente_id'           => $data['cliente_id'] ?? null,
+                'documento_tipo'       => $data['documento_tipo'] ?? null,
+                'documento_numero'     => $data['documento_numero'] ?? null,
+                'fecha'                => $data['fecha'],
+                'observaciones'        => $data['observaciones'] ?? null,
+                'total'                => $nuevoTotal,
+                'es_referencia_fiscal' => $data['es_referencia_fiscal'] ?? false,
             ]);
 
             // ── Upsert de detalles preservando IDs ────────────────────────
@@ -349,12 +346,10 @@ class VentaController extends Controller
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
                      'total', 'pagado', 'metodo_pago', 'documento_tipo', 'documento_numero')
             ->whereIn('estado', ['pendiente', 'parcial'])
+            ->where('es_referencia_fiscal', false)
             ->whereDate('fecha', '<=', today());
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $query->whereIn('vendedor_id', $authUser->vendedorIds());
-        }
+        VendedorScope::aplicar($query);
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
 
@@ -368,6 +363,7 @@ class VentaController extends Controller
 
     public function pago(Venta $venta)
     {
+        abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
         $this->authorizeVenta($venta);
         $venta->load([
             'vendedor:id,nombre',
@@ -402,6 +398,7 @@ class VentaController extends Controller
 
     public function updatePago(Request $request, Venta $venta)
     {
+        abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
         $this->authorizeVenta($venta);
         $data = $request->validate([
             'pagos'               => 'required|array|min:1',
@@ -416,11 +413,10 @@ class VentaController extends Controller
         ));
 
         if (!empty($ventasAdicionales)) {
-            $authUser2 = auth()->user();
-            if ($authUser2 && $authUser2->debeRestringirPorVendedor()) {
-                $allowed2 = $authUser2->vendedorIds();
+            $idsVendedor = VendedorScope::ids();
+            if ($idsVendedor !== null) {
                 $unauthorized = Venta::whereIn('id', $ventasAdicionales)
-                    ->whereNotIn('vendedor_id', $allowed2)
+                    ->whereNotIn('vendedor_id', $idsVendedor)
                     ->exists();
                 if ($unauthorized) {
                     abort(403, 'No tienes permiso para pagar algunas de las ventas adicionales seleccionadas.');
@@ -498,10 +494,7 @@ class VentaController extends Controller
             ->whereIn('estado', ['pendiente', 'parcial'])
             ->orderBy('fecha', 'asc');
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $query->whereIn('vendedor_id', $authUser->vendedorIds());
-        }
+        VendedorScope::aplicar($query);
 
         $ventas = $query->get();
 
@@ -525,11 +518,10 @@ class VentaController extends Controller
             'pagos.*.descripcion' => 'nullable|string|max:200',
         ]);
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $allowed = $authUser->vendedorIds();
+        $idsVendedor = VendedorScope::ids();
+        if ($idsVendedor !== null) {
             $unauthorized = Venta::whereIn('id', $data['ventas'])
-                ->whereNotIn('vendedor_id', $allowed)
+                ->whereNotIn('vendedor_id', $idsVendedor)
                 ->exists();
             if ($unauthorized) {
                 abort(403, 'No tienes permiso para pagar algunas de las ventas seleccionadas.');

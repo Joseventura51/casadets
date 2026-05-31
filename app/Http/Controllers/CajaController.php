@@ -9,6 +9,7 @@ use App\Models\Movimiento;
 use App\Models\Pago;
 use App\Models\PagoMetodo;
 use App\Models\Venta;
+use App\Services\VendedorScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -37,13 +38,14 @@ class CajaController extends Controller
             ->get();
 
         // Ventas del período (para la tabla de display)
-        $ventas = Venta::with(['vendedor', 'detalles'])
+        $ventasQuery = Venta::with(['vendedor', 'detalles'])
             ->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta)
             ->whereNotIn('estado', ['anulado'])
             ->orderBy('fecha', 'desc')
-            ->orderBy('id', 'desc')
-            ->get();
+            ->orderBy('id', 'desc');
+        VendedorScope::aplicar($ventasQuery);
+        $ventas = $ventasQuery->get();
 
         $ventasCobradas   = $ventas->where('estado', 'pagado');
         $ventasPendientes = $ventas->whereIn('estado', ['pendiente', 'parcial']);

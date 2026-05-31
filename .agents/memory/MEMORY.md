@@ -1,3 +1,5 @@
 - [SaldoFavor FK architecture](saldo-favor-fk.md) — venta_origen_id is the canonical link from saldos_favor to ventas; never use descripcion LIKE for logic again.
 - [NC recalcularEstado guard](nc-estado-guard.md) — nota_credito documents must be guarded at the top of recalcularEstado() to always stay 'pagado', not rely on math coincidence.
-- [Dynamic permission system](permission-system.md) — roles use JSON modulos/permisos columns; PermisoCatalog defines the full catalog; puedeVer() has static fallback for unconfigured roles.
+- [Dynamic permission system](permission-system.md) — roles use JSON modulos/permisos columns; puedeHacer() now has full static role-based fallback (not just Admin); puedeVer() has static fallback too.
+- [VendedorScope centralization](vendedor-scope-pattern.md) — all vendedor restrictions go through VendedorScope service; never use inline debeRestringirPorVendedor() in controllers again.
+- [Chart.js in layout](chartjs-layout.md) — Chart.js CDN loaded in layouts/app.blade.php; layout has @stack('scripts'); use @push('scripts') in views for chart initialization.

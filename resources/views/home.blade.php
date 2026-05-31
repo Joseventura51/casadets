@@ -104,6 +104,31 @@
     </div>
 </div>
 
+{{-- Chart.js — cobrado por día del mes --}}
+<div class="row g-3 mb-4">
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center py-2">
+                <span class="fw-semibold"><i class="bi bi-graph-up-arrow me-1 text-primary"></i> Cobrado por día — {{ now()->translatedFormat('F Y') }}</span>
+                <small class="text-muted">Pagos de ventas del mes (S/)</small>
+            </div>
+            <div class="card-body py-3 px-3">
+                <canvas id="chartCobranzaDiaria" height="90"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header py-2">
+                <span class="fw-semibold"><i class="bi bi-pie-chart me-1 text-success"></i> Resumen del mes</span>
+            </div>
+            <div class="card-body d-flex flex-column justify-content-center py-3">
+                <canvas id="chartResumenMes" height="160"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row g-3">
     <div class="col-md-6">
         <div class="card">
@@ -204,4 +229,105 @@
         </div>
     </div>
 </div>
+@push('scripts')
+<script>
+(function () {
+    const labels = @json($chartLabels);
+    const dataCobrado = @json($cobranzaDiaria);
+
+    // ── Gráfica de barras: cobrado por día ─────────────────────────
+    const ctxBar = document.getElementById('chartCobranzaDiaria');
+    if (ctxBar) {
+        const maxVal = Math.max(...dataCobrado, 1);
+        new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Cobrado (S/)',
+                    data: dataCobrado,
+                    backgroundColor: dataCobrado.map(v =>
+                        v === 0 ? 'rgba(206,212,218,0.4)' : 'rgba(13,110,253,0.75)'
+                    ),
+                    borderColor: dataCobrado.map(v =>
+                        v === 0 ? 'rgba(206,212,218,0.6)' : 'rgba(13,110,253,1)'
+                    ),
+                    borderWidth: 1,
+                    borderRadius: 3,
+                }],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => 'S/ ' + ctx.parsed.y.toFixed(2),
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: v => 'S/ ' + v.toLocaleString('es-PE'),
+                            maxTicksLimit: 6,
+                            font: { size: 11 },
+                        },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                    },
+                    x: {
+                        ticks: { font: { size: 10 } },
+                        grid: { display: false },
+                    },
+                },
+            },
+        });
+    }
+
+    // ── Gráfica de donut: resumen del mes ──────────────────────────
+    const ctxDonut = document.getElementById('chartResumenMes');
+    const cobrado  = {{ $cobradoMes }};
+    const otros    = {{ $otrosIngresosMes }};
+    const salidas  = {{ $salidasMes }};
+
+    if (ctxDonut && (cobrado + otros + salidas) > 0) {
+        new Chart(ctxDonut, {
+            type: 'doughnut',
+            data: {
+                labels: ['Ventas cobradas', 'Otros ingresos', 'Salidas'],
+                datasets: [{
+                    data: [cobrado, otros, salidas],
+                    backgroundColor: [
+                        'rgba(13,110,253,0.8)',
+                        'rgba(25,135,84,0.8)',
+                        'rgba(220,53,69,0.8)',
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                }],
+            },
+            options: {
+                responsive: true,
+                cutout: '62%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { font: { size: 11 }, padding: 10 },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ' S/ ' + ctx.parsed.toFixed(2),
+                        },
+                    },
+                },
+            },
+        });
+    } else if (ctxDonut) {
+        ctxDonut.closest('.card-body').innerHTML =
+            '<p class="text-center text-muted small mt-3">Sin movimientos este mes</p>';
+    }
+})();
+</script>
+@endpush
 @endsection

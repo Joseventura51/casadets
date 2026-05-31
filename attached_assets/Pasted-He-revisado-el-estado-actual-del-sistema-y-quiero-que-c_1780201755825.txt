@@ -1,0 +1,164 @@
+He revisado el estado actual del sistema y quiero que completes los puntos que aún están pendientes o parcialmente implementados relacionados con permisos, vendedores, movimientos, referencias fiscales y reportes.
+
+1. Completar permisos granulares en todo el sistema
+
+Actualmente puedeHacer() parece estar implementado correctamente solo en algunos controladores y vistas.
+
+Quiero que se aplique de forma consistente en:
+
+Ventas
+Compras
+Productos
+Clientes
+Vendedores
+Movimientos
+Caja
+Saldos a favor
+Reportes
+Administración de usuarios
+Administración de roles
+Backend
+
+Agregar validaciones tipo:
+
+abort_if(!auth()->user()->puedeHacer('ventas.crear'), 403);
+abort_if(!auth()->user()->puedeHacer('ventas.editar'), 403);
+abort_if(!auth()->user()->puedeHacer('ventas.eliminar'), 403);
+
+según corresponda en cada acción.
+
+Frontend
+
+Ocultar botones y acciones utilizando:
+
+@if(auth()->user()->puedeHacer('ventas.editar'))
+@endif
+
+No quiero que un usuario vea botones que no puede utilizar.
+
+2. Completar restricción global por vendedor
+
+La restricción por vendedor debe ser una capa de seguridad de datos y debe aplicarse automáticamente en todo el sistema.
+
+Si un usuario tiene vendedores asignados mediante la tabla usuario_vendedor, solo podrá visualizar información relacionada con esos vendedores.
+
+Aplicar esta restricción en:
+
+Ventas
+Compras
+Movimientos
+Saldos a favor
+Dashboard
+Reportes
+Utilidades
+
+No debe existir ninguna consulta que permita ver datos de vendedores no asignados.
+
+Quiero una única implementación centralizada mediante un servicio tipo:
+
+App\Services\VendedorScope
+
+para evitar duplicar lógica en múltiples controladores.
+
+3. Referencias fiscales
+
+Implementar completamente:
+
+es_referencia_fiscal
+
+en ventas.
+
+Las ventas marcadas como referencia fiscal:
+
+No generan utilidad.
+No generan ingresos.
+No afectan KPIs.
+No afectan reportes financieros.
+No afectan dashboard.
+No generan deuda.
+No generan saldo pendiente.
+No aparecen en pendientes de cobro.
+No participan en cálculos de rentabilidad.
+
+Además:
+
+Ocultar botón "Verificar pago".
+Bloquear cualquier registro de pago.
+Excluirlas de reportes de utilidad.
+Excluirlas de reportes por vendedor.
+
+Deben existir únicamente para control documental.
+
+4. Movimientos vinculados a vendedor
+
+Agregar:
+
+movimientos.vendedor_id
+
+con relación al vendedor.
+
+Regla obligatoria
+
+Cuando el movimiento sea:
+
+tipo = salida
+
+debe ser obligatorio seleccionar un vendedor.
+
+Regla de visibilidad
+
+Los movimientos deben respetar la restricción de vendedor.
+
+Un usuario solo podrá ver:
+
+movimientos asignados a sus vendedores;
+movimientos relacionados con ventas de sus vendedores.
+
+Los ingresos no requieren selección manual porque ya quedan asociados mediante la cobranza de ventas.
+
+5. Dashboard avanzado con Chart.js
+
+Chart.js ya está instalado.
+
+Quiero convertir el módulo de reportes en un dashboard visual.
+
+Agregar KPIs:
+
+Ventas del día
+Ventas del mes
+Compras del mes
+Utilidad del mes
+Deuda pendiente
+Saldos disponibles
+Movimientos del día
+
+Agregar gráficos:
+
+Ventas por día
+Ventas por mes
+Compras por día
+Compras por mes
+Utilidad por vendedor
+Ingresos vs gastos
+Cobranza vs deuda
+Top productos vendidos
+Métodos de pago
+Evolución de utilidad
+
+Todos los gráficos deben respetar:
+
+filtros de fecha;
+restricciones por vendedor;
+exclusión de referencias fiscales.
+6. Verificación final
+
+Antes de dar la tarea por terminada, revisa y confirma:
+
+Qué controladores fueron modificados.
+Qué vistas fueron modificadas.
+Qué migraciones fueron creadas.
+Qué rutas quedaron protegidas.
+Qué consultas quedaron filtradas por vendedor.
+Qué elementos del dashboard ya están funcionando.
+
+No quiero una implementación parcial. Quiero que quede consistente tanto a nivel visual como a nivel de seguridad y datos.

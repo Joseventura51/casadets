@@ -14,9 +14,11 @@
         <p class="text-muted mb-0 small">{{ $venta->fecha->format('d/m/Y') }} · {{ $venta->vendedor->nombre ?? '—' }}</p>
     </div>
     <div class="d-flex gap-2">
+        @if(!($venta->es_referencia_fiscal ?? false) && auth()->user()->puedeHacer('ventas.pago'))
         <a href="/casadets/ventas/{{ $venta->id }}/pago" class="btn btn-outline-success btn-sm">
             <i class="bi bi-cash-stack me-1"></i>Verificar pago
         </a>
+        @endif
         <a href="/casadets/ventas/{{ $venta->id }}" class="btn btn-outline-secondary btn-sm">← Volver</a>
     </div>
 </div>
@@ -71,9 +73,22 @@
                     <label class="form-label">Número documento</label>
                     <input type="text" name="documento_numero" value="{{ old('documento_numero', $venta->documento_numero) }}" class="form-control" placeholder="F002-953">
                 </div>
-                <div class="col-12">
+                <div class="col-10">
                     <label class="form-label">Observaciones</label>
                     <textarea name="observaciones" class="form-control" rows="2">{{ old('observaciones', $venta->observaciones) }}</textarea>
+                </div>
+                <div class="col-2 d-flex align-items-end">
+                    <div class="form-check mb-2">
+                        <input type="hidden" name="es_referencia_fiscal" value="0">
+                        <input class="form-check-input" type="checkbox" name="es_referencia_fiscal"
+                               id="esRefFiscal" value="1"
+                               {{ old('es_referencia_fiscal', $venta->es_referencia_fiscal) ? 'checked' : '' }}>
+                        <label class="form-check-label small" for="esRefFiscal">
+                            Ref. fiscal
+                            <i class="bi bi-info-circle text-muted ms-1"
+                               title="Marcar si este documento es solo un comprobante fiscal. No generará deuda de cobranza."></i>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>

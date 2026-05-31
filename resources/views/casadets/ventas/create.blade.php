@@ -74,9 +74,23 @@
                     <input type="text" name="documento_numero" value="{{ old('documento_numero') }}" class="form-control">
                 </div>
 
-                <div class="col-md-9">
+                <div class="col-md-7">
                     <label class="form-label">Observaciones</label>
                     <input type="text" name="observaciones" value="{{ old('observaciones') }}" class="form-control">
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check mb-2">
+                        <input type="hidden" name="es_referencia_fiscal" value="0">
+                        <input class="form-check-input" type="checkbox" name="es_referencia_fiscal"
+                               id="esRefFiscal" value="1"
+                               {{ old('es_referencia_fiscal') ? 'checked' : '' }}>
+                        <label class="form-check-label small" for="esRefFiscal">
+                            Referencia fiscal
+                            <i class="bi bi-info-circle text-muted ms-1"
+                               title="Marcar si este documento es solo un comprobante fiscal (factura/boleta) que cubre proformas ya cobradas. No generará deuda de cobranza."></i>
+                        </label>
+                    </div>
                 </div>
             </div>
 
