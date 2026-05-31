@@ -27,7 +27,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "php -d upload_max_filesize=100M -d post_max_size=100M -d max_input_vars=10000 artisan serve --host=0.0.0.0 --port=5000"
+args = "bash scripts/start.sh"
 waitForPort = 5000
 
 [[ports]]
