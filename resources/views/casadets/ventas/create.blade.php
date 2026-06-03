@@ -125,6 +125,47 @@
                 <i class="bi bi-plus-lg"></i> Agregar producto
             </button>
 
+            {{-- ── Ajuste Manual de Cobro ─────────────────────────────── --}}
+            <div class="card border-0 bg-light mb-3" id="ajusteCard">
+                <div class="card-body py-3">
+                    <h6 class="text-muted small mb-3 text-uppercase fw-semibold" style="letter-spacing:.04em;">
+                        <i class="bi bi-sliders me-1"></i>Ajuste Manual de Cobro
+                    </h6>
+                    <div class="row align-items-start g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold text-muted">Total Original <small>(calculado)</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">S/</span>
+                                <input type="text" id="totalOriginalDisplay"
+                                       class="form-control form-control-sm bg-white text-end fw-semibold" readonly value="0.00">
+                            </div>
+                            <div class="form-text">Suma exacta de los productos.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold" for="totalACobrar">
+                                Total a Cobrar
+                                <i class="bi bi-pencil-square text-primary ms-1"
+                                   title="Puedes ajustar el importe a cobrar. La diferencia queda registrada para auditoría."></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">S/</span>
+                                <input type="number" id="totalACobrar" name="total_cobrar"
+                                       class="form-control form-control-sm text-end"
+                                       step="0.01" min="0" value="0.00">
+                            </div>
+                            <div class="form-text">Edita si el importe cobrado es distinto.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold text-muted">Ajuste registrado</label>
+                            <div class="pt-1" id="ajusteDisplay" style="font-size:.9rem; min-height:2rem;">
+                                <span class="text-muted">Sin ajuste</span>
+                            </div>
+                            <div class="form-text">Diferencia para auditoría interna.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="d-flex gap-2 border-top pt-3">
                 <button type="submit" class="btn btn-primary">Guardar venta</button>
                 <a href="/casadets/ventas" class="btn btn-outline-secondary">Cancelar</a>
@@ -154,6 +195,20 @@
         recalcular();
     }
 
+    function actualizarAjuste() {
+        const totalOrig = parseFloat(document.getElementById('totalOriginalDisplay').value) || 0;
+        const totalCob  = parseFloat(document.getElementById('totalACobrar').value);
+        const ajuste = isNaN(totalCob) ? 0 : Math.round((totalCob - totalOrig) * 100) / 100;
+        const el = document.getElementById('ajusteDisplay');
+        if (Math.abs(ajuste) < 0.005) {
+            el.innerHTML = '<span class="text-muted">Sin ajuste</span>';
+        } else if (ajuste < 0) {
+            el.innerHTML = '<span class="text-danger fw-semibold">S/ ' + ajuste.toFixed(2) + '</span>';
+        } else {
+            el.innerHTML = '<span class="text-success fw-semibold">+S/ ' + ajuste.toFixed(2) + '</span>';
+        }
+    }
+
     function recalcular() {
         let total = 0;
         body.querySelectorAll('tr').forEach(tr => {
@@ -164,6 +219,10 @@
             total += sub;
         });
         totalEl.textContent = 'S/ ' + total.toFixed(2);
+        // Sincronizar sección de ajuste
+        document.getElementById('totalOriginalDisplay').value = total.toFixed(2);
+        document.getElementById('totalACobrar').value = total.toFixed(2);
+        actualizarAjuste();
     }
 
     body.addEventListener('input', e => {
@@ -184,6 +243,7 @@
     });
 
     document.getElementById('btnAgregarProducto').addEventListener('click', () => nuevaFila());
+    document.getElementById('totalACobrar').addEventListener('input', actualizarAjuste);
 
     // Empieza con una fila
     nuevaFila();

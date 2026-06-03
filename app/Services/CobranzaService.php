@@ -53,7 +53,7 @@ class CobranzaService
                     'pago'            => null,
                     'estado'          => $venta->fresh()->estado,
                     'saldo_favor'     => 0.0,
-                    'saldo_pendiente' => max(0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2)),
+                    'saldo_pendiente' => max(0, (float) bcsub((string) $venta->total_a_cobrar, (string) $venta->pagado, 2)),
                 ];
             }
 
@@ -75,7 +75,7 @@ class CobranzaService
                 ]);
             }
 
-            $totalDeuda    = (float) $venta->total;
+            $totalDeuda    = $venta->total_a_cobrar;
             $yaPagado      = (float) $venta->pagado;
             $saldoDeuda    = (float) max('0', bcsub((string) $totalDeuda, (string) $yaPagado, 2));
             $ventaYaPagada = $venta->estado === 'pagado';
@@ -153,7 +153,7 @@ class CobranzaService
                 'pago'            => $pago,
                 'estado'          => $venta->estado,
                 'saldo_favor'     => $hayExcedente ? $excedente : 0.0,
-                'saldo_pendiente' => max(0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2)),
+                'saldo_pendiente' => max(0, (float) bcsub((string) $venta->total_a_cobrar, (string) $venta->pagado, 2)),
             ];
         });
     }

@@ -16,10 +16,12 @@ class Vendedor extends Model
         'nombre',
         'telefono',
         'activo',
+        'comision_porcentaje',
     ];
 
     protected $casts = [
-        'activo' => 'boolean',
+        'activo'               => 'boolean',
+        'comision_porcentaje'  => 'decimal:2',
     ];
 
     public function ventas(): HasMany

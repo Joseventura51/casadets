@@ -3,3 +3,4 @@
 - [Dynamic permission system](permission-system.md) — roles use JSON modulos/permisos columns; puedeHacer() now has full static role-based fallback (not just Admin); puedeVer() has static fallback too.
 - [VendedorScope centralization](vendedor-scope-pattern.md) — all vendedor restrictions go through VendedorScope service; never use inline debeRestringirPorVendedor() in controllers again.
 - [Chart.js in layout](chartjs-layout.md) — Chart.js CDN loaded in layouts/app.blade.php; layout has @stack('scripts'); use @push('scripts') in views for chart initialization.
+- [Ajuste Manual de Cobro](ajuste-cobro.md) — total=Original (immutable), ajuste=delta, total_a_cobrar=total+ajuste; forms submit total_cobrar not ajuste; CobranzaService uses total_a_cobrar for debt calculations.

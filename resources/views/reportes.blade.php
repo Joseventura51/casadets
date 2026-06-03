@@ -309,6 +309,31 @@
                     </div>
                 </div>
             </div>
+
+            {{-- Ventas por día con totales --}}
+            <div class="mt-4">
+                <h6 class="small fw-bold text-uppercase text-muted mb-3">
+                    <i class="bi bi-calendar3 me-1"></i>Ventas por día
+                </h6>
+                <div class="table-responsive">
+                    <table class="table table-sm rpt-table" id="tablaPorDia">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fecha</th>
+                                <th class="text-center"># Ventas</th>
+                                <th class="text-end">Total Vendido</th>
+                                <th class="text-end">Costo</th>
+                                <th class="text-end">Utilidad Bruta</th>
+                                <th class="text-end">Comisión</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyPorDia">
+                            <tr><td colspan="6" class="text-center text-muted py-3">Sin datos en este período</td></tr>
+                        </tbody>
+                        <tfoot class="table-secondary fw-bold" id="tfootPorDia"></tfoot>
+                    </table>
+                </div>
+            </div>
         </div>
 
         {{-- TAB COMPRAS --}}
@@ -561,6 +586,7 @@ function renderDatos(data) {
     // Gráficos
     renderChartVentas(v.por_dia, periodoLabel);
     renderChartMetodos(v.por_metodo);
+    renderTablaPorDia(v.por_dia, u.comision_total ?? 0);
 
     // Listas
     renderBarras('listaTopClientes',   v.top_clientes,   'nombre', 'total', '#2563eb');
@@ -582,6 +608,46 @@ function renderDatos(data) {
             </tr>`
         ).join('');
     }
+}
+
+/* ── Tabla Ventas por día con totales ───────────────────── */
+function renderTablaPorDia(porDia, comisionTotal) {
+    const tbody = document.getElementById('tbodyPorDia');
+    const tfoot = document.getElementById('tfootPorDia');
+    if (!porDia || !porDia.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Sin datos en este período</td></tr>';
+        tfoot.innerHTML = '';
+        return;
+    }
+
+    let sumVentas = 0, sumCount = 0, sumCosto = 0, sumUtil = 0;
+    tbody.innerHTML = porDia.map(d => {
+        sumCount  += d.count;
+        sumVentas += d.total;
+        sumCosto  += d.costo   ?? 0;
+        sumUtil   += d.utilidad ?? 0;
+        const util   = d.utilidad ?? 0;
+        const costo  = d.costo   ?? 0;
+        const cls    = util >= 0 ? 'text-success' : 'text-danger';
+        return `<tr>
+            <td>${d.fecha}</td>
+            <td class="text-center"><span class="badge bg-light text-dark border">${d.count}</span></td>
+            <td class="text-end">${fmt(d.total)}</td>
+            <td class="text-end text-danger">${fmt(costo)}</td>
+            <td class="text-end ${cls}">${fmt(util)}</td>
+            <td class="text-end text-muted">—</td>
+        </tr>`;
+    }).join('');
+
+    const clsTotal = sumUtil >= 0 ? 'text-success' : 'text-danger';
+    tfoot.innerHTML = `<tr>
+        <td class="fw-bold">TOTAL</td>
+        <td class="text-center fw-bold">${sumCount}</td>
+        <td class="text-end fw-bold">${fmt(sumVentas)}</td>
+        <td class="text-end text-danger fw-bold">${fmt(sumCosto)}</td>
+        <td class="text-end ${clsTotal} fw-bold">${fmt(sumUtil)}</td>
+        <td class="text-end fw-bold text-primary">${fmt(comisionTotal)}</td>
+    </tr>`;
 }
 
 /* ── Gráfico mixto: Ventas (barras) + Utilidad (línea) ── */

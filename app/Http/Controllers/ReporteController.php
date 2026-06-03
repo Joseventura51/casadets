@@ -48,9 +48,9 @@ class ReporteController extends Controller
             ->where(fn($q) => $q->whereNull('ventas.documento_tipo')
                 ->orWhere('ventas.documento_tipo', '!=', 'nota_credito'));
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $q->whereIn('ventas.vendedor_id', $authUser->vendedorIds());
+        $ids = \App\Services\VendedorScope::ids();
+        if ($ids !== null) {
+            $q->whereIn('ventas.vendedor_id', $ids);
         } elseif ($r->filled('vendedor_id')) {
             $q->where('ventas.vendedor_id', $r->vendedor_id);
         }
@@ -74,9 +74,9 @@ class ReporteController extends Controller
             ->where(fn($q) => $q->whereNull('v.documento_tipo')
                 ->orWhere('v.documento_tipo', '!=', 'nota_credito'));
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $q->whereIn('v.vendedor_id', $authUser->vendedorIds());
+        $ids = \App\Services\VendedorScope::ids();
+        if ($ids !== null) {
+            $q->whereIn('v.vendedor_id', $ids);
         } elseif ($r->filled('vendedor_id')) {
             $q->where('v.vendedor_id', $r->vendedor_id);
         }
@@ -166,6 +166,7 @@ class ReporteController extends Controller
                 'fecha'    => $v->fecha,
                 'count'    => (int)   $v->count,
                 'total'    => (float) $v->total_ventas,
+                'costo'    => round($costo, 2),
                 'utilidad' => round((float)$v->total_ventas - $costo, 2),
             ];
         })->values();
@@ -209,6 +210,20 @@ class ReporteController extends Controller
             ->get()
             ->map(fn($p) => ['nombre' => $p->nombre, 'cantidad' => (float)$p->cantidad, 'total' => (float)$p->total]);
 
+        // Comisión de vendedores sobre Total a Cobrar
+        $vendorIdsComision = \App\Services\VendedorScope::ids();
+        $comisionTotal = (float) DB::table('ventas as v')
+            ->join('vendedores as vend', 'v.vendedor_id', '=', 'vend.id')
+            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->where('v.estado', '!=', 'anulado')
+            ->whereNull('v.deleted_at')
+            ->where('v.es_referencia_fiscal', false)
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
+            ->when($vendorIdsComision !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIdsComision))
+            ->when($vendorIdsComision === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
+            ->selectRaw('COALESCE(SUM((v.total + COALESCE(v.ajuste, 0)) * COALESCE(vend.comision_porcentaje, 0) / 100), 0) as total')
+            ->value('total');
+
         return response()->json([
             'periodo' => $periodo,
             'desde'   => $desde->format('d/m/Y'),
@@ -233,12 +248,13 @@ class ReporteController extends Controller
                 'top_productos' => $topProductosCompra,
             ],
             'utilidad' => [
-                'total_ventas' => round($totalVentas, 2),
-                'total_costo'  => round($totalCosto, 2),
-                'utilidad'     => $utilidad,
-                'margen'       => $margen,
-                'invertido'    => round($totalCompras, 2),
-                'recuperado'   => round($totalVentas, 2),
+                'total_ventas'   => round($totalVentas, 2),
+                'total_costo'    => round($totalCosto, 2),
+                'utilidad'       => $utilidad,
+                'margen'         => $margen,
+                'invertido'      => round($totalCompras, 2),
+                'recuperado'     => round($totalVentas, 2),
+                'comision_total' => round($comisionTotal, 2),
             ],
         ]);
     }
@@ -310,8 +326,7 @@ class ReporteController extends Controller
         $periodo        = $r->input('periodo', 'diario');
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        $authUser   = auth()->user();
-        $vendorIds  = ($authUser && $authUser->debeRestringirPorVendedor()) ? $authUser->vendedorIds() : null;
+        $vendorIds = \App\Services\VendedorScope::ids();
 
         $ventas = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
@@ -442,8 +457,7 @@ class ReporteController extends Controller
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
         // Reusa la misma lógica de datos pero con colección pequeña para el PDF
-        $authUser  = auth()->user();
-        $vendorIds = ($authUser && $authUser->debeRestringirPorVendedor()) ? $authUser->vendedorIds() : null;
+        $vendorIds = \App\Services\VendedorScope::ids();
 
         $ventasSummary = DB::table('ventas')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])

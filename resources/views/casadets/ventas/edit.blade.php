@@ -153,10 +153,58 @@
             </table>
         </div>
         <div class="card-footer bg-light d-flex justify-content-end gap-4 py-2">
-            <span class="text-muted small">Total cobrado actual:
-                <strong>S/ {{ number_format($venta->total_cobrado, 2) }}</strong>
-                <span class="text-muted"> (se recalcula con el nuevo total de productos)</span>
+            <span class="text-muted small">Total original:
+                <strong id="totalProductosDisplay">S/ {{ number_format($venta->total, 2) }}</strong>
             </span>
+        </div>
+    </div>
+
+    {{-- ── Ajuste Manual de Cobro ─────────────────────────────── --}}
+    <div class="card border-0 bg-light mb-3">
+        <div class="card-body py-3">
+            <h6 class="text-muted small mb-3 text-uppercase fw-semibold" style="letter-spacing:.04em;">
+                <i class="bi bi-sliders me-1"></i>Ajuste Manual de Cobro
+            </h6>
+            <div class="row align-items-start g-3">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-muted">Total Original <small>(calculado)</small></label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">S/</span>
+                        <input type="text" id="totalOriginalDisplay"
+                               class="form-control form-control-sm bg-white text-end fw-semibold" readonly
+                               value="{{ number_format($venta->total, 2, '.', '') }}">
+                    </div>
+                    <div class="form-text">Suma exacta de los productos.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold" for="totalACobrar">
+                        Total a Cobrar
+                        <i class="bi bi-pencil-square text-primary ms-1"
+                           title="Ajusta el importe a cobrar. La diferencia se registrará como ajuste."></i>
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">S/</span>
+                        <input type="number" id="totalACobrar" name="total_cobrar"
+                               class="form-control form-control-sm text-end"
+                               step="0.01" min="0"
+                               value="{{ number_format($venta->total_a_cobrar, 2, '.', '') }}">
+                    </div>
+                    <div class="form-text">Edita si el importe cobrado es distinto.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-muted">Ajuste registrado</label>
+                    <div class="pt-1" id="ajusteDisplay" style="font-size:.9rem; min-height:2rem;">
+                        @if(abs((float) $venta->ajuste) < 0.01)
+                            <span class="text-muted">Sin ajuste</span>
+                        @elseif((float) $venta->ajuste < 0)
+                            <span class="text-danger fw-semibold">S/ {{ number_format($venta->ajuste, 2) }}</span>
+                        @else
+                            <span class="text-success fw-semibold">+S/ {{ number_format($venta->ajuste, 2) }}</span>
+                        @endif
+                    </div>
+                    <div class="form-text">Diferencia para auditoría interna.</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -169,6 +217,20 @@
 <script>
 let prodIdx = {{ $venta->detalles->count() }};
 
+function actualizarAjuste() {
+    const totalOrig = parseFloat(document.getElementById('totalOriginalDisplay').value) || 0;
+    const totalCob  = parseFloat(document.getElementById('totalACobrar').value);
+    const ajuste = isNaN(totalCob) ? 0 : Math.round((totalCob - totalOrig) * 100) / 100;
+    const el = document.getElementById('ajusteDisplay');
+    if (Math.abs(ajuste) < 0.005) {
+        el.innerHTML = '<span class="text-muted">Sin ajuste</span>';
+    } else if (ajuste < 0) {
+        el.innerHTML = '<span class="text-danger fw-semibold">S/ ' + ajuste.toFixed(2) + '</span>';
+    } else {
+        el.innerHTML = '<span class="text-success fw-semibold">+S/ ' + ajuste.toFixed(2) + '</span>';
+    }
+}
+
 function recalcTotal() {
     let total = 0;
     document.querySelectorAll('.producto-row').forEach(row => {
@@ -179,6 +241,8 @@ function recalcTotal() {
         total += sub;
     });
     document.getElementById('totalProductosDisplay').textContent = 'S/ ' + total.toFixed(2);
+    document.getElementById('totalOriginalDisplay').value = total.toFixed(2);
+    actualizarAjuste();
 }
 
 function reindexar() {
@@ -224,6 +288,8 @@ document.getElementById('btnAgregarProducto').addEventListener('click', () => {
     tr.querySelector('input').focus();
 });
 
+document.getElementById('totalACobrar').addEventListener('input', actualizarAjuste);
+actualizarAjuste();
 recalcTotal();
 </script>
 @endsection

@@ -159,17 +159,26 @@
             </tbody>
             <tfoot>
                 <tr>
-                    <th colspan="4" class="text-end text-muted">Total productos</th>
-                    <th class="text-end"></th>
-                </tr>
-                <tr>
-                    <td colspan="3" class="text-end text-muted small">Subtotal</td>
-                    <td class="text-end">S/ {{ number_format($venta->total, 2) }}</td>
+                    <td colspan="3" class="text-end text-muted small">Total original</td>
+                    <td class="text-end text-muted">S/ {{ number_format($venta->total, 2) }}</td>
                     <td></td>
                 </tr>
+                @if(abs((float) $venta->ajuste) >= 0.01)
+                <tr>
+                    <td colspan="3" class="text-end text-muted small">
+                        Ajuste aplicado
+                        <i class="bi bi-info-circle text-muted ms-1"
+                           title="Diferencia entre el total original y el total a cobrar"></i>
+                    </td>
+                    <td class="text-end small {{ (float)$venta->ajuste < 0 ? 'text-danger' : 'text-success' }}">
+                        {{ (float)$venta->ajuste > 0 ? '+' : '' }}S/ {{ number_format($venta->ajuste, 2) }}
+                    </td>
+                    <td></td>
+                </tr>
+                @endif
                 <tr class="table-light">
-                    <td colspan="3" class="text-end fw-bold">TOTAL COBRADO</td>
-                    <td class="text-end fw-bold fs-5">S/ {{ number_format($venta->total_cobrado,2) }}</td>
+                    <td colspan="3" class="text-end fw-bold">TOTAL A COBRAR</td>
+                    <td class="text-end fw-bold fs-5">S/ {{ number_format($venta->total_a_cobrar, 2) }}</td>
                     <td></td>
                 </tr>
             </tfoot>
@@ -223,7 +232,7 @@
         ];
     }
 
-    $totalVenta     = $venta->total_cobrado;
+    $totalVenta     = $venta->total_a_cobrar;
     $utilidadTotal  = $totalVenta - $totalCostoGlobal;
     $margenTotal    = $totalVenta > 0 ? ($utilidadTotal / $totalVenta * 100) : null;
 @endphp

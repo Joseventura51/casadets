@@ -15,6 +15,7 @@ class Venta extends Model
         'vendedor_id',
         'cliente_id',
         'total',
+        'ajuste',
         'pagado',
         'metodo_pago',
         'documento_tipo',
@@ -28,6 +29,7 @@ class Venta extends Model
     protected $casts = [
         'fecha'                => 'date',
         'total'                => 'decimal:2',
+        'ajuste'               => 'decimal:2',
         'pagado'               => 'decimal:2',
         'es_referencia_fiscal' => 'boolean',
     ];
@@ -89,24 +91,40 @@ class Venta extends Model
         return $this->detalles->flatMap->compras->unique('id')->values();
     }
 
+    /**
+     * Total a cobrar = Total original + ajuste.
+     * Este es el importe efectivo que se le cobra al cliente.
+     * Si no hay ajuste, coincide con el total original.
+     */
+    public function getTotalACobrarAttribute(): float
+    {
+        return round((float) $this->total + (float) $this->ajuste, 2);
+    }
+
+    /**
+     * Total cobrado = importe ya recibido en pagos.
+     * @deprecated En nuevas vistas usar pagado directamente.
+     */
     public function getTotalCobradoAttribute(): float
     {
         return (float) ($this->attributes['pagado'] ?? 0);
     }
 
+    /**
+     * Saldo pendiente = lo que falta por pagar sobre el Total a Cobrar.
+     */
     public function getSaldoPendienteAttribute(): float
     {
-        // Las referencias fiscales no generan deuda
         if ($this->es_referencia_fiscal) {
             return 0.0;
         }
-        return max(0, (float) $this->total - $this->total_cobrado);
+        return max(0, $this->total_a_cobrar - (float) $this->pagado);
     }
 
     // ── Lógica de negocio ────────────────────────────────────────────────────
 
     /**
-     * Recalcula y persiste el estado según lo pagado.
+     * Recalcula y persiste el estado según lo pagado vs. el total a cobrar.
      */
     public function recalcularEstado(): void
     {
@@ -114,26 +132,22 @@ class Venta extends Model
             return;
         }
 
-        // Las referencias fiscales siempre están en estado 'pagado':
-        // no generan deuda ni cobranza.
         if ($this->es_referencia_fiscal) {
             $this->update(['estado' => 'pagado']);
             return;
         }
 
-        // Las notas de crédito siempre están en estado 'pagado':
-        // representan una devolución/crédito, no una deuda pendiente.
         if ($this->documento_tipo === 'nota_credito') {
             $this->update(['estado' => 'pagado']);
             return;
         }
 
-        $pagado = round((float) $this->pagado, 2);
-        $total  = round((float) $this->total, 2);
+        $pagado       = round((float) $this->pagado, 2);
+        $totalCobrar  = round($this->total_a_cobrar, 2);
 
         if ($pagado <= 0) {
             $estado = 'pendiente';
-        } elseif ($pagado >= $total) {
+        } elseif ($pagado >= $totalCobrar) {
             $estado = 'pagado';
         } else {
             $estado = 'parcial';

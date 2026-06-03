@@ -128,7 +128,7 @@ class VentaController extends Controller
     public function show(Venta $venta)
     {
         $this->authorizeVenta($venta);
-        $venta->load(['vendedor', 'cliente', 'detalles.compras', 'detalles.producto']);
+        $venta->load(['vendedor', 'cliente', 'detalles.compras.lineas', 'detalles.producto']);
         return view('casadets.ventas.show', compact('venta'));
     }
 
@@ -164,6 +164,7 @@ class VentaController extends Controller
             'observaciones'        => 'nullable|string',
             'fecha'                => 'required|date',
             'es_referencia_fiscal' => 'boolean',
+            'total_cobrar'         => 'nullable|numeric|min:0',
             'productos'            => 'required|array|min:1',
             'productos.*.producto'        => 'required|string|max:255',
             'productos.*.cantidad'        => 'required|numeric|min:0.01',
@@ -171,17 +172,24 @@ class VentaController extends Controller
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data) {
-            // Total exacto con bcmath
+            // Total Original exacto con bcmath (inmutable, suma de productos)
             $total = (float) collect($data['productos'])->reduce(
                 fn ($carry, $p) => bcadd($carry, bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 4), 2),
                 '0'
             );
+
+            // Ajuste manual de cobro: el usuario puede indicar un Total a Cobrar diferente al Original
+            $totalCobrar = (isset($data['total_cobrar']) && $data['total_cobrar'] !== null)
+                ? max(0.0, round((float) $data['total_cobrar'], 2))
+                : $total;
+            $ajuste = round($totalCobrar - $total, 2);
 
             // Venta creada en estado pendiente — metodo_pago NULL hasta que CobranzaService lo asigne
             $venta = Venta::create([
                 'vendedor_id'          => $data['vendedor_id'],
                 'cliente_id'           => $data['cliente_id'] ?? null,
                 'total'                => $total,
+                'ajuste'               => $ajuste,
                 'documento_tipo'       => $data['documento_tipo'] ?? null,
                 'documento_numero'     => $data['documento_numero'] ?? null,
                 'observaciones'        => $data['observaciones'] ?? null,
@@ -217,7 +225,7 @@ class VentaController extends Controller
             $metodo = $data['metodo_pago'] ?? null;
             if (!empty($metodo) && $metodo !== 'ninguno') {
                 app(CobranzaService::class)->registrarPago($venta, [
-                    ['metodo' => $metodo, 'monto' => $total],
+                    ['metodo' => $metodo, 'monto' => $totalCobrar],
                 ]);
             }
         });
@@ -257,6 +265,7 @@ class VentaController extends Controller
             'fecha'                => 'required|date',
             'observaciones'        => 'nullable|string',
             'es_referencia_fiscal' => 'boolean',
+            'total_cobrar'         => 'nullable|numeric|min:0',
             'productos'            => 'required|array|min:1',
             'productos.*.id'             => 'nullable|integer',
             'productos.*.producto'       => 'required|string|max:255',
@@ -270,6 +279,12 @@ class VentaController extends Controller
                 '0'
             );
 
+            // Ajuste manual de cobro
+            $totalCobrar = (isset($data['total_cobrar']) && $data['total_cobrar'] !== null)
+                ? max(0.0, round((float) $data['total_cobrar'], 2))
+                : $nuevoTotal;
+            $ajuste = round($totalCobrar - $nuevoTotal, 2);
+
             $venta->update([
                 'vendedor_id'          => $data['vendedor_id'],
                 'cliente_id'           => $data['cliente_id'] ?? null,
@@ -278,6 +293,7 @@ class VentaController extends Controller
                 'fecha'                => $data['fecha'],
                 'observaciones'        => $data['observaciones'] ?? null,
                 'total'                => $nuevoTotal,
+                'ajuste'               => $ajuste,
                 'es_referencia_fiscal' => $data['es_referencia_fiscal'] ?? false,
             ]);
 
@@ -344,7 +360,7 @@ class VentaController extends Controller
                 'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
             ])
             ->select('id', 'vendedor_id', 'cliente_id', 'fecha', 'estado',
-                     'total', 'pagado', 'metodo_pago', 'documento_tipo', 'documento_numero')
+                     'total', 'ajuste', 'pagado', 'metodo_pago', 'documento_tipo', 'documento_numero')
             ->whereIn('estado', ['pendiente', 'parcial'])
             ->where('es_referencia_fiscal', false)
             ->whereDate('fecha', '<=', today());
@@ -384,11 +400,7 @@ class VentaController extends Controller
                 ->where('id', '!=', $venta->id)
                 ->whereIn('estado', ['pendiente', 'parcial'])
                 ->orderBy('fecha', 'asc')
-                ->get()
-                ->map(function ($v) {
-                    $v->saldo_pendiente = max(0.0, (float) bcsub((string) $v->total, (string) $v->pagado, 2));
-                    return $v;
-                });
+                ->get();
         }
 
         return view('casadets.ventas.verificar_pago', compact(
@@ -708,7 +720,7 @@ class VentaController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Ventas');
 
-        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Método Pago', 'Banco destino', 'Total', 'Total Cobrado', 'Estado'];
+        $headers = ['Fecha', 'Documento', 'Nro. Doc.', 'Cliente', 'Vendedor', 'Método Pago', 'Banco destino', 'Total Original', 'Total a Cobrar', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
 
         $headerStyle = [
@@ -739,7 +751,7 @@ class VentaController extends Controller
             $sheet->setCellValue("F{$row}", $v->metodo_pago ?? '');
             $sheet->setCellValue("G{$row}", $bancoDst);
             $sheet->setCellValue("H{$row}", $esRefFiscal ? '' : (float) $v->total);
-            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total_cobrado);
+            $sheet->setCellValue("I{$row}", $esRefFiscal ? '' : (float) $v->total_a_cobrar);
             $sheet->setCellValue("J{$row}", $esRefFiscal ? 'Ref. fiscal' : ucfirst($v->estado ?? 'pendiente'));
 
             $metodos    = array_map('trim', explode(',', strtolower($v->metodo_pago ?? '')));
