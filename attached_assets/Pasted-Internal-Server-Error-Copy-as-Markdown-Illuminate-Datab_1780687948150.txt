@@ -1,0 +1,138 @@
+Internal Server Error
+
+Copy as Markdown
+Illuminate\Database\QueryException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+SQLSTATE[42000]: Syntax error or access violation: 1305 FUNCTION bd_casadets.strftime does not exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: bd_casadets, SQL: select strftime('%d', fecha) as dia, ROUND(SUM(monto), 2) as total from `movimientos` where `subtipo` = pago_venta and `estado` = activo and `fecha` between 2026-06-01 00:00:00 and 2026-06-30 23:59:59 group by `dia` order by `dia` asc)
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 42000
+500
+GET
+http://127.0.0.1:8000
+
+Exception trace
+8 vendor frames
+
+Illuminate\Database\Eloquent\Builder->pluck(string, string)
+app\Http\Controllers\HomeController.php:111
+
+106            ->whereBetween('fecha', [$inicio, $fin])
+107            ->selectRaw("strftime('%d', fecha) as dia, ROUND(SUM(monto), 2) as total")
+108            ->groupBy('dia')
+109            ->orderBy('dia');
+110        VendedorScope::aplicarMovimientos($chartQuery);
+111        $cobranzaDiariaRaw = $chartQuery->pluck('total', 'dia');
+112
+113        $diasEnMes   = $hoy->copy()->daysInMonth;
+114        $chartLabels = [];
+115        $cobranzaDiaria = [];
+116        for ($d = 1; $d <= $diasEnMes; $d++) {
+117            $key = str_pad($d, 2, '0', STR_PAD_LEFT);
+118            $chartLabels[]    = $key;
+119            $cobranzaDiaria[] = (float) ($cobranzaDiariaRaw[$key] ?? 0);
+120        }
+121
+122        return view('/home', compact(
+123
+5 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 21
+mysql
+select * from `sessions` where `id` = 'FabmvPPsTsixlW4kb2yA3b7j5lDXKemapWQARpiR' limit 1
+12.49ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.48ms
+mysql
+select exists(select * from `vendedores` inner join `usuario_vendedor` on `vendedores`.`id` = `usuario_vendedor`.`vendedor_id` where `usuario_vendedor`.`user_id` = 1 and `vendedores`.`deleted_at` is null) as `exists`
+115.14ms
+mysql
+select sum(`monto`) as aggregate from `movimientos` where `subtipo` = 'pago_venta' and `estado` = 'activo' and `fecha` between '2026-06-01 00:00:00' and '2026-06-30 23:59:59'
+37.01ms
+mysql
+select exists(select * from `vendedores` inner join `usuario_vendedor` on `vendedores`.`id` = `usuario_vendedor`.`vendedor_id` where `usuario_vendedor`.`user_id` = 1 and `vendedores`.`deleted_at` is null) as `exists`
+1.35ms
+mysql
+select sum(`monto`) as aggregate from `movimientos` where `tipo` = 'ingreso' and `estado` = 'activo' and (`subtipo` is null or `subtipo` != 'pago_venta') and `fecha` between '2026-06-01 00:00:00' and '2026-06-30 23:59:59'
+2.4ms
+mysql
+select exists(select * from `vendedores` inner join `usuario_vendedor` on `vendedores`.`id` = `usuario_vendedor`.`vendedor_id` where `usuario_vendedor`.`user_id` = 1 and `vendedores`.`deleted_at` is null) as `exists`
+1.34ms
+mysql
+select sum(`monto`) as aggregate from `movimientos` where `tipo` = 'salida' and `estado` = 'activo' and `fecha` between '2026-06-01 00:00:00' and '2026-06-30 23:59:59'
+1.5ms
+mysql
+select exists(select * from `vendedores` inner join `usuario_vendedor` on `vendedores`.`id` = `usuario_vendedor`.`vendedor_id` where `usuario_vendedor`.`user_id` = 1 and `vendedores`.`deleted_at` is null) as `exists`
+1.28ms
+mysql
+select sum(`monto`) as aggregate from `movimientos` where `subtipo` = 'compra' and `estado` = 'activo' and `fecha` between '2026-06-01 00:00:00' and '2026-06-30 23:59:59'
+1.33ms
+
+
+1
+2
+3
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+cache-control
+max-age=0
+dnt
+1
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+sec-ch-ua
+"Chromium";v="148", "Google Chrome";v="148", "Not/A)Brand";v="99"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+referer
+http://127.0.0.1:8000/login
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6IlI3NHRwR3VrWXk5aHRldFIyaFhVMlE9PSIsInZhbHVlIjoiRGFZbVNGeWNNaTVQUE0rd1dZay9va2g0eUNZUHB4WUFwQzdmZHptSTg5UXNUeXlhSE9zU21rQ2VNaDJTc3JuRG5sOEo1Sm8wcmdRU0QwajhHQzZjWCtvMXpEa1JTOGdOUXBYQ0g2QkFvMVJ5TTRsTjBwSG1Pc01ZRkRBMUpPMUYiLCJtYWMiOiIyZTc4MDgyZGVlMDRmODc1NWJhZjMwNTg4YzJlY2Q1MmI3NjI3ZTg1MzMzNWIyOTliMzQ1OWRiOWNhZjM4MDUxIiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6InB3SzM5Z2lrN1EzYU83TDhMd2Q0Rnc9PSIsInZhbHVlIjoiU3Q0SjYvL0tsTEtlOHdxYUsycm5MN1hmVkhRSmlLTWpKeVMvSmVZWCt2TCtpUElkTUJGRlMvNHRmZjRyMlNjdS9FVEVzOTNTd0cvcUl6V2J2M0xwM0lHY2ZOdkJJZTdzalk1WWJuUlZZaHNmbVZTQktDdm1qMnVxR05VM1NyRGMiLCJtYWMiOiJmM2NiODI3ZDM5MzBlODliMGFmMzE5MDdlYmM0ZWI4MDVkNjAxYjM1ZTI4M2MyMjM1ODQyMGYzODdjOTI5ZjJjIiwidGFnIjoiIn0%3D
+Body
+// No request body
+Routing
+controller
+App\Http\Controllers\HomeController@index
+middleware
+web, auth, check.activo
+Routing parameters
+// No routing parameters

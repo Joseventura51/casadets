@@ -101,10 +101,15 @@ class HomeController extends Controller
 
         // ── Datos para gráfica (Chart.js) — cobrado por día del mes ──────
 
+        $diaExpr = match(\Illuminate\Support\Facades\DB::connection()->getDriverName()) {
+            'mysql', 'mariadb' => "LPAD(DAY(fecha), 2, '0')",
+            default            => "strftime('%d', fecha)",
+        };
+
         $chartQuery = Movimiento::where('subtipo', 'pago_venta')
             ->where('estado', 'activo')
             ->whereBetween('fecha', [$inicio, $fin])
-            ->selectRaw("strftime('%d', fecha) as dia, ROUND(SUM(monto), 2) as total")
+            ->selectRaw("{$diaExpr} as dia, ROUND(SUM(monto), 2) as total")
             ->groupBy('dia')
             ->orderBy('dia');
         VendedorScope::aplicarMovimientos($chartQuery);
