@@ -491,6 +491,46 @@ class VentaController extends Controller
         return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
     }
 
+    /* ─── Reducción de sobrante ─────────────────────────────────── */
+
+    public function reducirSaldo(Request $request, Venta $venta)
+    {
+        abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
+        $this->authorizeVenta($venta);
+
+        $data = $request->validate([
+            'monto' => 'required|numeric|min:0.01',
+        ]);
+
+        try {
+            $result = app(CobranzaService::class)->reducirSaldo(
+                $venta,
+                (float) $data['monto'],
+                auth()->id()
+            );
+        } catch (\InvalidArgumentException $e) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success'         => true,
+                'monto_reducido'  => $result['monto_reducido'],
+                'estado'          => $result['estado'],
+                'saldo_pendiente' => $result['saldo_pendiente'],
+            ]);
+        }
+
+        $msg = 'Se redujo S/ ' . number_format($result['monto_reducido'], 2) . ' del saldo pendiente.';
+        if ($result['estado'] === 'pagado') {
+            $msg .= ' El vale quedó marcado como Pagado.';
+        }
+        return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
+    }
+
     /* ─── Pago múltiple (varios vales a la vez) ─────────────────── */
 
     public function pagoMultiple(Request $request)
