@@ -117,11 +117,75 @@
     </div>
 </div>
 @elseif($venta->estado === 'parcial')
-<div class="alert alert-warning d-flex align-items-center gap-2 mb-3">
-    <i class="bi bi-hourglass-split fs-5"></i>
-    <div>
+<div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+    <i class="bi bi-hourglass-split fs-5 mt-1 flex-shrink-0"></i>
+    <div class="flex-grow-1">
         <strong>Pago parcial:</strong> se cobró S/ {{ number_format($yaPagedo, 2) }} de S/ {{ number_format($totalVenta, 2) }}.
         Queda <strong>S/ {{ number_format($saldoPendiente, 2) }}</strong> pendiente.
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0"
+        data-bs-toggle="modal" data-bs-target="#modalReducirSaldo"
+        title="Condonar el saldo restante">
+        <i class="bi bi-scissors me-1"></i> Reducir sobrante
+    </button>
+</div>
+@elseif($venta->estado === 'pendiente' && $saldoPendiente > 0)
+<div class="alert alert-secondary d-flex align-items-start gap-2 mb-3">
+    <i class="bi bi-clock fs-5 mt-1 flex-shrink-0"></i>
+    <div class="flex-grow-1">
+        <strong>Pendiente de pago.</strong> Total: S/ {{ number_format($totalVenta, 2) }}.
+    </div>
+</div>
+@endif
+
+{{-- ── Modal Reducir Sobrante ────────────────────────────────── --}}
+@if(!$ventaPagada && $saldoPendiente > 0)
+<div class="modal fade" id="modalReducirSaldo" tabindex="-1" aria-labelledby="modalReducirSaldoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalReducirSaldoLabel">
+                    <i class="bi bi-scissors me-2 text-danger"></i>Reducir sobrante
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border mb-3 p-2" style="font-size:.88rem;">
+                    <table class="table table-sm mb-0" style="font-size:.88rem;">
+                        <tr>
+                            <td class="text-muted border-0 py-1">Total del vale</td>
+                            <td class="text-end fw-semibold border-0 py-1">S/ {{ number_format($totalVenta, 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted border-0 py-1">Ya cobrado</td>
+                            <td class="text-end fw-semibold text-success border-0 py-1">S/ {{ number_format($yaPagedo, 2) }}</td>
+                        </tr>
+                        <tr class="border-top">
+                            <td class="border-0 py-1 fw-semibold">Saldo pendiente</td>
+                            <td class="text-end fw-bold text-danger border-0 py-1">S/ {{ number_format($saldoPendiente, 2) }}</td>
+                        </tr>
+                    </table>
+                </div>
+                <p class="text-muted small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Al reducir el sobrante, el vale quedará marcado como <strong>Pagado</strong> y se registrará una nota de reducción en el historial de movimientos.
+                </p>
+                <label class="form-label fw-semibold">Monto a reducir</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white text-muted">S/</span>
+                    <input type="number" id="montoReduccion" class="form-control text-end"
+                        value="{{ number_format($saldoPendiente, 2, '.', '') }}"
+                        step="0.01" min="0.01" max="{{ number_format($saldoPendiente, 2, '.', '') }}">
+                </div>
+                <div id="reduccionAlerta" class="mt-2 d-none alert alert-danger p-2 small"></div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarReduccion">
+                    <i class="bi bi-scissors me-1"></i> Confirmar reducción
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 @endif
@@ -848,5 +912,60 @@ document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
 });
 
 recalc();
+
+// ── Reducción de sobrante ──────────────────────────────────────
+@if(!$ventaPagada && $saldoPendiente > 0)
+(function() {
+    const btnConfirmar = document.getElementById('btnConfirmarReduccion');
+    if (!btnConfirmar) return;
+
+    btnConfirmar.addEventListener('click', async () => {
+        const monto  = parseFloat(document.getElementById('montoReduccion').value) || 0;
+        const alerta = document.getElementById('reduccionAlerta');
+        const maxVal = {{ number_format($saldoPendiente, 2, '.', '') }};
+
+        alerta.classList.add('d-none');
+
+        if (monto <= 0 || monto > maxVal + 0.001) {
+            alerta.textContent = 'El monto debe ser mayor a 0 y no superar S/ ' + maxVal.toFixed(2) + '.';
+            alerta.classList.remove('d-none');
+            return;
+        }
+
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Procesando…';
+
+        try {
+            const csrfToken = document.querySelector('meta[name=csrf-token]')?.content
+                           || document.querySelector('input[name=_token]')?.value || '';
+            const res = await fetch(`/casadets/ventas/${VENTA_ID}/reducir-saldo`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                },
+                body: JSON.stringify({ monto }),
+            });
+            const json = await res.json();
+            if (json.success) {
+                const estadoMsg = json.estado === 'pagado' ? ' El vale quedó marcado como Pagado.' : '';
+                showToast('Se redujo S/ ' + json.monto_reducido.toFixed(2) + ' del saldo pendiente.' + estadoMsg, 'success');
+                setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1600);
+            } else {
+                alerta.textContent = json.message || 'Error al procesar la reducción.';
+                alerta.classList.remove('d-none');
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="bi bi-scissors me-1"></i> Confirmar reducción';
+            }
+        } catch (err) {
+            alerta.textContent = 'Error de red: ' + err.message;
+            alerta.classList.remove('d-none');
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = '<i class="bi bi-scissors me-1"></i> Confirmar reducción';
+        }
+    });
+})();
+@endif
 </script>
 @endsection

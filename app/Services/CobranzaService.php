@@ -293,6 +293,75 @@ class CobranzaService
     }
 
     /**
+     * Reduce el saldo pendiente de una venta (condonación de sobrante).
+     * Ajusta el campo `ajuste` para que total_a_cobrar coincida con lo ya cobrado,
+     * y registra un Movimiento con subtipo = 'reduccion_saldo'.
+     */
+    public function reducirSaldo(
+        Venta $venta,
+        float $monto,
+        ?int $userId = null,
+        string $empresa = 'casadets'
+    ): array {
+        return DB::transaction(function () use ($venta, $monto, $userId, $empresa) {
+
+            if ($venta->estado === 'anulado') {
+                throw new \InvalidArgumentException('No se puede reducir el saldo de una venta anulada.');
+            }
+            if ($venta->estado === 'pagado') {
+                throw new \InvalidArgumentException('La venta ya está completamente pagada.');
+            }
+
+            $saldoPendiente = round($venta->saldo_pendiente, 2);
+            $monto          = round($monto, 2);
+
+            if ($monto <= 0) {
+                throw new \InvalidArgumentException('El monto a reducir debe ser mayor a cero.');
+            }
+            if ($monto > $saldoPendiente) {
+                throw new \InvalidArgumentException(
+                    'El monto a reducir (S/ ' . number_format($monto, 2) . ') supera el saldo pendiente (S/ ' . number_format($saldoPendiente, 2) . ').'
+                );
+            }
+
+            // Reducir ajuste para que total_a_cobrar disminuya exactamente en $monto
+            $nuevoAjuste = round((float) bcsub((string) $venta->ajuste, (string) $monto, 2), 2);
+            $venta->update(['ajuste' => $nuevoAjuste]);
+            $venta->refresh();
+            $venta->recalcularEstado();
+
+            $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
+            Movimiento::create([
+                'tipo'             => 'contable',
+                'subtipo'          => 'reduccion_saldo',
+                'origen'           => 'manual',
+                'estado'           => 'activo',
+                'empresa'          => $empresa,
+                'categoria'        => 'Reducción de sobrante',
+                'metodo_pago'      => null,
+                'referencia_tipo'  => 'venta',
+                'referencia_id'    => $venta->id,
+                'cliente_id'       => $venta->cliente_id,
+                'user_id'          => $userId,
+                'documento_tipo'   => $venta->documento_tipo,
+                'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
+                'monto'            => $monto,
+                'fecha'            => now()->toDateString(),
+                'observaciones'    => 'Reducción de sobrante S/ ' . number_format($monto, 2)
+                    . ' en venta #' . $venta->id . ($docStr ? " ({$docStr})" : ''),
+            ]);
+
+            $venta->refresh();
+            return [
+                'monto_reducido'  => $monto,
+                'nuevo_ajuste'    => $nuevoAjuste,
+                'estado'          => $venta->estado,
+                'saldo_pendiente' => $venta->saldo_pendiente,
+            ];
+        });
+    }
+
+    /**
      * Saldo a favor disponible de un cliente (suma).
      */
     public function saldoFavorDisponible(int $clienteId): float
