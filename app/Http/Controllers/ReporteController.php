@@ -97,6 +97,7 @@ class ReporteController extends Controller
 
     public function datos(Request $r): JsonResponse
     {
+        try {
         $periodo        = $r->input('periodo', 'diario');
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
@@ -257,6 +258,12 @@ class ReporteController extends Controller
                 'comision_total' => round($comisionTotal, 2),
             ],
         ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => '[' . class_basename($e) . '] ' . $e->getMessage()
+                         . ' (línea ' . $e->getLine() . ' en ' . basename($e->getFile()) . ')',
+            ], 500);
+        }
     }
 
     public function utilidadDetalle(Request $r): JsonResponse

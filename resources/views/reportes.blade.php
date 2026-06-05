@@ -521,16 +521,26 @@ function cargarDatos() {
     fetch('/reportes/datos?' + params.toString(), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
-    .then(r => r.json())
+    .then(async r => {
+        if (!r.ok) {
+            const text = await r.text();
+            throw new Error('HTTP ' + r.status + ': ' + text.substring(0, 300));
+        }
+        return r.json();
+    })
     .then(data => {
+        if (data.error) throw new Error(data.error);
         datosActuales = data;
         renderDatos(data);
         document.getElementById('rptLoading').style.display = 'none';
         document.getElementById('rptContent').style.display = 'block';
     })
-    .catch(() => {
+    .catch(err => {
+        console.error('[Reportes] Error:', err.message);
         document.getElementById('rptLoading').innerHTML =
-            '<p class="text-danger">Error al cargar el reporte. Intenta de nuevo.</p>';
+            '<div class="alert alert-danger mx-3 mt-3"><strong>Error al cargar el reporte:</strong><br><code style="font-size:.75rem;white-space:pre-wrap;">' +
+            err.message.replace(/</g,'&lt;').replace(/>/g,'&gt;') +
+            '</code></div>';
     });
 }
 
