@@ -80,7 +80,6 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::put('/casadets/ventas/{venta}',                   [VentaController::class, 'update']);
         Route::get('/casadets/ventas/{venta}/pago',              [VentaController::class, 'pago']);
         Route::post('/casadets/ventas/{venta}/pago',             [VentaController::class, 'updatePago']);
-        Route::post('/casadets/ventas/{venta}/reducir-saldo',    [VentaController::class, 'reducirSaldo']);
         Route::post('/casadets/ventas/{venta}/estado',           [VentaController::class, 'updateEstado']);
         Route::delete('/casadets/ventas/{venta}',                [VentaController::class, 'destroy']);
     });

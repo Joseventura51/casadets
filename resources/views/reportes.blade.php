@@ -575,9 +575,7 @@ function renderDatos(data) {
 
     document.getElementById('kpiUtilidad').textContent      = fmt(u.utilidad);
     document.getElementById('kpiCosto').textContent         = fmt(u.total_costo);
-    // total_cobrado = lo realmente pagado (base de la utilidad)
-    const totalCobrado = u.total_cobrado ?? u.total_ventas;
-    document.getElementById('kpiVentasUtilidad').textContent= fmt(totalCobrado);
+    document.getElementById('kpiVentasUtilidad').textContent= fmt(u.total_ventas);
 
     document.getElementById('kpiMargen').textContent        = u.margen + '%';
     document.getElementById('kpiInvertido').textContent     = fmt(u.invertido);
@@ -593,7 +591,7 @@ function renderDatos(data) {
     document.getElementById('utilTotal').textContent    = fmt(u.utilidad);
     document.getElementById('utilMargen').textContent   = u.margen + '%';
     document.getElementById('utilInvertido').textContent= fmt(u.total_costo);
-    document.getElementById('utilRecuperado').textContent= fmt(totalCobrado);
+    document.getElementById('utilRecuperado').textContent= fmt(u.total_ventas);
 
     // Gráficos
     renderChartVentas(v.por_dia, periodoLabel);
