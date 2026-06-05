@@ -93,7 +93,7 @@ class VentaController extends Controller
                                WHEN documento_tipo='boleta'   THEN 1
                                WHEN documento_tipo='proforma' THEN 2
                                ELSE 3 END")
-            ->orderByRaw('LENGTH(COALESCE(documento_numero,""))')
+            ->orderByRaw("LENGTH(COALESCE(documento_numero,''))")
             ->orderBy('documento_numero')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc')
@@ -688,15 +688,15 @@ class VentaController extends Controller
             $cliente = strtolower(trim($request->cliente));
             $query->whereHas('cliente', function ($q) use ($cliente) {
                 $q->whereRaw('LOWER(nombre) LIKE ?', ['%' . $cliente . '%'])
-                  ->orWhereRaw('LOWER(COALESCE(documento, "")) LIKE ?', ['%' . $cliente . '%']);
+                  ->orWhereRaw("LOWER(COALESCE(documento, '')) LIKE ?", ['%' . $cliente . '%']);
             });
         }
 
         if ($request->filled('documento')) {
             $documento = strtolower(trim($request->documento));
             $query->where(function ($q) use ($documento) {
-                $q->whereRaw('LOWER(COALESCE(documento_tipo, "")) LIKE ?', ['%' . $documento . '%'])
-                  ->orWhereRaw('LOWER(COALESCE(documento_numero, "")) LIKE ?', ['%' . $documento . '%']);
+                $q->whereRaw("LOWER(COALESCE(documento_tipo, '')) LIKE ?", ['%' . $documento . '%'])
+                  ->orWhereRaw("LOWER(COALESCE(documento_numero, '')) LIKE ?", ['%' . $documento . '%']);
             });
         }
 
@@ -710,7 +710,7 @@ class VentaController extends Controller
                                  WHEN documento_tipo='boleta'  THEN 1
                                  WHEN documento_tipo='proforma' THEN 2
                                  ELSE 3 END")
-              ->orderByRaw('LENGTH(COALESCE(documento_numero,""))')
+              ->orderByRaw("LENGTH(COALESCE(documento_numero,''))")
               ->orderBy('documento_numero')
               ->orderBy('fecha', 'desc');
 

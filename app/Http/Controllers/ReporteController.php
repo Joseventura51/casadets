@@ -112,7 +112,7 @@ class ReporteController extends Controller
 
         // ── Por método de pago ───────────────────────────
         $porMetodo = $this->qVentas($r, $desde, $hasta)
-            ->selectRaw('COALESCE(metodo_pago,"No especificado") as metodo, COUNT(*) as count, SUM(total) as total')
+            ->selectRaw("COALESCE(metodo_pago,'No especificado') as metodo, COUNT(*) as count, SUM(total) as total")
             ->groupBy('metodo_pago')
             ->orderByDesc('total')
             ->get()
@@ -121,7 +121,7 @@ class ReporteController extends Controller
         // ── Top clientes ────────────────────────────────
         $topClientes = $this->qVentas($r, $desde, $hasta)
             ->leftJoin('clientes as cl', 'ventas.cliente_id', '=', 'cl.id')
-            ->selectRaw('COALESCE(cl.nombre,"Sin cliente") as nombre, COUNT(*) as count, SUM(ventas.total) as total')
+            ->selectRaw("COALESCE(cl.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(ventas.total) as total")
             ->groupBy('ventas.cliente_id', 'cl.nombre')
             ->orderByDesc('total')
             ->limit(8)
@@ -130,7 +130,7 @@ class ReporteController extends Controller
 
         // ── Top productos vendidos ───────────────────────
         $topProductos = $this->qDetalles($r, $desde, $hasta)
-            ->selectRaw('COALESCE(vd.producto,"Manual") as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total')
+            ->selectRaw("COALESCE(vd.producto,'Manual') as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total")
             ->groupBy('vd.producto')
             ->orderByDesc('total')
             ->limit(8)
@@ -139,7 +139,7 @@ class ReporteController extends Controller
 
         // ── Comprobantes ─────────────────────────────────
         $comprobantes = $this->qVentas($r, $desde, $hasta)
-            ->selectRaw('COALESCE(documento_tipo,"Sin tipo") as tipo, COUNT(*) as count, SUM(total) as total')
+            ->selectRaw("COALESCE(documento_tipo,'Sin tipo') as tipo, COUNT(*) as count, SUM(total) as total")
             ->groupBy('documento_tipo')
             ->get()
             ->map(fn($c) => ['tipo' => $c->tipo, 'count' => (int)$c->count, 'total' => (float)$c->total]);
@@ -193,7 +193,7 @@ class ReporteController extends Controller
         $porProveedor = DB::table('compras')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('deleted_at')
-            ->selectRaw('COALESCE(empresa,"Sin proveedor") as proveedor, COUNT(*) as count, SUM(monto_total) as total')
+            ->selectRaw("COALESCE(empresa,'Sin proveedor') as proveedor, COUNT(*) as count, SUM(monto_total) as total")
             ->groupBy('empresa')
             ->orderByDesc('total')
             ->get()
@@ -203,7 +203,7 @@ class ReporteController extends Controller
             ->join('compras as c', 'cl.compra_id', '=', 'c.id')
             ->whereBetween('c.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('c.deleted_at')
-            ->selectRaw('COALESCE(cl.producto,"Manual") as nombre, SUM(cl.cantidad) as cantidad, SUM(cl.monto_total) as total')
+            ->selectRaw("COALESCE(cl.producto,'Manual') as nombre, SUM(cl.cantidad) as cantidad, SUM(cl.monto_total) as total")
             ->groupBy('cl.producto')
             ->orderByDesc('total')
             ->limit(8)
@@ -503,7 +503,7 @@ class ReporteController extends Controller
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
             ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
-            ->selectRaw('COALESCE(c.nombre,"Sin cliente") as nombre, COUNT(*) as count, SUM(v.total) as total')
+            ->selectRaw("COALESCE(c.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(v.total) as total")
             ->groupBy('v.cliente_id', 'c.nombre')
             ->orderByDesc('total')
             ->limit(5)
@@ -515,7 +515,7 @@ class ReporteController extends Controller
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
             ->when($vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
-            ->selectRaw('COALESCE(vd.producto,"Manual") as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total')
+            ->selectRaw("COALESCE(vd.producto,'Manual') as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total")
             ->groupBy('vd.producto')
             ->orderByDesc('total')
             ->limit(5)
