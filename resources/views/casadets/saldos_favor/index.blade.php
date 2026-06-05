@@ -16,6 +16,9 @@
 .kpi-box { border-radius:12px; padding:1.1rem 1.4rem; }
 .nc-row { transition: background .15s; }
 .nc-row:hover { background: #fff8f0 !important; }
+.nc-summary-card { border-left:4px solid #ffc107; border-radius:10px; }
+.nc-cliente-select { min-width:220px; }
+.nc-status-pill { font-size:.72rem; }
 
 /* ── Autocomplete cliente ── */
 .ns-sugerencias .list-group-item { cursor:pointer; padding:.45rem .75rem; font-size:.9rem; border-radius:0; }
@@ -197,6 +200,9 @@
         <button type="button" class="btn btn-outline-warning btn-sm"
                 data-bs-toggle="modal" data-bs-target="#modalConvertirNC">
             <i class="bi bi-arrow-repeat me-1"></i>Desde nota de crédito
+            @if($notasCreditoPendientes > 0)
+                <span class="badge text-bg-warning ms-1">{{ $notasCreditoPendientes }}</span>
+            @endif
         </button>
         <button type="button" class="btn btn-success btn-sm"
                 data-bs-toggle="modal" data-bs-target="#modalNuevoSaldo">
@@ -226,6 +232,31 @@
         @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
     </ul>
     <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
+@if($notasCreditoPendientes > 0)
+<div class="card border-0 shadow-sm nc-summary-card mb-3">
+    <div class="card-body d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center py-3">
+        <div>
+            <div class="fw-semibold">
+                <i class="bi bi-arrow-repeat text-warning me-1"></i>
+                Notas de credito pendientes de conversion
+            </div>
+            <div class="text-muted small">
+                {{ $notasCreditoPendientes }} NC pendiente(s).
+                @if($notasCreditoSinCliente > 0)
+                    {{ $notasCreditoSinCliente }} necesita(n) cliente antes de convertirse.
+                @else
+                    Todas tienen cliente y pueden convertirse manualmente.
+                @endif
+            </div>
+        </div>
+        <button type="button" class="btn btn-outline-warning btn-sm align-self-start align-self-md-center"
+                data-bs-toggle="modal" data-bs-target="#modalConvertirNC">
+            <i class="bi bi-list-check me-1"></i>Revisar notas
+        </button>
+    </div>
 </div>
 @endif
 
@@ -768,83 +799,161 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 @endif
 
-/* ── Modal 3: Convertir NC ─────────────────────────────────── */
-document.getElementById('modalConvertirNC').addEventListener('shown.bs.modal', function () {
-    const contenedor = document.getElementById('ncLista');
-    if (!contenedor) return;
-    contenedor.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de crédito…</div>';
+/* Modal 3: Convertir notas de credito */
+const CLIENTES_NC = {!! $clientesJsonAc !!};
 
-    fetch('/casadets/saldos-favor/notas-credito.json')
-        .then(r => r.json())
-        .then(ncs => {
-            if (!ncs.length) {
-                contenedor.innerHTML = `
-                    <div class="text-center text-muted py-5">
-                        <i class="bi bi-check-circle text-success fs-1 d-block mb-2"></i>
-                        <div>No hay notas de crédito pendientes de convertir.</div>
-                        <div class="small text-muted mt-1">Todas las NC ya fueron procesadas o no tienen cliente asignado.</div>
-                    </div>`;
-                return;
-            }
+function ncEscape(value) {
+    return String(value ?? '').replace(/[&<>"]/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+    }[char]));
+}
 
-            let html = `<div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-3">Documento</th>
-                            <th>Cliente</th>
-                            <th>Fecha</th>
-                            <th class="text-end">Monto</th>
-                            <th class="text-end pe-3">Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
+function ncClienteOptions() {
+    return '<option value="">Seleccionar cliente...</option>' + CLIENTES_NC.map(c => {
+        const doc = c.doc ? ` - ${c.doc}` : '';
+        return `<option value="${c.id}">${ncEscape(c.nombre + doc)}</option>`;
+    }).join('');
+}
 
-            ncs.forEach(nc => {
-                html += `<tr class="nc-row">
+function ncClienteCell(nc) {
+    if (!nc.requiere_cliente) {
+        const doc = nc.cliente_doc ? `<span class="text-muted ms-1">${ncEscape(nc.cliente_doc)}</span>` : '';
+        return `<div class="fw-semibold small">${ncEscape(nc.cliente)}${doc}</div><span class="badge bg-success-subtle text-success border nc-status-pill">Listo para convertir</span>`;
+    }
+
+    return `<div class="d-flex flex-column flex-lg-row gap-2 align-items-lg-center">
+        <select class="form-select form-select-sm nc-cliente-select" data-nc-select="${nc.id}">
+            ${ncClienteOptions()}
+        </select>
+        <button type="button" class="btn btn-sm btn-outline-primary btn-asignar-nc" data-id="${nc.id}">
+            <i class="bi bi-person-check me-1"></i>Asignar
+        </button>
+    </div>
+    <span class="badge bg-warning-subtle text-warning border nc-status-pill mt-2">Falta cliente</span>`;
+}
+
+function renderNotasCredito(ncs) {
+    if (!ncs.length) {
+        return `<div class="text-center text-muted py-5">
+            <i class="bi bi-check-circle text-success fs-1 d-block mb-2"></i>
+            <div>No hay notas de credito pendientes de convertir.</div>
+            <div class="small text-muted mt-1">Todas las NC disponibles ya fueron procesadas.</div>
+        </div>`;
+    }
+
+    return `<div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">Documento</th>
+                    <th>Cliente</th>
+                    <th>Fecha</th>
+                    <th class="text-end">Monto</th>
+                    <th class="text-end pe-3">Accion</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${ncs.map(nc => `<tr class="nc-row" data-nc-row="${nc.id}">
                     <td class="ps-3">
                         <span class="badge bg-danger me-1">NC</span>
-                        <span class="fw-semibold">${nc.numero}</span>
+                        <span class="fw-semibold">${ncEscape(nc.numero)}</span>
                     </td>
-                    <td class="small">${nc.cliente}</td>
-                    <td class="small text-muted">${nc.fecha}</td>
-                    <td class="text-end fw-semibold text-danger">S/ ${nc.monto.toFixed(2)}</td>
+                    <td class="small" data-nc-cliente-cell="${nc.id}">${ncClienteCell(nc)}</td>
+                    <td class="small text-muted">${ncEscape(nc.fecha)}</td>
+                    <td class="text-end fw-semibold text-danger">S/ ${Number(nc.monto).toFixed(2)}</td>
                     <td class="text-end pe-3">
                         <button type="button" class="btn btn-sm btn-warning text-dark btn-convertir-nc"
-                                data-id="${nc.id}" data-monto="${nc.monto.toFixed(2)}"
-                                data-doc="${nc.numero}" data-cliente="${nc.cliente}">
+                                data-id="${nc.id}" data-monto="${Number(nc.monto).toFixed(2)}"
+                                data-doc="${ncEscape(nc.numero)}" data-cliente="${ncEscape(nc.cliente || '')}"
+                                ${nc.requiere_cliente ? 'disabled' : ''}>
                             <i class="bi bi-arrow-repeat me-1"></i>Convertir
                         </button>
                     </td>
-                </tr>`;
-            });
+                </tr>`).join('')}
+            </tbody>
+        </table>
+    </div>`;
+}
 
-            html += `</tbody></table></div>`;
-            contenedor.innerHTML = html;
+async function ncPost(url, form) {
+    form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
 
-            document.querySelectorAll('.btn-convertir-nc').forEach(btn => {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || 'No se pudo completar la accion.');
+    return data;
+}
+
+document.getElementById('modalConvertirNC').addEventListener('shown.bs.modal', function () {
+    const contenedor = document.getElementById('ncLista');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Cargando notas de credito...</div>';
+
+    fetch('/casadets/saldos-favor/notas-credito.json', {
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+        .then(r => r.json())
+        .then(ncs => {
+            contenedor.innerHTML = renderNotasCredito(ncs);
+
+            contenedor.querySelectorAll('.btn-asignar-nc').forEach(btn => {
                 btn.addEventListener('click', async function () {
-                    const id      = this.dataset.id;
-                    const monto   = this.dataset.monto;
-                    const doc     = this.dataset.doc;
-                    const cliente = this.dataset.cliente;
+                    const id = this.dataset.id;
+                    const select = contenedor.querySelector(`[data-nc-select="${id}"]`);
+                    const clienteId = select?.value;
 
-                    if (!confirm(`¿Convertir "${doc}" de ${cliente} por S/ ${monto} a saldo a favor?\n\nEsta acción no se puede deshacer.`)) return;
+                    if (!clienteId) {
+                        select?.focus();
+                        return;
+                    }
 
                     this.disabled = true;
                     this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
-                    const form = new FormData();
-                    form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
+                    try {
+                        const form = new FormData();
+                        form.append('cliente_id', clienteId);
+                        const data = await ncPost(`/casadets/saldos-favor/nc/${id}/cliente`, form);
+                        const cell = contenedor.querySelector(`[data-nc-cliente-cell="${id}"]`);
+                        const convertBtn = contenedor.querySelector(`.btn-convertir-nc[data-id="${id}"]`);
+                        const doc = data.cliente_doc ? `<span class="text-muted ms-1">${ncEscape(data.cliente_doc)}</span>` : '';
+
+                        cell.innerHTML = `<div class="fw-semibold small">${ncEscape(data.cliente)}${doc}</div><span class="badge bg-success-subtle text-success border nc-status-pill">Listo para convertir</span>`;
+                        convertBtn.disabled = false;
+                        convertBtn.dataset.cliente = data.cliente || '';
+                    } catch (err) {
+                        alert(err.message);
+                        this.disabled = false;
+                        this.innerHTML = '<i class="bi bi-person-check me-1"></i>Asignar';
+                    }
+                });
+            });
+
+            contenedor.querySelectorAll('.btn-convertir-nc').forEach(btn => {
+                btn.addEventListener('click', async function () {
+                    const id = this.dataset.id;
+                    const monto = this.dataset.monto;
+                    const doc = this.dataset.doc;
+                    const cliente = this.dataset.cliente || 'cliente asignado';
+
+                    if (!confirm(`Convertir "${doc}" de ${cliente} por S/ ${monto} a saldo a favor?\n\nEsta accion queda registrada y evita convertir la misma NC dos veces.`)) return;
+
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
                     try {
-                        await fetch(`/casadets/saldos-favor/nc/${id}/convertir`, {
-                            method: 'POST',
-                            body: form,
-                        });
+                        await ncPost(`/casadets/saldos-favor/nc/${id}/convertir`, new FormData());
                         window.location.href = '/casadets/saldos-favor';
                     } catch (err) {
-                        alert('Error al convertir: ' + err.message);
+                        alert(err.message);
                         this.disabled = false;
                         this.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Convertir';
                     }
@@ -852,7 +961,7 @@ document.getElementById('modalConvertirNC').addEventListener('shown.bs.modal', f
             });
         })
         .catch(() => {
-            contenedor.innerHTML = '<div class="alert alert-danger">Error al cargar notas de crédito.</div>';
+            contenedor.innerHTML = '<div class="alert alert-danger">Error al cargar notas de credito.</div>';
         });
 });
 </script>

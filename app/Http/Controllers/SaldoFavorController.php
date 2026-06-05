@@ -13,65 +13,76 @@ class SaldoFavorController extends Controller
 {
     public function __construct(private CobranzaService $cobranza) {}
 
-    /* ── Listado general agrupado por cliente ─────────────────────── */
     public function index(Request $request)
     {
-        // Una sola query: todos los saldos activos con relaciones precargadas
         $saldosActivos = SaldoFavor::with(['cliente', 'pago', 'ventaOrigen'])
             ->whereIn('estado', ['disponible', 'parcialmente_usado'])
             ->where('monto_disponible', '>', 0)
             ->orderBy('created_at', 'desc');
 
-        // Restricción por vendedor asignado al usuario
         VendedorScope::aplicarSaldos($saldosActivos);
 
         $saldosActivos = $saldosActivos->get();
-
-        // Agrupar por cliente (en memoria, sin N+1)
         $saldosPorCliente = $saldosActivos->groupBy('cliente_id');
+        $clienteIds = $saldosActivos->pluck('cliente_id')->unique()->toArray();
 
-        // Saldos históricos (estado=usado) en una sola query
-        $clienteIds    = $saldosActivos->pluck('cliente_id')->unique()->toArray();
-        $saldosUsados  = SaldoFavor::with(['ventaOrigen'])
+        $saldosUsados = SaldoFavor::with(['ventaOrigen'])
             ->whereIn('cliente_id', $clienteIds)
             ->where('estado', 'usado')
             ->orderBy('created_at', 'desc')
             ->get()
             ->groupBy('cliente_id');
 
-        // Conteo de ventas pendientes por cliente (una query con GROUP BY)
         $pendientesPorCliente = Venta::whereIn('cliente_id', $clienteIds)
             ->whereIn('estado', ['pendiente', 'parcial'])
             ->selectRaw('cliente_id, count(*) as total')
             ->groupBy('cliente_id')
             ->pluck('total', 'cliente_id');
 
-        // Construir colección de clientes con sus datos precalculados
         $clientes = Cliente::whereIn('id', $clienteIds)
             ->orderBy('nombre')
             ->get()
             ->map(function ($c) use ($saldosPorCliente, $saldosUsados, $pendientesPorCliente) {
-                $activos               = $saldosPorCliente->get($c->id, collect());
-                $c->saldo_total        = round($activos->sum('monto_disponible'), 2);
-                $c->saldos             = $activos;
-                $c->saldos_historial   = $saldosUsados->get($c->id, collect());
+                $activos = $saldosPorCliente->get($c->id, collect());
+                $c->saldo_total = round($activos->sum('monto_disponible'), 2);
+                $c->saldos = $activos;
+                $c->saldos_historial = $saldosUsados->get($c->id, collect());
                 $c->ventas_pendientes_count = $pendientesPorCliente->get($c->id, 0);
                 return $c;
             });
 
-        // KPIs
         $totalDisponible = round($saldosActivos->sum('monto_disponible'), 2);
-        $totalClientes   = $saldosActivos->pluck('cliente_id')->unique()->count();
-        $totalRegistros  = $saldosActivos->count();
+        $totalClientes = $saldosActivos->pluck('cliente_id')->unique()->count();
+        $totalRegistros = $saldosActivos->count();
 
-        $todosClientes = Cliente::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'documento']);
+        $todosClientes = Cliente::where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'documento']);
+
+        $idsNcConvertidas = $this->idsNotasCreditoConvertidas();
+
+        $notasCreditoPendientes = Venta::where('documento_tipo', 'nota_credito')
+            ->whereNotIn('id', $idsNcConvertidas)
+            ->where('total', '<', 0)
+            ->count();
+
+        $notasCreditoSinCliente = Venta::where('documento_tipo', 'nota_credito')
+            ->whereNotIn('id', $idsNcConvertidas)
+            ->where('total', '<', 0)
+            ->whereNull('cliente_id')
+            ->count();
 
         return view('casadets.saldos_favor.index', compact(
-            'clientes', 'totalDisponible', 'totalClientes', 'totalRegistros', 'todosClientes'
+            'clientes',
+            'totalDisponible',
+            'totalClientes',
+            'totalRegistros',
+            'todosClientes',
+            'notasCreditoPendientes',
+            'notasCreditoSinCliente'
         ));
     }
 
-    /* ── JSON: lista de todos los clientes activos ─────────────────── */
     public function clientesJson()
     {
         return response()->json(
@@ -79,33 +90,50 @@ class SaldoFavorController extends Controller
         );
     }
 
-    /* ── JSON: notas de crédito disponibles para convertir ─────────── */
     public function notasCreditoDisponibles()
     {
-        // Usando FK real (venta_origen_id) — O(1), sin N+1, sin string matching
-        $idsYaConvertidos = SaldoFavor::whereNotNull('venta_origen_id')
-            ->pluck('venta_origen_id')
-            ->unique()
-            ->toArray();
-
         $ventas = Venta::where('documento_tipo', 'nota_credito')
-            ->whereNotNull('cliente_id')
-            ->whereNotIn('id', $idsYaConvertidos)
+            ->whereNotIn('id', $this->idsNotasCreditoConvertidas())
             ->where('total', '<', 0)
             ->with('cliente')
             ->orderBy('fecha', 'desc')
             ->get();
 
         return response()->json($ventas->map(fn ($v) => [
-            'id'      => $v->id,
-            'numero'  => $v->documento_numero ?? ('NC #' . $v->id),
-            'cliente' => $v->cliente->nombre ?? '—',
-            'fecha'   => $v->fecha->format('d/m/Y'),
-            'monto'   => abs((float) $v->total),
+            'id'               => $v->id,
+            'numero'           => $v->documento_numero ?? ('NC #' . $v->id),
+            'cliente_id'       => $v->cliente_id,
+            'cliente'          => $v->cliente->nombre ?? null,
+            'cliente_doc'      => $v->cliente->documento ?? null,
+            'requiere_cliente' => !$v->cliente_id,
+            'fecha'            => $v->fecha->format('d/m/Y'),
+            'monto'            => abs((float) $v->total),
         ]));
     }
 
-    /* ── Crear saldo a favor manualmente ────────────────────────────── */
+    public function asignarClienteNC(Request $request, Venta $venta)
+    {
+        $data = $request->validate([
+            'cliente_id' => 'required|exists:clientes,id',
+        ]);
+
+        $error = $this->validarNotaCreditoConvertible($venta, false);
+        if ($error) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
+
+        $venta->update(['cliente_id' => $data['cliente_id']]);
+        $venta->load('cliente');
+
+        return response()->json([
+            'success'     => true,
+            'message'     => 'Cliente asignado correctamente.',
+            'cliente_id'  => $venta->cliente_id,
+            'cliente'     => $venta->cliente?->nombre,
+            'cliente_doc' => $venta->cliente?->documento,
+        ]);
+    }
+
     public function crear(Request $request)
     {
         $data = $request->validate([
@@ -127,32 +155,25 @@ class SaldoFavorController extends Controller
         ]);
 
         $cliente = Cliente::find($data['cliente_id']);
+
         return redirect('/casadets/saldos-favor')->with(
             'success',
             'Saldo a favor de S/ ' . number_format($data['monto'], 2) . ' creado para ' . ($cliente->nombre ?? '') . '.'
         );
     }
 
-    /* ── Convertir nota de crédito a saldo a favor ──────────────────── */
     public function convertirNC(Request $request, Venta $venta)
     {
-        if ($venta->documento_tipo !== 'nota_credito') {
-            return back()->with('error', 'Este documento no es una nota de crédito.');
-        }
-        if (!$venta->cliente_id) {
-            return back()->with('error', 'La nota de crédito no tiene cliente asignado. Asigna un cliente primero.');
-        }
+        $error = $this->validarNotaCreditoConvertible($venta, true);
+        if ($error) {
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $error], 422);
+            }
 
-        // Verificar duplicado usando FK — determinístico y O(1)
-        $yaConvertida = SaldoFavor::where('venta_origen_id', $venta->id)->exists();
-        if ($yaConvertida) {
-            return back()->with('error', 'Esta nota de crédito ya fue convertida a saldo a favor anteriormente.');
+            return back()->with('error', $error);
         }
 
         $monto = abs((float) $venta->total);
-        if ($monto <= 0) {
-            return back()->with('error', 'El monto de la nota de crédito debe ser mayor a cero.');
-        }
 
         SaldoFavor::create([
             'cliente_id'       => $venta->cliente_id,
@@ -161,25 +182,32 @@ class SaldoFavorController extends Controller
             'monto_original'   => $monto,
             'monto_disponible' => $monto,
             'estado'           => 'disponible',
-            'descripcion'      => 'NC ' . ($venta->documento_numero ? $venta->documento_numero : '#' . $venta->id) . ' — Convertida a saldo a favor',
+            'descripcion'      => 'NC ' . ($venta->documento_numero ?: '#' . $venta->id) . ' - Convertida a saldo a favor',
             'fecha'            => $venta->fecha->format('Y-m-d'),
         ]);
 
-        // Marcar NC como convertida
         $venta->update([
-            'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' — ' : '') . 'Convertida a saldo a favor'),
+            'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' - ' : '') . 'Convertida a saldo a favor'),
         ]);
 
-        return redirect('/casadets/saldos-favor')->with(
-            'success',
-            'Nota de crédito ' . ($venta->documento_numero ?? '#' . $venta->id) . ' convertida a saldo a favor por S/ ' . number_format($monto, 2) . '.'
-        );
+        $message = 'Nota de credito ' . ($venta->documento_numero ?? '#' . $venta->id)
+            . ' convertida a saldo a favor por S/ ' . number_format($monto, 2) . '.';
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'monto'   => $monto,
+            ]);
+        }
+
+        return redirect('/casadets/saldos-favor')->with('success', $message);
     }
 
-    /* ── JSON: saldos disponibles de un cliente ─────────────────────── */
     public function saldosCliente(int $clienteId)
     {
         $saldos = $this->cobranza->saldosDisponibles($clienteId);
+
         return response()->json($saldos->map(fn($s) => [
             'id'               => $s->id,
             'monto_disponible' => (float) $s->monto_disponible,
@@ -188,18 +216,18 @@ class SaldoFavorController extends Controller
             'fecha'            => $s->fecha->format('d/m/Y'),
             'estado'           => $s->estado,
             'tipo_origen'      => $s->venta_origen_id
-                                    ? (optional($s->ventaOrigen)->documento_tipo === 'nota_credito' ? 'nc' : 'excedente')
-                                    : ($s->pago_id ? 'excedente' : 'manual'),
+                ? (optional($s->ventaOrigen)->documento_tipo === 'nota_credito' ? 'nc' : 'excedente')
+                : ($s->pago_id ? 'excedente' : 'manual'),
         ]));
     }
 
-    /* ── JSON: ventas pendientes/parciales de un cliente ─────────────── */
     public function ventasPendientesCliente(int $clienteId)
     {
         $ventas = $this->cobranza->ventasPendientesCliente($clienteId);
+
         return response()->json($ventas->map(fn($v) => [
             'id'               => $v->id,
-            'label'            => ($v->documento_tipo ? ucfirst($v->documento_tipo) . ' ' . $v->documento_numero . ' — ' : 'Venta #' . $v->id . ' — ')
+            'label'            => ($v->documento_tipo ? ucfirst($v->documento_tipo) . ' ' . $v->documento_numero . ' - ' : 'Venta #' . $v->id . ' - ')
                                   . 'S/ ' . number_format($v->saldo_pendiente, 2) . ' pendiente'
                                   . ' (' . $v->fecha->format('d/m/Y') . ')',
             'saldo_pendiente'  => $v->saldo_pendiente,
@@ -207,7 +235,6 @@ class SaldoFavorController extends Controller
         ]));
     }
 
-    /* ── Aplicar saldo a una venta (POST) ────────────────────────────── */
     public function aplicar(Request $request, SaldoFavor $saldo)
     {
         $data = $request->validate([
@@ -227,7 +254,7 @@ class SaldoFavorController extends Controller
                     'saldo_restante' => $result['saldo_restante'],
                     'estado_venta'   => $result['estado_venta'],
                     'saldo_estado'   => $result['saldo_estado'],
-                    'message'        => 'Saldo aplicado correctamente. Se cobró S/ ' . number_format($result['aplicado'], 2),
+                    'message'        => 'Saldo aplicado correctamente. Se cobro S/ ' . number_format($result['aplicado'], 2),
                 ]);
             }
 
@@ -235,13 +262,43 @@ class SaldoFavorController extends Controller
             if ($result['saldo_restante'] > 0) {
                 $msg .= ' Queda S/ ' . number_format($result['saldo_restante'], 2) . ' de saldo a favor disponible.';
             }
-            return redirect('/casadets/saldos-favor')->with('success', $msg);
 
+            return redirect('/casadets/saldos-favor')->with('success', $msg);
         } catch (\InvalidArgumentException $e) {
             if ($request->expectsJson()) {
                 return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
             }
+
             return back()->with('error', $e->getMessage());
         }
+    }
+
+    private function idsNotasCreditoConvertidas(): array
+    {
+        return SaldoFavor::whereNotNull('venta_origen_id')
+            ->pluck('venta_origen_id')
+            ->unique()
+            ->toArray();
+    }
+
+    private function validarNotaCreditoConvertible(Venta $venta, bool $requiereCliente): ?string
+    {
+        if ($venta->documento_tipo !== 'nota_credito') {
+            return 'Este documento no es una nota de credito.';
+        }
+
+        if ($requiereCliente && !$venta->cliente_id) {
+            return 'La nota de credito no tiene cliente asignado. Asigna un cliente primero.';
+        }
+
+        if (SaldoFavor::where('venta_origen_id', $venta->id)->exists()) {
+            return 'Esta nota de credito ya fue convertida a saldo a favor anteriormente.';
+        }
+
+        if (abs((float) $venta->total) <= 0 || (float) $venta->total >= 0) {
+            return 'El monto de la nota de credito debe ser mayor a cero y estar registrado en negativo.';
+        }
+
+        return null;
     }
 }

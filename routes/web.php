@@ -91,6 +91,7 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::get('/casadets/saldos-favor/clientes.json',                      [SaldoFavorController::class, 'clientesJson']);
         Route::get('/casadets/saldos-favor/notas-credito.json',                 [SaldoFavorController::class, 'notasCreditoDisponibles']);
         Route::post('/casadets/saldos-favor/crear',                             [SaldoFavorController::class, 'crear']);
+        Route::post('/casadets/saldos-favor/nc/{venta}/cliente',                [SaldoFavorController::class, 'asignarClienteNC']);
         Route::post('/casadets/saldos-favor/nc/{venta}/convertir',              [SaldoFavorController::class, 'convertirNC']);
         Route::get('/casadets/saldos-favor/cliente/{clienteId}/saldos.json',    [SaldoFavorController::class, 'saldosCliente']);
         Route::get('/casadets/saldos-favor/cliente/{clienteId}/ventas.json',    [SaldoFavorController::class, 'ventasPendientesCliente']);
