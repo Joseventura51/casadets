@@ -95,15 +95,18 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
 
     // Saldos a favor
     Route::middleware('rol:saldos-favor')->group(function () {
+        // ── Solo lectura ──────────────────────────────────────────
         Route::get('/casadets/saldos-favor',                                    [SaldoFavorController::class, 'index']);
         Route::get('/casadets/saldos-favor/clientes.json',                      [SaldoFavorController::class, 'clientesJson']);
         Route::get('/casadets/saldos-favor/notas-credito.json',                 [SaldoFavorController::class, 'notasCreditoDisponibles']);
-        Route::post('/casadets/saldos-favor/crear',                             [SaldoFavorController::class, 'crear']);
-        Route::post('/casadets/saldos-favor/nc/{venta}/cliente',                [SaldoFavorController::class, 'asignarClienteNC']);
-        Route::post('/casadets/saldos-favor/nc/{venta}/convertir',              [SaldoFavorController::class, 'convertirNC']);
         Route::get('/casadets/saldos-favor/cliente/{clienteId}/saldos.json',    [SaldoFavorController::class, 'saldosCliente']);
         Route::get('/casadets/saldos-favor/cliente/{clienteId}/ventas.json',    [SaldoFavorController::class, 'ventasPendientesCliente']);
-        Route::post('/casadets/saldos-favor/{saldo}/aplicar',                   [SaldoFavorController::class, 'aplicar']);
+
+        // ── Escritura (requieren caja abierta) ────────────────────
+        Route::post('/casadets/saldos-favor/crear',                             [SaldoFavorController::class, 'crear'])          ->middleware('caja.abierta');
+        Route::post('/casadets/saldos-favor/nc/{venta}/cliente',                [SaldoFavorController::class, 'asignarClienteNC'])->middleware('caja.abierta');
+        Route::post('/casadets/saldos-favor/nc/{venta}/convertir',              [SaldoFavorController::class, 'convertirNC'])    ->middleware('caja.abierta');
+        Route::post('/casadets/saldos-favor/{saldo}/aplicar',                   [SaldoFavorController::class, 'aplicar'])        ->middleware('caja.abierta');
     });
 
     // Clientes
