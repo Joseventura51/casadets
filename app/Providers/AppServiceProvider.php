@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
         View::composer('*', function ($view) {
             try {
                 $cajaAbierta = CajaSesion::where('empresa', 'casadets')
-                    ->where('fecha', now()->toDateString())
+                    ->whereDate('fecha', now()->toDateString())
                     ->where('estado', 'abierta')
                     ->exists();
             } catch (\Throwable $e) {

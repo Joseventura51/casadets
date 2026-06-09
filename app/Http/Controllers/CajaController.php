@@ -25,7 +25,7 @@ class CajaController extends Controller
 
         // ── Sesión de caja del día actual ──────────────────────────────
         $sesionHoy = CajaSesion::where('empresa', $empresa)
-            ->where('fecha', $hoy)
+            ->whereDate('fecha', $hoy)
             ->first();
 
         // ── Movimientos del período (fuente única financiera) ──────────
@@ -142,14 +142,25 @@ class CajaController extends Controller
 
         $hoy = Carbon::today()->toDateString();
 
-        CajaSesion::updateOrCreate(
-            ['empresa' => $request->empresa, 'fecha' => $hoy],
-            [
+        $sesion = CajaSesion::where('empresa', $request->empresa)
+            ->whereDate('fecha', $hoy)
+            ->first();
+
+        if ($sesion) {
+            $sesion->update([
                 'monto_apertura' => $request->monto_apertura,
                 'estado'         => 'abierta',
                 'observaciones'  => $request->observaciones,
-            ]
-        );
+            ]);
+        } else {
+            CajaSesion::create([
+                'empresa'        => $request->empresa,
+                'fecha'          => $hoy,
+                'monto_apertura' => $request->monto_apertura,
+                'estado'         => 'abierta',
+                'observaciones'  => $request->observaciones,
+            ]);
+        }
 
         return redirect("/casadets/caja?empresa={$request->empresa}")
             ->with('success', 'Apertura de caja registrada.');
@@ -165,7 +176,7 @@ class CajaController extends Controller
         $hoy = Carbon::today()->toDateString();
 
         $sesion = CajaSesion::where('empresa', $request->empresa)
-            ->where('fecha', $hoy)
+            ->whereDate('fecha', $hoy)
             ->first();
 
         if (!$sesion) {

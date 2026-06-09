@@ -11,7 +11,7 @@ class CajaAbierta
     public function handle(Request $request, Closure $next)
     {
         $abierta = CajaSesion::where('empresa', 'casadets')
-            ->where('fecha', now()->toDateString())
+            ->whereDate('fecha', now()->toDateString())
             ->where('estado', 'abierta')
             ->exists();
 
