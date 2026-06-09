@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'rol'          => \App\Http\Middleware\CheckRol::class,
             'permiso'      => \App\Http\Middleware\CheckPermiso::class,
             'check.activo' => \App\Http\Middleware\CheckActivo::class,
+            'caja.abierta' => \App\Http\Middleware\CajaAbierta::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

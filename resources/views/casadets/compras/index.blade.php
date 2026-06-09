@@ -1,14 +1,32 @@
 @extends('layouts.app')
 
 @section('content')
+@if(!$cajaAbierta)
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2">
+    <i class="bi bi-lock-fill fs-5 flex-shrink-0"></i>
+    <div class="flex-grow-1">
+        <strong>Caja cerrada.</strong> No puedes registrar ni modificar compras hasta que se abra la caja del día.
+    </div>
+    <a href="/casadets/caja" class="btn btn-sm btn-warning flex-shrink-0">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Ir a Caja
+    </a>
+</div>
+@endif
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0">Compras</h3>
         <p class="text-muted mb-0">Compras a proveedores. Pueden vincularse a ventas.</p>
     </div>
+    @if($cajaAbierta)
     <a href="/casadets/compras/create" class="btn btn-primary">
         <i class="bi bi-plus-lg"></i> Nueva compra
     </a>
+    @else
+    <button class="btn btn-primary" disabled title="Abre la caja primero">
+        <i class="bi bi-lock me-1"></i> Nueva compra
+    </button>
+    @endif
 </div>
 
 <div class="card mb-3">

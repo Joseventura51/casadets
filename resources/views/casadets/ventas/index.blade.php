@@ -24,6 +24,18 @@
 .pagination .page-item.disabled .page-link { color: #adb5bd; }
 </style>
 
+@if(!$cajaAbierta)
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2">
+    <i class="bi bi-lock-fill fs-5 flex-shrink-0"></i>
+    <div class="flex-grow-1">
+        <strong>Caja cerrada.</strong> No puedes crear ni modificar ventas hasta que se abra la caja del día.
+    </div>
+    <a href="/casadets/caja" class="btn btn-sm btn-warning flex-shrink-0">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Ir a Caja
+    </a>
+</div>
+@endif
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0">Ventas</h3>
