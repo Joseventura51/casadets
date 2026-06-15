@@ -21,7 +21,7 @@
     @if($showCasadets)
     <li class="nav-item mt-2">
         <a class="nav-link sidebar-section" data-bs-toggle="collapse" href="#casadetsMenu">
-            <i class="bi bi-shop me-2"></i>CASADETS
+            <i class="bi bi-shop me-2"></i>GESTION
             <i class="bi bi-chevron-down ms-auto"></i>
         </a>
         <div class="collapse {{ request()->is('casadets*') || request()->is('movimientos*') ? 'show' : '' }}" id="casadetsMenu">
