@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CajaSesion extends Model
 {
@@ -10,6 +11,7 @@ class CajaSesion extends Model
 
     protected $fillable = [
         'empresa',
+        'caja_id',
         'fecha',
         'monto_apertura',
         'monto_cierre',
@@ -31,5 +33,10 @@ class CajaSesion extends Model
     public function estaCerrada(): bool
     {
         return $this->estado === 'cerrada';
+    }
+
+    public function caja(): BelongsTo
+    {
+        return $this->belongsTo(Caja::class);
     }
 }

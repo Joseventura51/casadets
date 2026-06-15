@@ -48,6 +48,19 @@ class User extends Authenticatable
         return $this->belongsToMany(Vendedor::class, 'usuario_vendedor');
     }
 
+    public function cajasPermitidas(): BelongsToMany
+    {
+        return $this->belongsToMany(Caja::class, 'usuario_caja', 'user_id', 'caja_id')
+                    ->withPivot('principal')
+                    ->withTimestamps();
+    }
+
+    public function cajaPrincipal(): ?Caja
+    {
+        return $this->cajasPermitidas()->wherePivot('principal', true)->first()
+            ?? $this->cajasPermitidas()->first();
+    }
+
     // ── Helpers de rol ──────────────────────────────────────────────────────
 
     public function esAdmin(): bool

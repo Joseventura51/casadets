@@ -6,20 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('series', function (Blueprint $table) {
             $table->id();
+            $table->string('codigo')->unique();               // F001, B002
+            $table->string('tipo_documento');                   // boleta, factura, proforma, nota_credito
+            $table->integer('correlativo_actual')->default(0);
+            $table->boolean('activa')->default(true);
+            $table->foreignId('caja_id')->nullable()->constrained('cajas')->nullOnDelete();
             $table->timestamps();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('series');

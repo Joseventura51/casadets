@@ -13,6 +13,7 @@ class Venta extends Model
 
     protected $fillable = [
         'vendedor_id',
+        'caja_id',
         'cliente_id',
         'total',
         'ajuste',
@@ -44,6 +45,11 @@ class Venta extends Model
     public function cliente(): BelongsTo
     {
         return $this->belongsTo(Cliente::class);
+    }
+
+    public function caja(): BelongsTo
+    {
+        return $this->belongsTo(Caja::class);
     }
 
     public function detalles(): HasMany
