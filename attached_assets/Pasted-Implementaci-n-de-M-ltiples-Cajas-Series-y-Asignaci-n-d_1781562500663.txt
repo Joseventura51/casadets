@@ -1,0 +1,325 @@
+Implementación de Múltiples Cajas, Series y Asignación de Usuarios
+Objetivo
+
+Actualmente el sistema trabaja por empresa (CASADET'S y ZENDY) y maneja sesiones de caja, movimientos, ventas, compras y reportes correctamente. Se requiere evolucionar esta funcionalidad para soportar múltiples cajas físicas por empresa, cada una con sus propias series documentarias, correlativos y usuarios asignados, manteniendo toda la lógica financiera existente.
+
+1. Nuevo Módulo: Administración > Cajas
+
+Crear un módulo independiente llamado Cajas.
+
+Cada caja debe tener:
+
+Código
+Nombre
+Empresa asociada
+Estado (Activa/Inactiva)
+Series asignadas
+
+Ejemplo:
+
+Caja 01
+
+F001
+B001
+
+Caja 02
+
+F002
+B002
+
+Caja 03
+
+F003
+2. Nuevo Módulo: Administración > Series
+
+Las series deben convertirse en entidades administrables.
+
+Campos:
+
+Serie
+Tipo de documento
+Correlativo actual
+Estado
+Caja asignada
+
+Funciones:
+
+Crear serie
+Editar serie
+Activar/Inactivar serie
+Asignar serie a caja
+Configurar correlativo inicial
+3. Aprovechar la Estructura Actual de Importación
+
+Actualmente el sistema ya importa:
+
+doc
+serie
+nro
+
+Y genera documentos como:
+
+F006-43957
+
+Por lo tanto, la implementación debe aprovechar esta lógica existente.
+
+No debe crearse un sistema paralelo para las series.
+
+4. Relación Serie → Caja
+
+Cada serie deberá pertenecer a una caja.
+
+Ejemplo:
+
+F001 → Caja 01
+
+B001 → Caja 01
+
+F002 → Caja 02
+
+B002 → Caja 02
+
+5. Importación de Ventas
+
+Cuando se importe un Excel:
+
+Leer la serie del documento.
+Buscar la serie registrada.
+Determinar automáticamente la caja asociada.
+Registrar la venta dentro de dicha caja.
+
+Ejemplo:
+
+Documento:
+F006-43957
+
+Serie:
+F006
+
+Caja:
+Caja 02
+
+Resultado:
+
+La venta se registra automáticamente en Caja 02.
+
+Validaciones:
+
+Si la serie existe y tiene caja asignada → importar normalmente.
+Si la serie existe pero no tiene caja asignada → mostrar advertencia.
+Si la serie no existe → permitir crearla o reportar error.
+6. Ventas Manuales
+
+Al registrar una venta:
+
+Seleccionar Caja.
+Mostrar únicamente las series asignadas a esa caja.
+Seleccionar Serie.
+Generar correlativo automático.
+Registrar venta.
+7. Correlativos por Serie
+
+Cada serie debe manejar su propio correlativo independiente.
+
+Ejemplo:
+
+F001 → 00000025
+
+F002 → 00000152
+
+B001 → 00000087
+
+Nueva venta:
+
+F001-00000026
+
+8. Selector de Caja
+
+Actualmente existe un selector superior para cambiar entre empresas.
+
+Agregar un selector adicional para seleccionar la caja de trabajo.
+
+Flujo:
+
+Empresa
+
+↓
+
+Caja
+
+↓
+
+Operaciones
+
+Todas las ventas, movimientos, compras, saldos a favor y reportes deben quedar asociados a la caja seleccionada.
+
+9. Sesiones por Caja
+
+Actualmente las sesiones de caja están asociadas únicamente a la empresa.
+
+Modificar para que cada caja tenga sus propias sesiones.
+
+Ejemplo:
+
+CASADET'S
+
+Caja 01 → Abierta
+
+Caja 02 → Cerrada
+
+Caja 03 → Abierta
+
+Cada caja debe funcionar de manera independiente.
+
+10. Apertura y Cierre
+
+Permitir múltiples aperturas y cierres en un mismo día.
+
+Ejemplo:
+
+08:00 → Apertura Caja 01
+
+12:00 → Cierre Caja 01
+
+13:00 → Apertura Caja 01
+
+18:00 → Cierre Caja 01
+
+20:00 → Apertura Caja 01
+
+22:00 → Cierre Caja 01
+
+Todo debe estar permitido.
+
+Única restricción:
+
+No permitir abrir una nueva sesión si la misma caja ya tiene una sesión activa.
+
+Mensaje:
+
+"La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura."
+
+11. Middleware caja.abierta
+
+Actualizar el middleware para validar:
+
+Empresa seleccionada.
+Caja seleccionada.
+
+Si la caja no tiene una sesión activa:
+
+403
+
+"La caja seleccionada no está abierta. Debes abrir la caja antes de realizar esta operación."
+
+Mantener el bloqueo para:
+
+Crear ventas
+Cobrar ventas
+Crear saldos a favor
+Aplicar saldos a favor
+Convertir notas de crédito
+Importar ventas
+12. Asignación de Usuarios a Cajas
+
+Además de crear el módulo de Cajas, se debe integrar con el módulo existente de Usuarios dentro de Administración.
+
+Actualmente ya existe:
+
+Administración → Usuarios
+
+Modificar este módulo para permitir asignar una o varias cajas a cada usuario.
+
+Nuevos campos en Usuario
+Empresa
+Caja principal
+Cajas permitidas
+
+Ejemplo:
+
+Usuario:
+Juan Pérez
+
+Empresa:
+CASADET'S
+
+Caja principal:
+Caja 01
+
+Cajas permitidas:
+
+Caja 01
+Caja 02
+13. Restricción por Usuario
+
+Un usuario solamente debe poder operar en las cajas que tenga asignadas.
+
+Ejemplo:
+
+Usuario:
+María
+
+Cajas asignadas:
+
+Caja 02
+
+Resultado:
+
+✅ Puede abrir Caja 02
+
+✅ Puede vender en Caja 02
+
+❌ No puede abrir Caja 01
+
+❌ No puede vender en Caja 01
+
+14. Comportamiento al Iniciar Sesión
+
+Cuando el usuario inicie sesión:
+
+Mostrar únicamente las cajas que tiene asignadas.
+Si solo tiene una caja asignada, seleccionarla automáticamente.
+Si tiene varias cajas, permitir elegir una.
+15. Dashboard
+
+Agregar filtro de Caja junto al filtro actual de Empresa.
+
+Todos los indicadores deben recalcularse utilizando:
+
+Empresa
+Caja
+Fecha
+
+Mantener la lógica actual donde la tabla movimientos sigue siendo la única fuente de verdad financiera.
+
+16. Seguridad y Auditoría
+
+Registrar auditoría para:
+
+Apertura de caja
+Cierre de caja
+Reapertura de caja
+Creación de cajas
+Edición de cajas
+Creación de series
+Modificación de correlativos
+Asignación de series
+Asignación de cajas a usuarios
+Cambio de caja activa
+17. Compatibilidad
+
+La implementación debe mantener intacta toda la funcionalidad existente:
+
+Ventas
+Compras
+Cobros
+Movimientos
+Saldos a favor
+Notas de crédito
+Dashboard
+Reportes
+Importación de Excel
+
+Sin afectar registros históricos ni generar inconsistencias en la información ya almacenada.
+
+La tabla movimientos debe continuar siendo la única fuente de verdad financiera para todos los KPIs y reportes.
