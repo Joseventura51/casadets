@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Caja;
 use App\Models\Rol;
 use App\Models\User;
 use App\Models\Vendedor;
@@ -15,26 +16,30 @@ class UsuarioController extends Controller
 {
     public function index()
     {
-        $usuarios = User::with('rol')->orderBy('name')->get();
+        $usuarios = User::with(['rol', 'cajasPermitidas'])->orderBy('name')->get();
         return view('admin.usuarios.index', compact('usuarios'));
     }
 
     public function create()
     {
-        $roles     = Rol::orderBy('nombre')->get();
+        $roles      = Rol::orderBy('nombre')->get();
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
-        return view('admin.usuarios.create', compact('roles', 'vendedores'));
+        $cajas      = Caja::where('activa', true)->orderBy('empresa')->orderBy('codigo')->get();
+        return view('admin.usuarios.create', compact('roles', 'vendedores', 'cajas'));
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
-            'email'       => 'required|email|unique:users,email',
-            'password'    => ['required', Password::min(6)],
-            'rol_id'      => 'required|exists:roles,id',
-            'vendedores'  => 'nullable|array',
-            'vendedores.*'=> 'exists:vendedores,id',
+            'name'         => 'required|string|max:255',
+            'email'        => 'required|email|unique:users,email',
+            'password'     => ['required', Password::min(6)],
+            'rol_id'       => 'required|exists:roles,id',
+            'vendedores'   => 'nullable|array',
+            'vendedores.*' => 'exists:vendedores,id',
+            'cajas'        => 'nullable|array',
+            'cajas.*'      => 'exists:cajas,id',
+            'caja_principal' => 'nullable|integer|exists:cajas,id',
         ]);
 
         $user = User::create([
@@ -49,6 +54,14 @@ class UsuarioController extends Controller
             $user->vendedores()->sync($data['vendedores']);
         }
 
+        if (!empty($data['cajas'])) {
+            $cajaPrincipal = (int) ($data['caja_principal'] ?? 0);
+            $pivotData = collect($data['cajas'])->mapWithKeys(fn ($id) => [
+                $id => ['principal' => ($id == $cajaPrincipal)]
+            ])->toArray();
+            $user->cajasPermitidas()->sync($pivotData);
+        }
+
         return redirect('/admin/usuarios')->with('success', "Usuario {$user->name} creado correctamente.");
     }
 
@@ -56,19 +69,23 @@ class UsuarioController extends Controller
     {
         $roles      = Rol::orderBy('nombre')->get();
         $vendedores = Vendedor::where('activo', true)->orderBy('nombre')->get();
-        $usuario->load('vendedores', 'rol');
-        return view('admin.usuarios.edit', compact('usuario', 'roles', 'vendedores'));
+        $cajas      = Caja::where('activa', true)->orderBy('empresa')->orderBy('codigo')->get();
+        $usuario->load('vendedores', 'rol', 'cajasPermitidas');
+        return view('admin.usuarios.edit', compact('usuario', 'roles', 'vendedores', 'cajas'));
     }
 
     public function update(Request $request, User $usuario)
     {
         $data = $request->validate([
-            'name'        => 'required|string|max:255',
-            'email'       => ['required', 'email', Rule::unique('users')->ignore($usuario->id)],
-            'password'    => ['nullable', Password::min(6)],
-            'rol_id'      => 'required|exists:roles,id',
-            'vendedores'  => 'nullable|array',
-            'vendedores.*'=> 'exists:vendedores,id',
+            'name'           => 'required|string|max:255',
+            'email'          => ['required', 'email', Rule::unique('users')->ignore($usuario->id)],
+            'password'       => ['nullable', Password::min(6)],
+            'rol_id'         => 'required|exists:roles,id',
+            'vendedores'     => 'nullable|array',
+            'vendedores.*'   => 'exists:vendedores,id',
+            'cajas'          => 'nullable|array',
+            'cajas.*'        => 'exists:cajas,id',
+            'caja_principal' => 'nullable|integer|exists:cajas,id',
         ]);
 
         $usuario->name   = $data['name'];
@@ -82,6 +99,13 @@ class UsuarioController extends Controller
 
         $usuario->save();
         $usuario->vendedores()->sync($data['vendedores'] ?? []);
+
+        $cajasData = [];
+        $cajaPrincipal = (int) ($data['caja_principal'] ?? 0);
+        foreach ($data['cajas'] ?? [] as $id) {
+            $cajasData[$id] = ['principal' => ($id == $cajaPrincipal)];
+        }
+        $usuario->cajasPermitidas()->sync($cajasData);
 
         return redirect('/admin/usuarios')->with('success', "Usuario {$usuario->name} actualizado.");
     }

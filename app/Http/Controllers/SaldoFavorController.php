@@ -146,6 +146,7 @@ class SaldoFavorController extends Controller
         SaldoFavor::create([
             'cliente_id'       => $data['cliente_id'],
             'pago_id'          => null,
+            'caja_id'          => session('caja_id'),
             'venta_origen_id'  => null,
             'monto_original'   => $data['monto'],
             'monto_disponible' => $data['monto'],

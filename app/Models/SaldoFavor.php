@@ -12,6 +12,7 @@ class SaldoFavor extends Model
     protected $fillable = [
         'cliente_id',
         'pago_id',
+        'caja_id',
         'venta_origen_id',
         'monto_original',
         'monto_disponible',

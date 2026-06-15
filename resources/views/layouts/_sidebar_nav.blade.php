@@ -145,7 +145,10 @@
 
     <!-- ADMINISTRACIÓN -->
     @php
-        $showAdmin = $user && ($user->puedeVer('admin.usuarios') || $user->puedeVer('admin.roles'));
+        $showAdmin = $user && (
+            $user->puedeVer('admin.usuarios') || $user->puedeVer('admin.roles') ||
+            $user->puedeVer('admin.cajas')    || $user->puedeVer('admin.series')
+        );
     @endphp
     @if($showAdmin)
     <li class="nav-item mt-2">
@@ -166,6 +169,20 @@
                 <li>
                     <a href="/admin/roles" class="nav-link {{ request()->is('admin/roles*') ? 'active' : '' }}">
                         <i class="bi bi-shield-lock me-2"></i>Roles y permisos
+                    </a>
+                </li>
+                @endif
+                @if($user->puedeVer('admin.cajas'))
+                <li>
+                    <a href="/admin/cajas" class="nav-link {{ request()->is('admin/cajas*') ? 'active' : '' }}">
+                        <i class="bi bi-cash-register me-2"></i>Cajas
+                    </a>
+                </li>
+                @endif
+                @if($user->puedeVer('admin.series'))
+                <li>
+                    <a href="/admin/series" class="nav-link {{ request()->is('admin/series*') ? 'active' : '' }}">
+                        <i class="bi bi-123 me-2"></i>Series
                     </a>
                 </li>
                 @endif

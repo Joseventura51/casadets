@@ -136,6 +136,7 @@ class MovimientoController extends Controller
                 'origen'  => 'manual',
                 'estado'  => 'activo',
                 'empresa' => $request->input('empresa', 'casadets'),
+                'caja_id' => session('caja_id'),
                 'user_id' => auth()->id(),
             ]
         ));

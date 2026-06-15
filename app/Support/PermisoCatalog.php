@@ -19,6 +19,8 @@ class PermisoCatalog
         'reportes'       => ['label' => 'Reportes',                   'grupo' => 'General'],
         'admin.usuarios' => ['label' => 'Administración / Usuarios',  'grupo' => 'Administración'],
         'admin.roles'    => ['label' => 'Administración / Roles',     'grupo' => 'Administración'],
+        'admin.cajas'    => ['label' => 'Administración / Cajas',     'grupo' => 'Administración'],
+        'admin.series'   => ['label' => 'Administración / Series',    'grupo' => 'Administración'],
     ];
 
     const PERMISOS = [
@@ -67,7 +69,7 @@ class PermisoCatalog
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
                 'clientes','vendedores','saldos-favor','movimientos','zendy',
-                'reportes','admin.usuarios','admin.roles',
+                'reportes','admin.usuarios','admin.roles','admin.cajas','admin.series',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',

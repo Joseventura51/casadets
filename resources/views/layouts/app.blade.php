@@ -47,6 +47,44 @@
         {{-- CONTENIDO --}}
         <main class="col-12 col-md-10 content-area p-3 p-md-4" id="appContent" aria-live="polite">
 
+            {{-- SELECTOR DE CAJA --}}
+            @auth
+            @php
+                $cajasOpts   = \App\Services\CajaService::cajasUsuario();
+                $cajaActual  = \App\Services\CajaService::cajaSeleccionada();
+                $cajaAbierta = $cajaActual ? $cajaActual->estaAbiertaHoy() : false;
+            @endphp
+            @if($cajasOpts->isNotEmpty())
+            <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded" style="background:#f8f9fa;border:1px solid #e9ecef;">
+                <i class="bi bi-cash-register text-secondary"></i>
+                <form action="/caja/seleccionar" method="POST" class="d-flex align-items-center gap-2 flex-grow-1 mb-0">
+                    @csrf
+                    <select name="caja_id" class="form-select form-select-sm" style="max-width:260px;"
+                            onchange="this.form.submit()">
+                        <option value="">— Seleccionar caja —</option>
+                        @foreach($cajasOpts as $opt)
+                        <option value="{{ $opt->id }}" {{ ($cajaActual?->id == $opt->id) ? 'selected' : '' }}>
+                            {{ $opt->codigo }} — {{ $opt->nombre }}
+                        </option>
+                        @endforeach
+                    </select>
+                    @if($cajaActual)
+                        @if($cajaAbierta)
+                            <span class="badge bg-success"><i class="bi bi-door-open me-1"></i>Abierta</span>
+                        @else
+                            <span class="badge bg-danger"><i class="bi bi-lock me-1"></i>Cerrada</span>
+                        @endif
+                    @endif
+                </form>
+                @if($cajaActual)
+                <a href="/casadets/caja" class="btn btn-outline-secondary btn-sm py-0">
+                    <i class="bi bi-arrow-right-circle"></i>
+                </a>
+                @endif
+            </div>
+            @endif
+            @endauth
+
             @if(session('success'))
                 <div class="alert alert-success alert-dismissible fade show" role="alert">
                     {{ session('success') }}

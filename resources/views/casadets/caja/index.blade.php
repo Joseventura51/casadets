@@ -1,13 +1,21 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <div>
-        <h3 class="mb-0">Caja</h3>
+        <h3 class="mb-0">
+            Caja
+            @if($cajaSeleccionada)
+                <span class="badge bg-secondary ms-1" style="font-size:.65rem;">{{ $cajaSeleccionada->codigo }}</span>
+            @endif
+        </h3>
         <p class="text-muted mb-0">
             {{ $esRango ? 'Período: '.$desde.' al '.$hasta : 'Día: '.$desde }}
             &nbsp;·&nbsp;
             <span class="badge bg-light text-dark border" style="font-size:.75rem;">{{ strtoupper($empresa) }}</span>
+            @if($cajaSeleccionada)
+                &nbsp;·&nbsp; {{ $cajaSeleccionada->nombre }}
+            @endif
         </p>
     </div>
     <form method="GET" class="d-flex gap-2 align-items-center flex-wrap" data-dynamic-filter data-default-today>
@@ -15,6 +23,18 @@
             <option value="casadets" {{ $empresa === 'casadets' ? 'selected' : '' }}>CASADETS</option>
             <option value="zendy"    {{ $empresa === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
         </select>
+        @if($cajasDisponibles->count() > 1)
+        <select name="caja_id" class="form-select form-select-sm" style="width:170px;">
+            <option value="">— Todas las cajas —</option>
+            @foreach($cajasDisponibles as $opt)
+            <option value="{{ $opt->id }}" {{ ($cajaSeleccionada?->id == $opt->id) ? 'selected' : '' }}>
+                {{ $opt->codigo }} — {{ $opt->nombre }}
+            </option>
+            @endforeach
+        </select>
+        @elseif($cajaSeleccionada)
+            <input type="hidden" name="caja_id" value="{{ $cajaSeleccionada->id }}">
+        @endif
         <div class="d-flex align-items-center gap-1">
             <label class="form-label mb-0 small text-muted">Desde</label>
             <input type="date" name="desde" value="{{ $desde }}"
@@ -51,6 +71,9 @@
                 <form action="/casadets/caja/apertura" method="POST" class="d-flex gap-2 align-items-end flex-wrap">
                     @csrf
                     <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    @if($cajaSeleccionada)
+                        <input type="hidden" name="caja_id" value="{{ $cajaSeleccionada->id }}">
+                    @endif
                     <div>
                         <label class="form-label small mb-1">Monto de apertura (S/)</label>
                         <input type="number" name="monto_apertura" step="0.01" min="0" value="0"
@@ -87,6 +110,9 @@
                 <form action="/casadets/caja/cierre" method="POST" class="d-flex gap-2 align-items-end flex-wrap">
                     @csrf
                     <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    @if($cajaSeleccionada)
+                        <input type="hidden" name="caja_id" value="{{ $cajaSeleccionada->id }}">
+                    @endif
                     <div>
                         <label class="form-label small mb-1">Monto de cierre contado (S/)</label>
                         <input type="number" name="monto_cierre" step="0.01" min="0"

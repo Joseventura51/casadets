@@ -14,6 +14,7 @@ class Compra extends Model
 
     protected $fillable = [
         'empresa',
+        'caja_id',
         'documento_tipo',
         'documento_numero',
         'fecha',

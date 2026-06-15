@@ -13,6 +13,7 @@ class Movimiento extends Model
         'origen',
         'estado',
         'empresa',
+        'caja_id',
         'categoria',
         'metodo_pago',
         'referencia_tipo',

@@ -188,6 +188,7 @@ class VentaController extends Controller
             $venta = Venta::create([
                 'vendedor_id'          => $data['vendedor_id'],
                 'cliente_id'           => $data['cliente_id'] ?? null,
+                'caja_id'              => session('caja_id'),
                 'total'                => $total,
                 'ajuste'               => $ajuste,
                 'documento_tipo'       => $data['documento_tipo'] ?? null,

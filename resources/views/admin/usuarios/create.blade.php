@@ -68,6 +68,37 @@
                 </div>
                 @endif
 
+                @if($cajas->isNotEmpty())
+                <div class="col-12">
+                    <label class="form-label fw-semibold">Cajas permitidas <span class="text-muted small">(opcional)</span></label>
+                    <div class="border rounded p-2" style="max-height:180px;overflow-y:auto;">
+                        @foreach($cajas as $caja)
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="cajas[]"
+                                value="{{ $caja->id }}" id="caja_{{ $caja->id }}"
+                                {{ in_array($caja->id, old('cajas', [])) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="caja_{{ $caja->id }}">
+                                <span class="badge bg-secondary me-1">{{ strtoupper($caja->empresa) }}</span>
+                                <code>{{ $caja->codigo }}</code> — {{ $caja->nombre }}
+                            </label>
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Caja principal</label>
+                    <select name="caja_principal" class="form-select form-select-sm">
+                        <option value="">— Ninguna —</option>
+                        @foreach($cajas as $caja)
+                        <option value="{{ $caja->id }}" {{ old('caja_principal') == $caja->id ? 'selected' : '' }}>
+                            {{ $caja->codigo }} — {{ $caja->nombre }}
+                        </option>
+                        @endforeach
+                    </select>
+                    <div class="form-text">La caja que se seleccionará automáticamente al iniciar sesión.</div>
+                </div>
+                @endif
+
                 <div class="col-12">
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="activo" id="activo"

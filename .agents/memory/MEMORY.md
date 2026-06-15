@@ -4,3 +4,4 @@
 - [VendedorScope centralization](vendedor-scope-pattern.md) — all vendedor restrictions go through VendedorScope service; never use inline debeRestringirPorVendedor() in controllers again.
 - [Chart.js in layout](chartjs-layout.md) — Chart.js CDN loaded in layouts/app.blade.php; layout has @stack('scripts'); use @push('scripts') in views for chart initialization.
 - [Ajuste Manual de Cobro](ajuste-cobro.md) — total=Original (immutable), ajuste=delta, total_a_cobrar=total+ajuste; forms submit total_cobrar not ajuste; CobranzaService uses total_a_cobrar for debt calculations.
+- [Multi-Caja architecture](multi-caja.md) — cajas/series/usuario_caja tables; session('caja_id') is the active caja; all Movimiento/Venta/Compra/SaldoFavor.create must include caja_id; import detects caja via serie codigo lookup; AuthController auto-selects cajaPrincipal on login.

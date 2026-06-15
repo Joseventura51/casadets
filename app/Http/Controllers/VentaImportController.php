@@ -353,9 +353,19 @@ class VentaImportController extends Controller
                     $estadoInicial = 'pendiente';
                 }
 
+                // Detectar caja por serie del documento
+                $cajaIdVenta = session('caja_id');
+                if (!empty($g['serie'])) {
+                    $serieModel = \App\Models\Serie::where('codigo', strtoupper(trim($g['serie'])))->first();
+                    if ($serieModel && $serieModel->caja_id) {
+                        $cajaIdVenta = $serieModel->caja_id;
+                    }
+                }
+
                 $venta = Venta::create([
                     'vendedor_id'      => $g['vendedor_id'],
                     'cliente_id'       => $clienteId,
+                    'caja_id'          => $cajaIdVenta,
                     'total'            => $totalReal,
                     'estado'           => $estadoInicial,
                     'documento_tipo'   => $tipoDoc,

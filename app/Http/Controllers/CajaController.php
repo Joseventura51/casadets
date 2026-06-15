@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Caja;
 use App\Models\CajaSesion;
 use App\Models\Compra;
 use App\Models\DetallePagoFactura;
@@ -9,6 +10,7 @@ use App\Models\Movimiento;
 use App\Models\Pago;
 use App\Models\PagoMetodo;
 use App\Models\Venta;
+use App\Services\CajaService;
 use App\Services\VendedorScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -23,96 +25,116 @@ class CajaController extends Controller
         $empresa = $request->input('empresa', 'casadets');
         if ($hasta < $desde) $hasta = $desde;
 
-        // ── Sesión de caja del día actual ──────────────────────────────
-        $sesionHoy = CajaSesion::where('empresa', $empresa)
-            ->whereDate('fecha', $hoy)
-            ->first();
+        // ── Cajas disponibles para el usuario ──────────────────────────────
+        $cajasDisponibles = CajaService::cajasUsuario()
+            ->where('empresa', $empresa)
+            ->values();
 
-        // ── Movimientos del período (fuente única financiera) ──────────
-        $movimientos = Movimiento::with('cliente:id,nombre')
+        // ── Caja seleccionada ───────────────────────────────────────────────
+        $cajaId = $request->input('caja_id', session('caja_id'));
+
+        // Si hay parámetro en URL, actualizar sesión
+        if ($request->has('caja_id') && $cajaId) {
+            session(['caja_id' => $cajaId]);
+        }
+
+        $cajaSeleccionada = $cajaId ? Caja::find($cajaId) : null;
+
+        // ── Sesión de caja del día actual ──────────────────────────────────
+        $sesionHoy = null;
+        if ($cajaSeleccionada) {
+            $sesionHoy = CajaSesion::where('caja_id', $cajaSeleccionada->id)
+                ->whereDate('fecha', $hoy)
+                ->latest()
+                ->first();
+        } else {
+            // Fallback histórico por empresa
+            $sesionHoy = CajaSesion::where('empresa', $empresa)
+                ->whereNull('caja_id')
+                ->whereDate('fecha', $hoy)
+                ->first();
+        }
+
+        // ── Historial de sesiones del día (multi-apertura/cierre) ──────────
+        $sesionesHoy = collect();
+        if ($cajaSeleccionada) {
+            $sesionesHoy = CajaSesion::where('caja_id', $cajaSeleccionada->id)
+                ->whereDate('fecha', $hoy)
+                ->orderBy('id')
+                ->get();
+        }
+
+        // ── Base query de movimientos ────────────────────────────────────
+        $movQuery = Movimiento::with('cliente:id,nombre')
             ->where('empresa', $empresa)
             ->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta)
             ->orderBy('fecha', 'desc')
-            ->orderBy('id', 'desc')
-            ->get();
+            ->orderBy('id', 'desc');
 
-        // Ventas del período (para la tabla de display)
+        if ($cajaSeleccionada) {
+            $movQuery->where('caja_id', $cajaSeleccionada->id);
+        }
+
+        $movimientos = $movQuery->get();
+
+        // Ventas del período
         $ventasQuery = Venta::with(['vendedor', 'detalles'])
             ->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta)
             ->whereNotIn('estado', ['anulado'])
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
+
+        if ($cajaSeleccionada) {
+            $ventasQuery->where('caja_id', $cajaSeleccionada->id);
+        }
+
         VendedorScope::aplicar($ventasQuery);
         $ventas = $ventasQuery->get();
 
         $ventasCobradas   = $ventas->where('estado', 'pagado');
         $ventasPendientes = $ventas->whereIn('estado', ['pendiente', 'parcial']);
 
-        // ── KPIs desde movimientos activos ──────────────────────────────
+        // ── KPIs desde movimientos activos ──────────────────────────────────
         $movActivos = $movimientos->where('estado', 'activo');
 
-        $totalVentasCobradas = round(
-            $movActivos->where('subtipo', 'pago_venta')->sum('monto'), 2
-        );
-        $totalOtrosIngresos = round(
-            $movActivos->filter(
-                fn ($m) => $m->tipo === 'ingreso' && $m->subtipo !== 'pago_venta'
-            )->sum('monto'), 2
-        );
-        $totalCompras = round(
-            $movActivos->where('subtipo', 'compra')->sum('monto'), 2
-        );
-        $totalSalidas = round(
-            $movActivos->where('tipo', 'salida')->sum('monto'), 2
-        );
-        $balance = round($totalVentasCobradas + $totalOtrosIngresos - $totalSalidas, 2);
+        $totalVentasCobradas = round($movActivos->where('subtipo', 'pago_venta')->sum('monto'), 2);
+        $totalOtrosIngresos  = round($movActivos->filter(
+            fn ($m) => $m->tipo === 'ingreso' && $m->subtipo !== 'pago_venta'
+        )->sum('monto'), 2);
+        $totalCompras = round($movActivos->where('subtipo', 'compra')->sum('monto'), 2);
+        $totalSalidas = round($movActivos->where('tipo', 'salida')->sum('monto'), 2);
+        $balance      = round($totalVentasCobradas + $totalOtrosIngresos - $totalSalidas, 2);
 
-        // ── Desglose por método de pago ──────────────────────────────────
-        $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas);
+        // ── Desglose por método de pago ─────────────────────────────────────
+        $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas, $cajaSeleccionada?->id);
 
-        // ── Efectivo actual en caja ──────────────────────────────────────
-        // apertura + cobrado_efectivo + ingresos_manuales_efectivo
-        //          - compras_efectivo - salidas_manuales_efectivo
-        $comprasEnEfectivo = round(
-            Compra::where('metodo_pago', 'efectivo')
-                ->whereDate('fecha', '>=', $desde)
-                ->whereDate('fecha', '<=', $hasta)
-                ->sum('monto_total'),
-            2
-        );
+        // ── Efectivo actual en caja ─────────────────────────────────────────
+        $comprasQuery = Compra::where('metodo_pago', 'efectivo')
+            ->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta);
+        if ($cajaSeleccionada) {
+            $comprasQuery->where('caja_id', $cajaSeleccionada->id);
+        }
+        $comprasEnEfectivo = round($comprasQuery->sum('monto_total'), 2);
 
-        $ingresosManualEfectivo = round(
-            $movActivos->filter(
-                fn ($m) => $m->tipo === 'ingreso'
-                    && $m->subtipo === 'manual'
-                    && $m->metodo_pago === 'efectivo'
-            )->sum('monto'),
-            2
-        );
+        $ingresosManualEfectivo = round($movActivos->filter(
+            fn ($m) => $m->tipo === 'ingreso' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo'
+        )->sum('monto'), 2);
 
-        $salidasManualEfectivo = round(
-            $movActivos->filter(
-                fn ($m) => $m->tipo === 'salida'
-                    && $m->subtipo === 'manual'
-                    && $m->metodo_pago === 'efectivo'
-            )->sum('monto'),
-            2
-        );
+        $salidasManualEfectivo = round($movActivos->filter(
+            fn ($m) => $m->tipo === 'salida' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo'
+        )->sum('monto'), 2);
 
-        $efectivoEntradas = round(
-            ($sesionHoy?->monto_apertura ?? 0)
-            + $ventasPorMetodo->get('efectivo', 0)
-            + $ingresosManualEfectivo,
-            2
-        );
+        // Suma monto_apertura de todas las sesiones abiertas del día
+        $montoAperturaDia = $sesionesHoy->sum('monto_apertura');
 
-        $efectivoSalidas = round($comprasEnEfectivo + $salidasManualEfectivo, 2);
+        $efectivoEntradas = round($montoAperturaDia + $ventasPorMetodo->get('efectivo', 0) + $ingresosManualEfectivo, 2);
+        $efectivoSalidas  = round($comprasEnEfectivo + $salidasManualEfectivo, 2);
+        $efectivoEnCaja   = round($efectivoEntradas - $efectivoSalidas, 2);
 
-        $efectivoEnCaja = round($efectivoEntradas - $efectivoSalidas, 2);
-
-        // ── Por vendedor ─────────────────────────────────────────────────
+        // ── Por vendedor ─────────────────────────────────────────────────────
         $ventasPorVendedor = $ventasCobradas
             ->groupBy(fn ($v) => $v->vendedor->nombre ?? 'Sin vendedor')
             ->map(fn ($g) => round($g->sum(fn ($v) => $v->total_cobrado), 2));
@@ -121,7 +143,8 @@ class CajaController extends Controller
 
         return view('casadets.caja.index', compact(
             'desde', 'hasta', 'hoy', 'esRango', 'empresa',
-            'sesionHoy',
+            'cajasDisponibles', 'cajaSeleccionada',
+            'sesionHoy', 'sesionesHoy',
             'ventas', 'ventasCobradas', 'ventasPendientes',
             'movimientos', 'movActivos',
             'totalVentasCobradas', 'totalOtrosIngresos', 'totalCompras',
@@ -135,32 +158,44 @@ class CajaController extends Controller
     public function apertura(Request $request)
     {
         $request->validate([
+            'caja_id'         => 'nullable|integer|exists:cajas,id',
             'empresa'         => 'required|string',
             'monto_apertura'  => 'required|numeric|min:0',
             'observaciones'   => 'nullable|string|max:500',
         ]);
 
-        $hoy = Carbon::today()->toDateString();
+        $cajaId = $request->caja_id;
 
+        if ($cajaId) {
+            $caja = Caja::findOrFail($cajaId);
+            try {
+                CajaService::abrirCaja($caja, (float) $request->monto_apertura, $request->observaciones);
+            } catch (\RuntimeException $e) {
+                return back()->with('error', $e->getMessage());
+            }
+            session(['caja_id' => $caja->id]);
+            return redirect("/casadets/caja?empresa={$request->empresa}&caja_id={$caja->id}")
+                ->with('success', "Apertura de {$caja->codigo} registrada.");
+        }
+
+        // Fallback sin caja específica (compatibilidad histórica)
+        $hoy = Carbon::today()->toDateString();
         $sesion = CajaSesion::where('empresa', $request->empresa)
+            ->whereNull('caja_id')
             ->whereDate('fecha', $hoy)
             ->first();
 
-        if ($sesion) {
-            $sesion->update([
-                'monto_apertura' => $request->monto_apertura,
-                'estado'         => 'abierta',
-                'observaciones'  => $request->observaciones,
-            ]);
-        } else {
-            CajaSesion::create([
-                'empresa'        => $request->empresa,
-                'fecha'          => $hoy,
-                'monto_apertura' => $request->monto_apertura,
-                'estado'         => 'abierta',
-                'observaciones'  => $request->observaciones,
-            ]);
+        if ($sesion && $sesion->estado === 'abierta') {
+            return back()->with('error', 'La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura.');
         }
+
+        CajaSesion::create([
+            'empresa'        => $request->empresa,
+            'fecha'          => $hoy,
+            'monto_apertura' => $request->monto_apertura,
+            'estado'         => 'abierta',
+            'observaciones'  => $request->observaciones,
+        ]);
 
         return redirect("/casadets/caja?empresa={$request->empresa}")
             ->with('success', 'Apertura de caja registrada.');
@@ -169,33 +204,43 @@ class CajaController extends Controller
     public function cierre(Request $request)
     {
         $request->validate([
-            'empresa'       => 'required|string',
-            'monto_cierre'  => 'required|numeric|min:0',
+            'caja_id'      => 'nullable|integer|exists:cajas,id',
+            'empresa'      => 'required|string',
+            'monto_cierre' => 'required|numeric|min:0',
         ]);
 
-        $hoy = Carbon::today()->toDateString();
+        $cajaId = $request->caja_id;
 
+        if ($cajaId) {
+            $caja = Caja::findOrFail($cajaId);
+            try {
+                CajaService::cerrarCaja($caja, (float) $request->monto_cierre);
+            } catch (\RuntimeException $e) {
+                return back()->with('error', $e->getMessage());
+            }
+            return redirect("/casadets/caja?empresa={$request->empresa}&caja_id={$caja->id}")
+                ->with('success', "Caja {$caja->codigo} cerrada correctamente.");
+        }
+
+        // Fallback sin caja
+        $hoy    = Carbon::today()->toDateString();
         $sesion = CajaSesion::where('empresa', $request->empresa)
+            ->whereNull('caja_id')
             ->whereDate('fecha', $hoy)
+            ->where('estado', 'abierta')
             ->first();
 
         if (!$sesion) {
             return back()->withErrors(['No hay apertura registrada para hoy.']);
         }
 
-        $sesion->update([
-            'monto_cierre' => $request->monto_cierre,
-            'estado'       => 'cerrada',
-        ]);
+        $sesion->update(['monto_cierre' => $request->monto_cierre, 'estado' => 'cerrada']);
 
         return redirect("/casadets/caja?empresa={$request->empresa}")
             ->with('success', 'Caja cerrada correctamente.');
     }
 
-    /**
-     * Desglose exacto por método de pago para el período.
-     */
-    private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas): \Illuminate\Support\Collection
+    private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas, ?int $cajaId = null): \Illuminate\Support\Collection
     {
         $pagoIds = Pago::whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta)
@@ -210,7 +255,6 @@ class CajaController extends Controller
                 ->map(fn ($t) => (float) $t);
         }
 
-        // Fallback para ventas sin Pago registrado (datos legados)
         $ventasConPagoRegistrado = DetallePagoFactura::whereIn('venta_id', $ventasCobradas->pluck('id'))
             ->pluck('venta_id')
             ->unique();

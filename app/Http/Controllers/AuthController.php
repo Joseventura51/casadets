@@ -43,6 +43,13 @@ class AuthController extends Controller
 
         if (Auth::attempt(['email' => $user->email, 'password' => $request->input('password')], $remember)) {
             $request->session()->regenerate();
+
+            // Auto-seleccionar caja principal si el usuario tiene una asignada
+            $cajaPrincipal = $user->cajaPrincipal();
+            if ($cajaPrincipal) {
+                session(['caja_id' => $cajaPrincipal->id]);
+            }
+
             return redirect()->intended('/');
         }
 
