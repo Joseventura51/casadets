@@ -127,8 +127,11 @@ class CajaController extends Controller
             fn ($m) => $m->tipo === 'salida' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo'
         )->sum('monto'), 2);
 
-        // Suma monto_apertura de todas las sesiones abiertas del día
-        $montoAperturaDia = $sesionesHoy->sum('monto_apertura');
+        // Suma monto_apertura de todas las sesiones del día.
+        // Si no hay caja seleccionada pero existe sesión de fallback, usarla igual.
+        $montoAperturaDia = $sesionesHoy->isNotEmpty()
+            ? $sesionesHoy->sum('monto_apertura')
+            : ($sesionHoy?->monto_apertura ?? 0);
 
         $efectivoEntradas = round($montoAperturaDia + $ventasPorMetodo->get('efectivo', 0) + $ingresosManualEfectivo, 2);
         $efectivoSalidas  = round($comprasEnEfectivo + $salidasManualEfectivo, 2);
