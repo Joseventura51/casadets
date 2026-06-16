@@ -729,14 +729,7 @@ class VentaController extends Controller
         $hasta = $request->input('hasta', $desde);
         if ($hasta < $desde) $hasta = $desde;
 
-        $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorCaja()) {
-            $query->whereIn('caja_id', $authUser->cajaIds());
-        } elseif ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $query->whereIn('vendedor_id', $authUser->vendedorIds());
-        } elseif ($request->filled('vendedor_id')) {
-            $query->where('vendedor_id', $request->vendedor_id);
-        }
+        VendedorScope::aplicar($query);
 
         if ($request->filled('tipo'))        $query->where('documento_tipo', $request->tipo);
         if ($request->filled('estado'))      $query->where('estado', $request->estado);

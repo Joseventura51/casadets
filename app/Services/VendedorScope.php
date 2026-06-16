@@ -68,16 +68,46 @@ class VendedorScope
         return auth()->user()->cajaIds();
     }
 
+    /**
+     * Códigos de serie (B002, F002, P002...) asociadas a las cajas del usuario.
+     * Usado cuando las ventas históricas no tienen caja_id pero SÍ tienen serie en documento_numero.
+     */
+    public static function serieCodigos(): ?array
+    {
+        if (static::modo() !== 'caja') {
+            return null;
+        }
+        $cajaIds = auth()->user()->cajaIds();
+        if (empty($cajaIds)) {
+            return null;
+        }
+        return \App\Models\Serie::whereIn('caja_id', $cajaIds)
+            ->where('activa', true)
+            ->pluck('codigo')
+            ->toArray();
+    }
+
     // ── Aplicadores por módulo ─────────────────────────────────────────
 
     /**
-     * Ventas / Pendientes — filtra por vendedor_id o caja_id.
+     * Ventas / Pendientes — filtra por caja_id (ventas nuevas) O por serie
+     * (ventas históricas sin caja_id).  Si filtra por vendedor, usa vendedor_id.
      */
     public static function aplicar(Builder $query, string $columna = 'vendedor_id'): Builder
     {
         $cajas = static::cajaIds();
-        if ($cajas !== null) {
-            $query->whereIn('caja_id', $cajas);
+        $series = static::serieCodigos();
+        if ($cajas !== null || $series !== null) {
+            $query->where(function (Builder $q) use ($cajas, $series) {
+                if ($cajas !== null) {
+                    $q->whereIn('caja_id', $cajas);
+                }
+                if ($series !== null) {
+                    foreach ($series as $serie) {
+                        $q->orWhere('documento_numero', 'like', $serie . '%');
+                    }
+                }
+            });
             return $query;
         }
 
@@ -112,16 +142,25 @@ class VendedorScope
     }
 
     /**
-     * SaldoFavor — si filtra por caja, usa caja_id de la venta origen.
+     * SaldoFavor — si filtra por caja, usa caja_id de la venta origen
+     * o documento_numero de la venta origen (histórico).
      * Si filtra por vendedor, usa vendedor_id de la venta origen.
      */
     public static function aplicarSaldos(Builder $query): Builder
     {
         $cajas = static::cajaIds();
-        if ($cajas !== null) {
-            $query->whereHas('ventaOrigen', fn ($q) =>
-                $q->whereIn('caja_id', $cajas)
-            );
+        $series = static::serieCodigos();
+        if ($cajas !== null || $series !== null) {
+            $query->whereHas('ventaOrigen', function (Builder $q) use ($cajas, $series) {
+                if ($cajas !== null) {
+                    $q->whereIn('caja_id', $cajas);
+                }
+                if ($series !== null) {
+                    foreach ($series as $serie) {
+                        $q->orWhere('documento_numero', 'like', $serie . '%');
+                    }
+                }
+            });
             return $query;
         }
 
@@ -167,16 +206,25 @@ class VendedorScope
     }
 
     /**
-     * Clientes — si filtra por caja, muestra clientes con ventas en esas cajas.
-     * Si filtra por vendedor, muestra clientes con ventas de esos vendedores.
+     * Clientes — si filtra por caja, muestra clientes con ventas en esas cajas
+     * o con serie de esas cajas.  Si filtra por vendedor, muestra clientes con
+     * ventas de esos vendedores.
      */
     public static function aplicarClientes(Builder $query): Builder
     {
         $cajas = static::cajaIds();
-        if ($cajas !== null) {
-            $query->whereHas('ventas', fn ($q) =>
-                $q->whereIn('caja_id', $cajas)
-            );
+        $series = static::serieCodigos();
+        if ($cajas !== null || $series !== null) {
+            $query->whereHas('ventas', function (Builder $q) use ($cajas, $series) {
+                if ($cajas !== null) {
+                    $q->whereIn('caja_id', $cajas);
+                }
+                if ($series !== null) {
+                    foreach ($series as $serie) {
+                        $q->orWhere('documento_numero', 'like', $serie . '%');
+                    }
+                }
+            });
             return $query;
         }
 

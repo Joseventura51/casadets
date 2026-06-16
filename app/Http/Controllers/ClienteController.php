@@ -14,12 +14,8 @@ class ClienteController extends Controller
         $query = Cliente::withCount('ventas')->orderBy('nombre');
 
         // Restricción por vendedor o caja
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
-            $ids = $authUser->vendedorIds();
-            $query->whereHas('ventas', fn ($q) => $q->whereIn('vendedor_id', $ids));
-        } elseif ($authUser && $authUser->debeRestringirPorCaja()) {
-            $ids = $authUser->cajaIds();
-            $query->whereHas('ventas', fn ($q) => $q->whereIn('caja_id', $ids));
+        if ($authUser) {
+            VendedorScope::aplicarClientes($query);
         }
 
         if ($request->filled('buscar')) {
