@@ -1,0 +1,141 @@
+Internal Server Error
+
+Copy as Markdown
+Error
+app\Http\Controllers\ClienteController.php:18
+Class "App\Http\Controllers\VendedorScope" not found
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 0
+500
+GET
+http://127.0.0.1:8000/casadets/clientes
+
+Exception trace
+App\Http\Controllers\ClienteController->index(object(Illuminate\Http\Request))
+app\Http\Controllers\ClienteController.php:18
+
+13
+14        $query = Cliente::withCount('ventas')->orderBy('nombre');
+15
+16        // Restricción por vendedor o caja
+17        if ($authUser) {
+18            VendedorScope::aplicarClientes($query);
+19        }
+20
+21        if ($request->filled('buscar')) {
+22            $term = '%' . $request->buscar . '%';
+23            $query->where(function ($q) use ($term) {
+24                $q->where('nombre', 'like', $term)
+25                  ->orWhere('documento', 'like', $term);
+26            });
+27        }
+28
+29        $clientes = $query->paginate(50)->withQueryString();
+30
+5 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckRol.php:24
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 100
+mysql
+select * from `sessions` where `id` = '36PsJ4NmZwXchDDYqLOf46Y20J6IuThDqlnxuylg' limit 1
+2.3ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.44ms
+mysql
+select * from `roles` where `roles`.`id` = 1 limit 1
+0.41ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.51ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.41ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.81ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.56ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.43ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.36ms
+mysql
+select exists(select * from `caja_sesiones` where `empresa` = 'casadets' and date(`fecha`) = '2026-06-16' and `estado` = 'abierta') as `exists`
+0.34ms
+
+
+1
+2
+3
+4
+5
+...
+10
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+sec-ch-ua
+"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+dnt
+1
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/casadets/ventas
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6IisrbUEvQkl1MkhNNUtVaUlkbFdHbGc9PSIsInZhbHVlIjoiSzZrVjc0SEZEdi9ZbStmYkhZc2VMaGFqaWhSKzRENFVENEloVjUrTG1oaGQ5azhscFcvRHVVNmJkN2FWQkVkajg5YmhUVlowVU1vV0pDNHdxeWFjTityS1RpSzdnQXA5eTJVbzlrZFZxc1hZZXdocGo3eGR2NFlnOHVLUDdZeHQiLCJtYWMiOiIyNTU4M2QxOGZhYjhmNzA3ZTM2NThlNDU3YjIxNTliYjFkMzRiMDBjNzNkMGIxZjcwOTgyNDgwMGZiY2RiMjQxIiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6IjVBUUNzQXFEZTNDMVRFdzV2TFA4K2c9PSIsInZhbHVlIjoidEpaemVsakozQ2duRGkrN3lkT1dEN2tjTmI4U2txK0dRTE9QQVIzZW50UU9Oamk3cGpsazZ6bkp4V1poN0dCTW1mYVhpODl1UzA1T0hYaUpPdmZsY2R5NS9OR1FKR2hwNFFzS2tON0ROR3dMOEFuSWtmOVJPWEFwaVg0YmR5SUQiLCJtYWMiOiJkZTg1N2Q4ZGQ1ODc3NDIzYThiZjI2YmRjNTU1ZjRjNjE2MDlhN2U5YmUxYzg4M2FlMDdiN2Q2MGNkNDI1NzU0IiwidGFnIjoiIn0%3D
+Body
+// No request body
+Routing
+controller
+App\Http\Controllers\ClienteController@index
+middleware
+web, auth, check.activo, rol:clientes
+Routing parameters
+// No routing parameters
