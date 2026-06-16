@@ -253,9 +253,11 @@ class CajaController extends Controller
 
     private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas, ?int $cajaId = null): \Illuminate\Support\Collection
     {
-        $pagoIds = Pago::whereDate('fecha', '>=', $desde)
-            ->whereDate('fecha', '<=', $hasta)
-            ->pluck('id');
+        // Solo pagos vinculados a ventas de ESTA caja (ya filtradas en $ventasCobradas)
+        $ventaIds = $ventasCobradas->pluck('id');
+        $pagoIds = $ventaIds->isNotEmpty()
+            ? DetallePagoFactura::whereIn('venta_id', $ventaIds)->pluck('pago_id')->unique()
+            : collect();
 
         $metodosDePagos = collect();
         if ($pagoIds->isNotEmpty()) {

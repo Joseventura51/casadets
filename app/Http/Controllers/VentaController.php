@@ -49,6 +49,10 @@ class VentaController extends Controller
 
         VendedorScope::aplicar($query);
 
+        if (session('caja_id')) {
+            $query->where('caja_id', session('caja_id'));
+        }
+
         if (!$request->boolean('todas')) {
             $query->whereDate('fecha', '>=', $desde)
                   ->whereDate('fecha', '<=', $hasta);
@@ -379,6 +383,10 @@ class VentaController extends Controller
             ->whereDate('fecha', '<=', today());
 
         VendedorScope::aplicar($query);
+
+        if (session('caja_id')) {
+            $query->where('caja_id', session('caja_id'));
+        }
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);
 

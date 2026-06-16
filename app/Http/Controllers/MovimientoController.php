@@ -26,6 +26,10 @@ class MovimientoController extends Controller
         // Restricción por vendedor asignado al usuario
         VendedorScope::aplicarMovimientos($query);
 
+        if (session('caja_id')) {
+            $query->where('caja_id', session('caja_id'));
+        }
+
         if ($request->filled('tipo'))        $query->where('tipo', $request->tipo);
         if ($request->filled('subtipo'))     $query->where('subtipo', $request->subtipo);
         if ($request->filled('empresa'))     $query->where('empresa', $request->empresa);

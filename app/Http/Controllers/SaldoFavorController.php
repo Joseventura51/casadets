@@ -22,6 +22,10 @@ class SaldoFavorController extends Controller
 
         VendedorScope::aplicarSaldos($saldosActivos);
 
+        if (session('caja_id')) {
+            $saldosActivos->where('caja_id', session('caja_id'));
+        }
+
         $saldosActivos = $saldosActivos->get();
         $saldosPorCliente = $saldosActivos->groupBy('cliente_id');
         $clienteIds = $saldosActivos->pluck('cliente_id')->unique()->toArray();

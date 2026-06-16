@@ -32,6 +32,10 @@ class CompraController extends Controller
         // Restricción por vendedor asignado al usuario
         VendedorScope::aplicarCompras($query);
 
+        if (session('caja_id')) {
+            $query->where('caja_id', session('caja_id'));
+        }
+
         if ($request->filled('empresa')) {
             $query->where('empresa', 'like', '%' . $request->empresa . '%');
         }
