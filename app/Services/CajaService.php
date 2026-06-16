@@ -22,7 +22,7 @@ class CajaService
         }
 
         // Cajas asignadas al usuario
-        $cajasIds = $user->cajasPermitidas()->pluck('id');
+        $cajasIds = $user->cajasPermitidas()->select('cajas.id')->pluck('cajas.id');
         return Caja::whereIn('id', $cajasIds)
             ->where('activa', true)
             ->orderBy('codigo')
