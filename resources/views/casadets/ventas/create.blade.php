@@ -61,17 +61,33 @@
 
                 <div class="col-md-2">
                     <label class="form-label">Documento</label>
-                    <select name="documento_tipo" class="form-select">
+                    <select name="documento_tipo" id="docTipo" class="form-select">
                         <option value="">Sin doc.</option>
-                        @foreach(['boleta','factura','proforma'] as $d)
-                            <option value="{{ $d }}" {{ old('documento_tipo') == $d ? 'selected' : '' }}>{{ ucfirst($d) }}</option>
-                        @endforeach
+                        @if($series->isNotEmpty())
+                            @foreach($series as $tipo => $serie)
+                                <option value="{{ $tipo }}"
+                                        data-preview="{{ $serie->codigo }}-{{ str_pad($serie->correlativo_actual + 1, 8, '0', STR_PAD_LEFT) }}"
+                                        {{ old('documento_tipo') == $tipo ? 'selected' : '' }}>
+                                    {{ ucfirst($tipo) }} ({{ $serie->codigo }})
+                                </option>
+                            @endforeach
+                        @else
+                            @foreach(['boleta','factura','proforma'] as $d)
+                                <option value="{{ $d }}" {{ old('documento_tipo') == $d ? 'selected' : '' }}>{{ ucfirst($d) }}</option>
+                            @endforeach
+                        @endif
                     </select>
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label">N° de documento</label>
-                    <input type="text" name="documento_numero" value="{{ old('documento_numero') }}" class="form-control">
+                    @if($series->isNotEmpty())
+                        <input type="text" id="docNumero" class="form-control text-muted"
+                               readonly placeholder="Se genera automáticamente">
+                        <div class="form-text">Se asigna desde la serie de la caja.</div>
+                    @else
+                        <input type="text" name="documento_numero" value="{{ old('documento_numero') }}" class="form-control">
+                    @endif
                 </div>
 
                 <div class="col-md-7">
@@ -265,6 +281,22 @@
     searchEl.addEventListener('blur', function () {
         if (!this.value.trim()) hiddenEl.value = '';
     });
+})();
+
+// Vista previa del número de documento según la serie de la caja
+(function () {
+    const tipoSel  = document.getElementById('docTipo');
+    const numPrev  = document.getElementById('docNumero');
+    if (!tipoSel || !numPrev) return;
+
+    function actualizarPreview() {
+        const opt = tipoSel.options[tipoSel.selectedIndex];
+        const preview = opt?.dataset?.preview || '';
+        numPrev.placeholder = preview ? 'Siguiente: ' + preview : 'Se genera automáticamente';
+    }
+
+    tipoSel.addEventListener('change', actualizarPreview);
+    actualizarPreview();
 })();
 </script>
 @endsection

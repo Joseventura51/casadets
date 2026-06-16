@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DetallePagoFactura;
 use App\Models\Movimiento;
 use App\Models\Producto;
+use App\Models\Serie;
 use App\Models\StockMovimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
@@ -150,7 +151,14 @@ class VentaController extends Controller
                 ->with('error', 'Primero registra al menos un vendedor.');
         }
         $clientes = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
-        return view('casadets.ventas.create', compact('vendedores', 'clientes'));
+
+        // Series activas de la caja actual, indexadas por tipo_documento
+        $series = Serie::where('caja_id', session('caja_id'))
+            ->where('activa', true)
+            ->get()
+            ->keyBy('tipo_documento');
+
+        return view('casadets.ventas.create', compact('vendedores', 'clientes', 'series'));
     }
 
     public function store(Request $request)
@@ -199,6 +207,18 @@ class VentaController extends Controller
                 : $total;
             $ajuste = round($totalCobrar - $total, 2);
 
+            // Auto-generar número de documento desde la serie de la caja activa
+            $docNumero = $data['documento_numero'] ?? null;
+            if (!empty($data['documento_tipo']) && session('caja_id')) {
+                $serie = Serie::where('caja_id', session('caja_id'))
+                    ->where('tipo_documento', $data['documento_tipo'])
+                    ->where('activa', true)
+                    ->first();
+                if ($serie) {
+                    $docNumero = $serie->generarNumero();
+                }
+            }
+
             // Venta creada en estado pendiente — metodo_pago NULL hasta que CobranzaService lo asigne
             $venta = Venta::create([
                 'vendedor_id'          => $data['vendedor_id'],
@@ -207,7 +227,7 @@ class VentaController extends Controller
                 'total'                => $total,
                 'ajuste'               => $ajuste,
                 'documento_tipo'       => $data['documento_tipo'] ?? null,
-                'documento_numero'     => $data['documento_numero'] ?? null,
+                'documento_numero'     => $docNumero,
                 'observaciones'        => $data['observaciones'] ?? null,
                 'fecha'                => $data['fecha'],
                 'es_referencia_fiscal' => $data['es_referencia_fiscal'] ?? false,
