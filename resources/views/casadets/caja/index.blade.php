@@ -130,13 +130,13 @@
             </div>
 
         @else
-            {{-- Caja cerrada --}}
-            <div class="d-flex align-items-center gap-3 flex-wrap">
+            {{-- Caja cerrada (permite nueva apertura) --}}
+            <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
                 <span class="badge bg-dark" style="font-size:.8rem;">
                     <i class="bi bi-lock-fill me-1"></i>Caja cerrada
                 </span>
                 <span class="small text-muted">
-                    Apertura: <strong>S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
+                    Última apertura: <strong>S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>
                     &nbsp;·&nbsp;
                     Cierre contado: <strong>S/ {{ number_format($sesionHoy->monto_cierre, 2) }}</strong>
                 </span>
@@ -151,6 +151,31 @@
                 @else
                     <span class="badge bg-success" style="font-size:.78rem;"><i class="bi bi-check2 me-1"></i>Cuadrado</span>
                 @endif
+                <button class="btn btn-success btn-sm ms-auto" data-bs-toggle="collapse" data-bs-target="#formApertura">
+                    <i class="bi bi-box-arrow-in-right me-1"></i>Abrir caja
+                </button>
+            </div>
+            <div class="collapse mt-3" id="formApertura">
+                <form action="/casadets/caja/apertura" method="POST" class="d-flex gap-2 align-items-end flex-wrap">
+                    @csrf
+                    <input type="hidden" name="empresa" value="{{ $empresa }}">
+                    @if($cajaSeleccionada)
+                        <input type="hidden" name="caja_id" value="{{ $cajaSeleccionada->id }}">
+                    @endif
+                    <div>
+                        <label class="form-label small mb-1">Monto de apertura (S/)</label>
+                        <input type="number" name="monto_apertura" step="0.01" min="0" value="0"
+                               class="form-control form-control-sm" style="width:160px;" required>
+                    </div>
+                    <div style="flex:1;min-width:200px;">
+                        <label class="form-label small mb-1">Observaciones</label>
+                        <input type="text" name="observaciones" class="form-control form-control-sm"
+                               placeholder="Opcional">
+                    </div>
+                    <button class="btn btn-success btn-sm">
+                        <i class="bi bi-check-lg me-1"></i>Confirmar apertura
+                    </button>
+                </form>
             </div>
         @endif
     </div>
