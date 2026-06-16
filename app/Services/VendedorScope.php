@@ -6,46 +6,81 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Servicio centralizado de restricción por vendedor.
+ * Servicio centralizado de restricción por VENDEDOR o CAJA.
  *
- * Cuando un usuario tiene vendedores asociados, SOLO puede ver información
- * relacionada con esos vendedores. Este servicio provee los métodos para
- * aplicar ese filtro en cada módulo del sistema.
+ * Reglas:
+ *   1. Si el usuario tiene CAJAS asignadas → filtra todo por caja_id (PRIORIDAD).
+ *   2. Si el usuario tiene VENDEDORES asignados (y NO cajas) → filtra por vendedor.
+ *   3. Admin/Supervisor sin asignaciones → sin restricción.
  *
  * Uso:
- *   VendedorScope::activo()          → bool   (¿aplica restricción?)
- *   VendedorScope::ids()             → array|null
- *   VendedorScope::aplicar($query)   → filtra por vendedor_id directo
+ *   VendedorScope::activo()          → bool   (¿aplica alguna restricción?)
+ *   VendedorScope::ids()             → array|null   (vendedor IDs)
+ *   VendedorScope::cajaIds()         → array|null   (caja IDs)
+ *   VendedorScope::modo()            → 'caja'|'vendedor'|'ninguno'
+ *   VendedorScope::aplicar($query)   → filtra ventas por vendedor_id o caja_id
  *   VendedorScope::aplicarCompras($query)
  *   VendedorScope::aplicarSaldos($query)
  *   VendedorScope::aplicarMovimientos($query)
+ *   VendedorScope::aplicarClientes($query)
  */
 class VendedorScope
 {
-    /** ¿El usuario autenticado debe ver solo sus vendedores? */
+    /** ¿El usuario autenticado debe ver filtrado? */
     public static function activo(): bool
     {
         $user = auth()->user();
-        return $user && $user->debeRestringirPorVendedor();
+        if (!$user) return false;
+        return $user->debeRestringirPorCaja() || $user->debeRestringirPorVendedor();
+    }
+
+    /** 'caja', 'vendedor', o 'ninguno' */
+    public static function modo(): string
+    {
+        $user = auth()->user();
+        if (!$user) return 'ninguno';
+        if ($user->debeRestringirPorCaja()) return 'caja';
+        if ($user->debeRestringirPorVendedor()) return 'vendedor';
+        return 'ninguno';
     }
 
     /**
      * IDs de vendedores asignados al usuario autenticado.
-     * Retorna null si no hay restricción (admin/supervisor sin restricción).
+     * Retorna null si no hay restricción por vendedor.
      */
     public static function ids(): ?array
     {
-        if (!static::activo()) {
+        if (static::modo() !== 'vendedor') {
             return null;
         }
         return auth()->user()->vendedorIds();
     }
 
     /**
-     * Filtra una query con columna directa vendedor_id (Ventas, pendientes, etc.)
+     * IDs de cajas asignadas al usuario autenticado.
+     * Retorna null si no hay restricción por caja.
+     */
+    public static function cajaIds(): ?array
+    {
+        if (static::modo() !== 'caja') {
+            return null;
+        }
+        return auth()->user()->cajaIds();
+    }
+
+    // ── Aplicadores por módulo ─────────────────────────────────────────
+
+    /**
+     * Ventas / Pendientes — filtra por vendedor_id o caja_id.
      */
     public static function aplicar(Builder $query, string $columna = 'vendedor_id'): Builder
     {
+        $cajas = static::cajaIds();
+        if ($cajas !== null) {
+            $query->whereIn('caja_id', $cajas);
+            return $query;
+        }
+
         $ids = static::ids();
         if ($ids !== null) {
             $query->whereIn($columna, $ids);
@@ -54,12 +89,17 @@ class VendedorScope
     }
 
     /**
-     * Filtra Compras por vendedor de las ventas asociadas.
-     * Una compra se muestra si al menos uno de sus detalles apunta
-     * a una venta cuyo vendedor está asignado al usuario.
+     * Compras — si filtra por caja, solo muestra compras de esas cajas.
+     * Si filtra por vendedor, muestra compras cuyas ventas asociadas tienen esos vendedores.
      */
     public static function aplicarCompras(Builder $query): Builder
     {
+        $cajas = static::cajaIds();
+        if ($cajas !== null) {
+            $query->whereIn('caja_id', $cajas);
+            return $query;
+        }
+
         $ids = static::ids();
         if ($ids !== null) {
             $query->whereHas('detalles', fn ($q) =>
@@ -72,10 +112,19 @@ class VendedorScope
     }
 
     /**
-     * Filtra SaldoFavor por el vendedor de la venta origen.
+     * SaldoFavor — si filtra por caja, usa caja_id de la venta origen.
+     * Si filtra por vendedor, usa vendedor_id de la venta origen.
      */
     public static function aplicarSaldos(Builder $query): Builder
     {
+        $cajas = static::cajaIds();
+        if ($cajas !== null) {
+            $query->whereHas('ventaOrigen', fn ($q) =>
+                $q->whereIn('caja_id', $cajas)
+            );
+            return $query;
+        }
+
         $ids = static::ids();
         if ($ids !== null) {
             $query->whereHas('ventaOrigen', fn ($q) =>
@@ -86,18 +135,21 @@ class VendedorScope
     }
 
     /**
-     * Filtra Movimientos por:
-     *   1. vendedor_id directo (salidas manuales), O
-     *   2. referencia a un pago vinculado a ventas del vendedor (cobranzas).
+     * Movimientos — si filtra por caja, usa caja_id directo.
+     * Si filtra por vendedor, usa vendedor_id o referencia a pago de ventas.
      */
     public static function aplicarMovimientos(Builder $query): Builder
     {
+        $cajas = static::cajaIds();
+        if ($cajas !== null) {
+            $query->whereIn('caja_id', $cajas);
+            return $query;
+        }
+
         $ids = static::ids();
         if ($ids !== null) {
             $query->where(function (Builder $q) use ($ids) {
-                // Salidas manuales con vendedor asignado
                 $q->whereIn('vendedor_id', $ids)
-                  // Cobranzas (ingresos tipo pago) vinculadas a ventas del vendedor
                   ->orWhere(function (Builder $q2) use ($ids) {
                       $q2->where('referencia_tipo', 'pago')
                          ->whereExists(function ($sub) use ($ids) {
@@ -110,6 +162,29 @@ class VendedorScope
                          });
                   });
             });
+        }
+        return $query;
+    }
+
+    /**
+     * Clientes — si filtra por caja, muestra clientes con ventas en esas cajas.
+     * Si filtra por vendedor, muestra clientes con ventas de esos vendedores.
+     */
+    public static function aplicarClientes(Builder $query): Builder
+    {
+        $cajas = static::cajaIds();
+        if ($cajas !== null) {
+            $query->whereHas('ventas', fn ($q) =>
+                $q->whereIn('caja_id', $cajas)
+            );
+            return $query;
+        }
+
+        $ids = static::ids();
+        if ($ids !== null) {
+            $query->whereHas('ventas', fn ($q) =>
+                $q->whereIn('vendedor_id', $ids)
+            );
         }
         return $query;
     }

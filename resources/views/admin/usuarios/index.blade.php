@@ -19,7 +19,7 @@
                     <th class="ps-3">Nombre</th>
                     <th>Correo</th>
                     <th>Rol</th>
-                    <th>Vendedores asociados</th>
+                    <th>Vendedores / Cajas</th>
                     <th class="text-center">Estado</th>
                     <th class="text-end pe-3">Acciones</th>
                 </tr>
@@ -44,7 +44,11 @@
                         @endif
                     </td>
                     <td class="small text-muted">
-                        @if($u->vendedores->isNotEmpty())
+                        @if($u->cajasPermitidas->isNotEmpty())
+                            <span class="badge bg-info text-dark me-1">Cajas</span>
+                            {{ $u->cajasPermitidas->pluck('codigo')->implode(', ') }}
+                        @elseif($u->vendedores->isNotEmpty())
+                            <span class="badge bg-secondary me-1">Vendedores</span>
                             {{ $u->vendedores->pluck('nombre')->implode(', ') }}
                         @else
                             <span class="text-secondary">—</span>

@@ -136,3 +136,26 @@
     </div>
 </div>
 @endsection
+
+@section('scripts')
+<script>
+(function() {
+    const vendos = document.querySelectorAll('input[name="vendedores[]"]');
+    const cajas  = document.querySelectorAll('input[name="cajas[]"]');
+    const cajaPrincipal = document.querySelector('select[name="caja_principal"]');
+
+    function sync() {
+        const hasVend = Array.from(vendos).some(cb => cb.checked);
+        const hasCaja  = Array.from(cajas).some(cb => cb.checked);
+        if (hasVend) {
+            cajas.forEach(cb => cb.checked = false);
+            if (cajaPrincipal) cajaPrincipal.value = '';
+        }
+        if (hasCaja) vendos.forEach(cb => cb.checked = false);
+    }
+    vendos.forEach(cb => cb.addEventListener('change', sync));
+    cajas.forEach(cb => cb.addEventListener('change', sync));
+    sync();
+})();
+</script>
+@endsection

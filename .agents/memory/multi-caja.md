@@ -16,6 +16,16 @@ description: How the multi-caja, series, and user assignment system works across
 - `CajaSelectorController::seleccionar()` — POST /caja/seleccionar, validates permission then writes to session
 - On login: `AuthController` auto-selects `$user->cajaPrincipal()` if exists
 
+## User assignment: Caja OR Vendedor (exclusivo)
+- Un usuario **solo** puede tener cajas **O** vendedores, **nunca ambos**.
+- Backend: `UsuarioController::store()` y `update()` validan exclusividad y devuelven error si ambos se envían.
+- Frontend: JavaScript en `create/edit.blade.php` desmarca el otro bloque automáticamente.
+- `User::debeRestringirPorCaja()` tiene prioridad sobre `debeRestringirPorVendedor()`.
+- Si tiene cajas: filtra **todo** (Ventas, Compras, Movimientos, Saldos, Clientes, Reportes) por `caja_id`.
+- Si tiene vendedores: filtra por `vendedor_id` como siempre.
+- `VendedorScope` tiene `modo()`, `cajaIds()`, `aplicar()`, `aplicarCompras()`, `aplicarSaldos()`, `aplicarMovimientos()`, `aplicarClientes()`.
+- `VendedorScope::ids()` ahora retorna null si el modo es caja (no vendedor).
+
 ## caja_id propagation rule
 Every `Movimiento::create()` must include `'caja_id' => $venta->caja_id ?? session('caja_id')` (or just `session('caja_id')` for non-venta context). Files covered:
 - CobranzaService: registrarPago, registrarPagoMultiple, reducirSaldo, aplicarSaldoFavor

@@ -163,19 +163,33 @@ class User extends Authenticatable
         return in_array($rol?->nombre, $defaults[$permiso] ?? ['Administrador']);
     }
 
-    // ── Restricción por vendedor ─────────────────────────────────────────────
+    // ── Restricción por vendedor / caja ─────────────────────────────────────
 
     /**
-     * Indica si este usuario debe ver SOLO los datos de sus vendedores asociados.
-     * Se activa cuando tiene al menos 1 vendedor asignado.
+     * ¿El usuario tiene CAJAS asignadas?
+     * Si tiene cajas, el filtro por caja tiene PRIORIDAD y el de vendedor se ignora.
+     */
+    public function debeRestringirPorCaja(): bool
+    {
+        return $this->cajasPermitidas()->exists();
+    }
+
+    /**
+     * ¿El usuario debe ver SOLO datos de sus vendedores asociados?
+     * Se activa cuando tiene vendedores PERO NO tiene cajas asignadas.
      */
     public function debeRestringirPorVendedor(): bool
     {
-        return $this->vendedores()->exists();
+        return $this->vendedores()->exists() && !$this->debeRestringirPorCaja();
     }
 
     public function vendedorIds(): array
     {
         return $this->vendedores()->pluck('vendedores.id')->toArray();
+    }
+
+    public function cajaIds(): array
+    {
+        return $this->cajasPermitidas()->pluck('cajas.id')->toArray();
     }
 }

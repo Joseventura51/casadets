@@ -117,6 +117,10 @@ class VentaController extends Controller
 
     private function authorizeVenta(Venta $venta): void
     {
+        $cajas = VendedorScope::cajaIds();
+        if ($cajas !== null && !in_array($venta->caja_id, $cajas)) {
+            abort(403, 'No tienes permiso para acceder a esta venta.');
+        }
         $ids = VendedorScope::ids();
         if ($ids !== null && !in_array($venta->vendedor_id, $ids)) {
             abort(403, 'No tienes permiso para acceder a esta venta.');
@@ -149,9 +153,16 @@ class VentaController extends Controller
     {
         abort_if(!auth()->user()?->puedeHacer('ventas.crear'), 403, 'No tienes permiso para crear ventas.');
 
-        $ids = VendedorScope::ids();
-        if ($ids !== null && !in_array((int) $request->input('vendedor_id'), $ids)) {
-            abort(403, 'No puedes crear ventas para este vendedor.');
+        // Validación de vendedor/caja: si filtra por caja, la caja debe ser válida
+        $cajas = VendedorScope::cajaIds();
+        if ($cajas !== null) {
+            // Validación opcional: si vendedor_id no está en sus vendedores, no importa
+            // (pero si filtra por caja, el vendedor no es restrictivo)
+        } else {
+            $ids = VendedorScope::ids();
+            if ($ids !== null && !in_array((int) $request->input('vendedor_id'), $ids)) {
+                abort(403, 'No puedes crear ventas para este vendedor.');
+            }
         }
 
         $data = $request->validate([
@@ -254,6 +265,7 @@ class VentaController extends Controller
         if ($ids !== null && !in_array((int) $request->input('vendedor_id'), $ids)) {
             abort(403, 'No puedes reasignar esta venta a un vendedor que no te pertenece.');
         }
+        // Nota: si filtra por caja, permite reasignar vendedor sin restricción
 
         $data = $request->validate([
             'vendedor_id'          => 'required|exists:vendedores,id',
@@ -426,8 +438,16 @@ class VentaController extends Controller
         ));
 
         if (!empty($ventasAdicionales)) {
+            $cajasIds = VendedorScope::cajaIds();
             $idsVendedor = VendedorScope::ids();
-            if ($idsVendedor !== null) {
+            if ($cajasIds !== null) {
+                $unauthorized = Venta::whereIn('id', $ventasAdicionales)
+                    ->whereNotIn('caja_id', $cajasIds)
+                    ->exists();
+                if ($unauthorized) {
+                    abort(403, 'No tienes permiso para pagar algunas de las ventas adicionales seleccionadas.');
+                }
+            } elseif ($idsVendedor !== null) {
                 $unauthorized = Venta::whereIn('id', $ventasAdicionales)
                     ->whereNotIn('vendedor_id', $idsVendedor)
                     ->exists();
@@ -571,8 +591,16 @@ class VentaController extends Controller
             'pagos.*.descripcion' => 'nullable|string|max:200',
         ]);
 
+        $cajasIds = VendedorScope::cajaIds();
         $idsVendedor = VendedorScope::ids();
-        if ($idsVendedor !== null) {
+        if ($cajasIds !== null) {
+            $unauthorized = Venta::whereIn('id', $data['ventas'])
+                ->whereNotIn('caja_id', $cajasIds)
+                ->exists();
+            if ($unauthorized) {
+                abort(403, 'No tienes permiso para pagar algunas de las ventas seleccionadas.');
+            }
+        } elseif ($idsVendedor !== null) {
             $unauthorized = Venta::whereIn('id', $data['ventas'])
                 ->whereNotIn('vendedor_id', $idsVendedor)
                 ->exists();
@@ -702,7 +730,9 @@ class VentaController extends Controller
         if ($hasta < $desde) $hasta = $desde;
 
         $authUser = auth()->user();
-        if ($authUser && $authUser->debeRestringirPorVendedor()) {
+        if ($authUser && $authUser->debeRestringirPorCaja()) {
+            $query->whereIn('caja_id', $authUser->cajaIds());
+        } elseif ($authUser && $authUser->debeRestringirPorVendedor()) {
             $query->whereIn('vendedor_id', $authUser->vendedorIds());
         } elseif ($request->filled('vendedor_id')) {
             $query->where('vendedor_id', $request->vendedor_id);

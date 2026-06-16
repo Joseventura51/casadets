@@ -42,6 +42,11 @@ class UsuarioController extends Controller
             'caja_principal' => 'nullable|integer|exists:cajas,id',
         ]);
 
+        // Mutuamente exclusivo: Caja OR Vendedor
+        if (!empty($data['cajas']) && !empty($data['vendedores'])) {
+            return back()->withInput()->with('error', 'Un usuario solo puede tener cajas O vendedores, no ambos.');
+        }
+
         $user = User::create([
             'name'     => $data['name'],
             'email'    => $data['email'],
@@ -50,16 +55,15 @@ class UsuarioController extends Controller
             'activo'   => $request->boolean('activo', true),
         ]);
 
-        if (!empty($data['vendedores'])) {
-            $user->vendedores()->sync($data['vendedores']);
-        }
-
         if (!empty($data['cajas'])) {
             $cajaPrincipal = (int) ($data['caja_principal'] ?? 0);
             $pivotData = collect($data['cajas'])->mapWithKeys(fn ($id) => [
                 $id => ['principal' => ($id == $cajaPrincipal)]
             ])->toArray();
             $user->cajasPermitidas()->sync($pivotData);
+            // Si tiene cajas, no se guardan vendedores
+        } elseif (!empty($data['vendedores'])) {
+            $user->vendedores()->sync($data['vendedores']);
         }
 
         return redirect('/admin/usuarios')->with('success', "Usuario {$user->name} creado correctamente.");
@@ -88,6 +92,11 @@ class UsuarioController extends Controller
             'caja_principal' => 'nullable|integer|exists:cajas,id',
         ]);
 
+        // Mutuamente exclusivo: Caja OR Vendedor
+        if (!empty($data['cajas']) && !empty($data['vendedores'])) {
+            return back()->withInput()->with('error', 'Un usuario solo puede tener cajas O vendedores, no ambos.');
+        }
+
         $usuario->name   = $data['name'];
         $usuario->email  = $data['email'];
         $usuario->rol_id = $data['rol_id'];
@@ -98,14 +107,23 @@ class UsuarioController extends Controller
         }
 
         $usuario->save();
-        $usuario->vendedores()->sync($data['vendedores'] ?? []);
 
-        $cajasData = [];
-        $cajaPrincipal = (int) ($data['caja_principal'] ?? 0);
-        foreach ($data['cajas'] ?? [] as $id) {
-            $cajasData[$id] = ['principal' => ($id == $cajaPrincipal)];
+        if (!empty($data['cajas'])) {
+            $cajasData = [];
+            $cajaPrincipal = (int) ($data['caja_principal'] ?? 0);
+            foreach ($data['cajas'] as $id) {
+                $cajasData[$id] = ['principal' => ($id == $cajaPrincipal)];
+            }
+            $usuario->cajasPermitidas()->sync($cajasData);
+            $usuario->vendedores()->sync([]); // elimina vendedores si tiene cajas
+        } elseif (!empty($data['vendedores'])) {
+            $usuario->vendedores()->sync($data['vendedores']);
+            $usuario->cajasPermitidas()->sync([]); // elimina cajas si tiene vendedores
+        } else {
+            // Vacío ambos: limpia ambos
+            $usuario->vendedores()->sync([]);
+            $usuario->cajasPermitidas()->sync([]);
         }
-        $usuario->cajasPermitidas()->sync($cajasData);
 
         return redirect('/admin/usuarios')->with('success', "Usuario {$usuario->name} actualizado.");
     }
