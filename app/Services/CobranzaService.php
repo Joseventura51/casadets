@@ -237,7 +237,7 @@ class CobranzaService
             foreach ($ventas as $venta) {
                 if ($restante <= 0) break;
 
-                $saldoVenta = max(0.0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2));
+                $saldoVenta = max(0.0, (float) bcsub((string) $venta->total_a_cobrar, (string) $venta->pagado, 2));
                 if ($saldoVenta <= 0) continue;
 
                 $aplicar  = min($restante, $saldoVenta);
@@ -262,6 +262,23 @@ class CobranzaService
                     'aplicado'       => $aplicar,
                     'estado'         => $venta->fresh()->estado,
                 ];
+            }
+
+            // Crear saldo a favor si sobra dinero y hay cliente asociado
+            $saldoFavorCreado = null;
+            if ($restante > 0 && $clienteId) {
+                $ventaOrigenId = $ventas->last()?->id;
+                $docList2 = collect($ventasActualizadas)->pluck('documento')->filter()->implode(', ');
+                $saldoFavorCreado = SaldoFavor::create([
+                    'cliente_id'       => $clienteId,
+                    'pago_id'          => $pago->id,
+                    'venta_origen_id'  => $ventaOrigenId,
+                    'monto_original'   => $restante,
+                    'monto_disponible' => $restante,
+                    'estado'           => 'disponible',
+                    'descripcion'      => 'Excedente de pago múltiple' . ($docList2 ? " — {$docList2}" : ''),
+                    'fecha'            => now()->toDateString(),
+                ]);
             }
 
             // Movimiento consolidado en el ledger
@@ -289,6 +306,7 @@ class CobranzaService
                 'ventas_actualizadas' => $ventasActualizadas,
                 'total_aplicado'     => $totalAplicado,
                 'sobrante'           => $restante,
+                'saldo_favor'        => $saldoFavorCreado,
                 'ventas_cobradas'    => collect($ventasActualizadas)->where('estado', 'pagado')->count(),
             ];
         });
