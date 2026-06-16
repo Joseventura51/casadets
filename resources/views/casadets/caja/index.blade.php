@@ -19,7 +19,17 @@
         </p>
     </div>
     <form method="GET" class="d-flex gap-2 align-items-center flex-wrap" data-dynamic-filter data-default-today>
-        @if($cajaSeleccionada)
+        @if($cajasDisponibles->count() > 1)
+        <select name="caja_id" class="form-select form-select-sm" style="width:220px;"
+                onchange="this.form.submit()">
+            <option value="">— Seleccionar caja —</option>
+            @foreach($cajasDisponibles as $opt)
+            <option value="{{ $opt->id }}" {{ ($cajaSeleccionada?->id == $opt->id) ? 'selected' : '' }}>
+                {{ $opt->codigo }} — {{ $opt->nombre }}
+            </option>
+            @endforeach
+        </select>
+        @elseif($cajaSeleccionada)
             <input type="hidden" name="caja_id" value="{{ $cajaSeleccionada->id }}">
         @endif
         <div class="d-flex align-items-center gap-1">
