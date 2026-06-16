@@ -22,13 +22,10 @@ class CajaController extends Controller
         $hoy    = Carbon::today()->toDateString();
         $desde  = $request->input('desde', $hoy);
         $hasta  = $request->input('hasta', $desde);
-        $empresa = $request->input('empresa', 'casadets');
         if ($hasta < $desde) $hasta = $desde;
 
-        // ── Cajas disponibles para el usuario ──────────────────────────────
-        $cajasDisponibles = CajaService::cajasUsuario()
-            ->where('empresa', $empresa)
-            ->values();
+        // ── Cajas disponibles para el usuario (todas las empresas) ──────────
+        $cajasDisponibles = CajaService::cajasUsuario()->values();
 
         // ── Caja seleccionada ───────────────────────────────────────────────
         $cajaId = $request->input('caja_id', session('caja_id'));
@@ -38,7 +35,18 @@ class CajaController extends Controller
             session(['caja_id' => $cajaId]);
         }
 
+        // Auto-seleccionar si solo hay una caja disponible
+        if (!$cajaId && $cajasDisponibles->count() === 1) {
+            $cajaId = $cajasDisponibles->first()->id;
+            session(['caja_id' => $cajaId]);
+        }
+
         $cajaSeleccionada = $cajaId ? Caja::find($cajaId) : null;
+
+        // Derivar empresa desde la caja seleccionada, o usar el primero disponible como fallback
+        $empresa = $cajaSeleccionada?->empresa
+            ?? $cajasDisponibles->first()?->empresa
+            ?? $request->input('empresa', 'casadets');
 
         // ── Sesión de caja del día actual ──────────────────────────────────
         $sesionHoy = null;
