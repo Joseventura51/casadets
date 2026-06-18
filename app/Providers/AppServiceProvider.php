@@ -20,10 +20,20 @@ class AppServiceProvider extends ServiceProvider
         // Compartir estado de caja con todas las vistas
         View::composer('*', function ($view) {
             try {
-                $cajaAbierta = CajaSesion::where('empresa', 'casadets')
-                    ->whereDate('fecha', now()->toDateString())
-                    ->where('estado', 'abierta')
-                    ->exists();
+                $cajaId = session('caja_id');
+                if ($cajaId) {
+                    // Verificar por caja_id de la sesión actual
+                    $cajaAbierta = CajaSesion::where('caja_id', $cajaId)
+                        ->whereDate('fecha', now()->toDateString())
+                        ->where('estado', 'abierta')
+                        ->exists();
+                } else {
+                    // Sin caja seleccionada: verificar si existe alguna caja abierta hoy
+                    $cajaAbierta = CajaSesion::whereNotNull('caja_id')
+                        ->whereDate('fecha', now()->toDateString())
+                        ->where('estado', 'abierta')
+                        ->exists();
+                }
             } catch (\Throwable $e) {
                 $cajaAbierta = true; // si la tabla no existe aún, no bloquear
             }

@@ -154,7 +154,21 @@
                             @endforeach
                         </select>
                     </td>
-                    <td><input type="text" id="fDocumento" name="documento" value="{{ $documento ?? '' }}" class="filter-input" placeholder="F001-001…"></td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            @if($seriesDisponibles->isNotEmpty())
+                            <select id="fSerie" name="serie" class="filter-input" style="max-width:80px;" title="Filtrar por serie">
+                                <option value="">Todas</option>
+                                @foreach($seriesDisponibles as $s)
+                                    <option value="{{ $s->codigo }}" {{ isset($serie) && $serie === $s->codigo ? 'selected' : '' }}>
+                                        {{ $s->codigo }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @endif
+                            <input type="text" id="fDocumento" name="documento" value="{{ $documento ?? '' }}" class="filter-input" placeholder="Nro…">
+                        </div>
+                    </td>
                     <td><input type="text" id="fTotal" name="total" value="{{ $total ?? '' }}" class="filter-input text-end" placeholder="84.48"></td>
                     <td class="text-end">
                         <button type="button" id="btnLimpiar" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Limpiar filtros" style="font-size:.75rem;">
@@ -336,6 +350,7 @@ let filtros = {
     vendedor:  document.getElementById('fVendedor'),
     cliente:   document.getElementById('fCliente'),
     pago:      document.getElementById('fPago'),
+    serie:     document.getElementById('fSerie'),
     documento: document.getElementById('fDocumento'),
     total:     document.getElementById('fTotal'),
 };
@@ -405,8 +420,8 @@ function restaurarFiltrosTabla() {
 restaurarFiltrosTabla();
 formFiltros?.addEventListener('submit', guardarFiltrosTabla);
 
-[filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => {
-    // Do NOT clear 'todas' — Estado/Pago are orthogonal to the date range
+[filtros.estado, filtros.pago, filtros.serie].forEach(el => el?.addEventListener('change', () => {
+    // Do NOT clear 'todas' — Estado/Pago/Serie are orthogonal to the date range
     fetchFiltersAjax(false);
 }));
 fFecha.addEventListener('change', () => {
@@ -446,6 +461,7 @@ function actualizarExport() {
         vendedor: filtros.vendedor?.value,
         cliente: filtros.cliente?.value,
         pago: filtros.pago?.value,
+        serie: filtros.serie?.value,
         documento: filtros.documento?.value,
         total: filtros.total?.value,
     };
@@ -479,6 +495,7 @@ function rebindTableBehaviors() {
         vendedor:  document.getElementById('fVendedor'),
         cliente:   document.getElementById('fCliente'),
         pago:      document.getElementById('fPago'),
+        serie:     document.getElementById('fSerie'),
         documento: document.getElementById('fDocumento'),
         total:     document.getElementById('fTotal'),
     };
@@ -500,8 +517,8 @@ function rebindTableBehaviors() {
     Object.values(filtros).forEach(el => el?.addEventListener('input', actualizarExport));
     fFecha?.addEventListener('input', actualizarExport);
     [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => el?.addEventListener('input', debouncedFetch));
-    [filtros.estado, filtros.pago].forEach(el => el?.addEventListener('change', () => {
-        // Do NOT clear 'todas' — Estado/Pago are orthogonal to the date range
+    [filtros.estado, filtros.pago, filtros.serie].forEach(el => el?.addEventListener('change', () => {
+        // Do NOT clear 'todas' — Estado/Pago/Serie are orthogonal to the date range
         fetchFiltersAjax(false);
     }));
     // fFecha is outside #ventasContainer so it is never replaced — do NOT re-add its listener here

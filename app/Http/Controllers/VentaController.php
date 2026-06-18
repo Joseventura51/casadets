@@ -37,6 +37,7 @@ class VentaController extends Controller
         $cliente   = $request->input('cliente');
         $pago      = $request->input('pago');
         $documento = $request->input('documento');
+        $serie     = $request->input('serie');
         $total     = $request->input('total');
 
         $query = Venta::with([
@@ -50,9 +51,25 @@ class VentaController extends Controller
 
         VendedorScope::aplicar($query);
 
+        // Filtrar por caja: incluye ventas con caja_id correcto
+        // Y también ventas importadas sin caja_id pero cuyo documento_numero
+        // empieza con alguna de las series asignadas a esta caja.
         if (session('caja_id')) {
-            $query->where('caja_id', session('caja_id'));
+            $cajaId = session('caja_id');
+            $seriesCodigos = Serie::where('caja_id', $cajaId)->pluck('codigo');
+
+            $query->where(function ($q) use ($cajaId, $seriesCodigos) {
+                $q->where('caja_id', $cajaId);
+                foreach ($seriesCodigos as $cod) {
+                    $q->orWhere('documento_numero', 'like', $cod . '-%');
+                }
+            });
         }
+
+        // Series disponibles de la caja actual (para el filtro desplegable)
+        $seriesDisponibles = session('caja_id')
+            ? Serie::where('caja_id', session('caja_id'))->orderBy('codigo')->get()
+            : collect();
 
         if (!$request->boolean('todas')) {
             $query->whereDate('fecha', '>=', $desde)
@@ -89,6 +106,10 @@ class VentaController extends Controller
             });
         }
 
+        if ($serie) {
+            $query->where('documento_numero', 'like', $serie . '-%');
+        }
+
         if ($total) {
             $query->where('total', 'like', '%' . $total . '%');
         }
@@ -114,7 +135,8 @@ class VentaController extends Controller
 
         return view('casadets.ventas.index', compact(
             'ventas', 'vendedores', 'desde', 'hasta', 'todas',
-            'estado', 'fecha', 'vendedor', 'cliente', 'pago', 'documento', 'total'
+            'estado', 'fecha', 'vendedor', 'cliente', 'pago', 'documento', 'serie',
+            'total', 'seriesDisponibles'
         ));
     }
 
