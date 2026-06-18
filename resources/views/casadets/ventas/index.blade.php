@@ -177,7 +177,7 @@
                     </td>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="ventasTbody">
                 @forelse($ventas as $v)
                 @php
                     $metodosArr  = array_filter(explode(',', $v->metodo_pago ?? ''));
@@ -278,19 +278,22 @@
                 @endforelse
             </tbody>
             @if($ventas->count())
-            <tfoot>
+            <tfoot id="ventasTfoot">
                 <tr class="table-light">
                     <th colspan="6" class="text-end">Total cobrado (visibles)</th>
                     <th class="text-end" id="totalVisible">S/ {{ number_format($ventas->sum(fn($v) => $v->total_cobrado), 2) }}</th>
                     <th></th>
                 </tr>
             </tfoot>
+            @else
+            <tfoot id="ventasTfoot"></tfoot>
             @endif
         </table>
     </div>
 </div>
 </form>
 
+<div id="ventasPaginacion">
 @if($ventas->hasPages())
 <div class="d-flex justify-content-between align-items-center mt-3">
     <div>
@@ -301,6 +304,7 @@
     </div>
 </div>
 @endif
+</div>
 
 </div>
 
@@ -488,62 +492,22 @@ function debounce(fn, ms) {
 }
 
 function rebindTableBehaviors() {
-    // refresh DOM references
-    formFiltros = document.getElementById('formFiltros');
-    filtros = {
-        estado:    document.getElementById('fEstado'),
-        vendedor:  document.getElementById('fVendedor'),
-        cliente:   document.getElementById('fCliente'),
-        pago:      document.getElementById('fPago'),
-        serie:     document.getElementById('fSerie'),
-        documento: document.getElementById('fDocumento'),
-        total:     document.getElementById('fTotal'),
-    };
-    fFecha = document.getElementById('fFecha');
-
-    filas = document.querySelectorAll('.fila-venta');
-    cntVisible = document.getElementById('cntVisible');
-    contador = document.getElementById('contadorFiltro');
+    // Los inputs de filtro (thead-filter) NUNCA se reemplazan — no re-enlazar.
+    // Solo actualizar referencias a filas y paginación.
+    filas        = document.querySelectorAll('.fila-venta');
+    cntVisible   = document.getElementById('cntVisible');
+    contador     = document.getElementById('contadorFiltro');
     noResultados = document.getElementById('filaNoResultados');
     totalVisible = document.getElementById('totalVisible');
 
-    // select-estado rows now use cambiarEstadoFila(this) via onchange — no listener needed here
-
-    // refresh export button and update its href
-    btnExportar = document.getElementById('btnExportar') || btnExportar;
-    actualizarExport();
-
-    // reattach listeners
-    Object.values(filtros).forEach(el => el?.addEventListener('input', actualizarExport));
-    fFecha?.addEventListener('input', actualizarExport);
-    [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => el?.addEventListener('input', debouncedFetch));
-    [filtros.estado, filtros.pago, filtros.serie].forEach(el => el?.addEventListener('change', () => {
-        // Do NOT clear 'todas' — Estado/Pago/Serie are orthogonal to the date range
-        fetchFiltersAjax(false);
-    }));
-    // fFecha is outside #ventasContainer so it is never replaced — do NOT re-add its listener here
-
-    const btnLim = document.getElementById('btnLimpiar');
-    btnLim?.addEventListener('click', () => {
-        Object.values(filtros).forEach(el => el.value = '');
-        if (fFecha) fFecha.value = '';
-        const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
-        actualizarExport();
-        formFiltros?.submit();
-    });
-
-    // Reattach pagination AJAX listeners: capture page parameter and use AJAX instead of full reload
-    document.querySelectorAll('.pagination a.page-link').forEach(link => {
+    // Paginación AJAX — re-enlazar los nuevos links
+    document.querySelectorAll('#ventasPaginacion .pagination a.page-link').forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const href = link.href || link.getAttribute('href');
             if (!href) return;
-            
-            const url = new URL(href, window.location.origin);
-            const pageParam = url.searchParams.get('page');
-            if (pageParam) {
-                fetchFiltersAjax(false, parseInt(pageParam));
-            }
+            const pageParam = new URL(href, window.location.origin).searchParams.get('page');
+            if (pageParam) fetchFiltersAjax(false, parseInt(pageParam));
         });
     });
 }
@@ -561,34 +525,23 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
     if (ajaxController) ajaxController.abort();
     ajaxController = new AbortController();
 
-    // Guardar foco y posición del cursor antes de reemplazar el DOM
-    const activeEl = document.activeElement;
-    const focusName  = activeEl?.name  || null;
-    const focusId    = activeEl?.id    || null;
-    const selStart   = activeEl?.selectionStart ?? null;
-    const selEnd     = activeEl?.selectionEnd   ?? null;
-
     try {
         const res = await fetch(url, { signal: ajaxController.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
         const text = await res.text();
         const tmp = document.createElement('div');
         tmp.innerHTML = text;
-        const newContainer = tmp.querySelector('#ventasContainer');
-        const oldContainer = document.getElementById('ventasContainer');
-        if (newContainer && oldContainer) {
-            oldContainer.replaceWith(newContainer);
-            rebindTableBehaviors();
 
-            // Restaurar foco y posición del cursor
-            const restored = (focusId   && document.getElementById(focusId))
-                          || (focusName && document.querySelector(`[name="${focusName}"]`));
-            if (restored) {
-                restored.focus();
-                if (selStart !== null && restored.setSelectionRange) {
-                    try { restored.setSelectionRange(selStart, selEnd); } catch (_) {}
-                }
-            }
-        }
+        // Reemplazar SOLO tbody, tfoot y paginación — los inputs del thead nunca se tocan
+        const newTbody = tmp.querySelector('#ventasTbody');
+        const newTfoot = tmp.querySelector('#ventasTfoot');
+        const newPag   = tmp.querySelector('#ventasPaginacion');
+
+        if (newTbody) document.getElementById('ventasTbody')?.replaceWith(newTbody);
+        if (newTfoot) document.getElementById('ventasTfoot')?.replaceWith(newTfoot);
+        if (newPag)   document.getElementById('ventasPaginacion')?.replaceWith(newPag);
+
+        rebindTableBehaviors();
+        aplicarFiltros();
     } catch (err) {
         if (err.name !== 'AbortError') console.error('AJAX filter error', err);
     } finally {
