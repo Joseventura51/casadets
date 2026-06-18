@@ -51,25 +51,30 @@ class VentaController extends Controller
 
         VendedorScope::aplicar($query);
 
-        // Filtrar por caja: incluye ventas con caja_id correcto
-        // Y también ventas importadas sin caja_id pero cuyo documento_numero
-        // empieza con alguna de las series asignadas a esta caja.
+        // Filtrar ventas según la caja seleccionada:
+        // Si la caja tiene series asignadas, solo mostrar documentos que empiecen
+        // con alguna de esas series (F006-xxx, B006-xxx, P006-xxx…).
+        // Si no hay series asignadas, caer en filtro por caja_id.
+        $seriesDisponibles = collect();
         if (session('caja_id')) {
             $cajaId = session('caja_id');
             $seriesCodigos = Serie::where('caja_id', $cajaId)->pluck('codigo');
+            $seriesDisponibles = Serie::where('caja_id', $cajaId)->orderBy('codigo')->get();
 
-            $query->where(function ($q) use ($cajaId, $seriesCodigos) {
-                $q->where('caja_id', $cajaId);
-                foreach ($seriesCodigos as $cod) {
-                    $q->orWhere('documento_numero', 'like', $cod . '-%');
-                }
-            });
+            if ($seriesCodigos->isNotEmpty()) {
+                // Mostrar SOLO ventas cuyo documento_numero pertenece a esta caja
+                $query->where(function ($q) use ($cajaId, $seriesCodigos) {
+                    foreach ($seriesCodigos as $cod) {
+                        $q->orWhere('documento_numero', 'like', $cod . '-%');
+                    }
+                    // También incluir ventas sin número de documento propias de esta caja
+                    $q->orWhere(fn ($q2) => $q2->where('caja_id', $cajaId)->whereNull('documento_numero'));
+                });
+            } else {
+                // Sin series configuradas: usar caja_id directamente
+                $query->where('caja_id', $cajaId);
+            }
         }
-
-        // Series disponibles de la caja actual (para el filtro desplegable)
-        $seriesDisponibles = session('caja_id')
-            ? Serie::where('caja_id', session('caja_id'))->orderBy('codigo')->get()
-            : collect();
 
         if (!$request->boolean('todas')) {
             $query->whereDate('fecha', '>=', $desde)

@@ -9,6 +9,7 @@ use App\Models\DetallePagoFactura;
 use App\Models\Movimiento;
 use App\Models\Pago;
 use App\Models\PagoMetodo;
+use App\Models\Serie;
 use App\Models\Venta;
 use App\Services\CajaService;
 use App\Services\VendedorScope;
@@ -86,7 +87,7 @@ class CajaController extends Controller
 
         $movimientos = $movQuery->get();
 
-        // Ventas del período
+        // Ventas del período — filtradas por las series asignadas a la caja
         $ventasQuery = Venta::with(['vendedor', 'detalles'])
             ->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta)
@@ -95,7 +96,17 @@ class CajaController extends Controller
             ->orderBy('id', 'desc');
 
         if ($cajaSeleccionada) {
-            $ventasQuery->where('caja_id', $cajaSeleccionada->id);
+            $seriesCodigos = Serie::where('caja_id', $cajaSeleccionada->id)->pluck('codigo');
+            if ($seriesCodigos->isNotEmpty()) {
+                $ventasQuery->where(function ($q) use ($cajaSeleccionada, $seriesCodigos) {
+                    foreach ($seriesCodigos as $cod) {
+                        $q->orWhere('documento_numero', 'like', $cod . '-%');
+                    }
+                    $q->orWhere(fn ($q2) => $q2->where('caja_id', $cajaSeleccionada->id)->whereNull('documento_numero'));
+                });
+            } else {
+                $ventasQuery->where('caja_id', $cajaSeleccionada->id);
+            }
         }
 
         VendedorScope::aplicar($ventasQuery);
