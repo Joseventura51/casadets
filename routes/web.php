@@ -72,32 +72,59 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
     Route::get('/casadets/pendientes', [VentaController::class, 'pendientes'])
         ->middleware(['rol:pendientes', 'caja.abierta']);
 
-    // Ventas — las rutas estáticas SIEMPRE antes del wildcard {venta}
+    // Ventas
+    // Nivel 1: rol:ventas   → acceso al módulo Ventas
+    // Nivel 2: permiso:X    → permiso de acción dentro de Ventas
+    // Nivel 3: caja.abierta → acción que requiere caja abierta
+    // IMPORTANTE: todas las rutas estáticas ANTES del wildcard {venta}
     Route::middleware('rol:ventas')->group(function () {
-        // Lectura sin restricción de caja
-        Route::get('/casadets/ventas/export',          [VentaController::class,       'export']);
-        Route::get('/casadets/ventas/import',          [VentaImportController::class, 'form']);
-        Route::get('/casadets/ventas',                 [VentaController::class,       'index']);
 
-        // Escritura estática (caja requerida) — antes del wildcard
-        Route::get('/casadets/ventas/create',          [VentaController::class,       'create'])             ->middleware('caja.abierta');
-        Route::get('/casadets/ventas/pago-multiple',   [VentaController::class,       'pagoMultiple'])       ->middleware('caja.abierta');
-        Route::post('/casadets/ventas',                [VentaController::class,       'store'])              ->middleware('caja.abierta');
-        Route::post('/casadets/ventas/pago-multiple',  [VentaController::class,       'updatePagoMultiple']) ->middleware('caja.abierta');
-        Route::post('/casadets/ventas/import',         [VentaImportController::class, 'preview'])            ->middleware('caja.abierta');
-        Route::post('/casadets/ventas/import/confirm', [VentaImportController::class, 'confirm'])            ->middleware('caja.abierta');
+        // ── Sólo lectura ───────────────────────────────────────────────────
+        Route::get('/casadets/ventas',        [VentaController::class, 'index']);
+        Route::get('/casadets/ventas/export', [VentaController::class, 'export']);
 
-        // Lectura con wildcard {venta}
-        Route::get('/casadets/ventas/{venta}',      [VentaController::class, 'show']);
-        Route::get('/casadets/ventas/{venta}/edit', [VentaController::class, 'edit']);
-        Route::get('/casadets/ventas/{venta}/pago', [VentaController::class, 'pago']);
+        // ── Crear venta ────────────────────────────────────────────────────
+        Route::get('/casadets/ventas/create',  [VentaController::class, 'create'])
+            ->middleware(['permiso:ventas.crear', 'caja.abierta']);
+        Route::post('/casadets/ventas',        [VentaController::class, 'store'])
+            ->middleware(['permiso:ventas.crear', 'caja.abierta']);
 
-        // Escritura con wildcard {venta} (caja requerida)
-        Route::put('/casadets/ventas/{venta}',                [VentaController::class, 'update'])         ->middleware('caja.abierta');
-        Route::post('/casadets/ventas/{venta}/pago',          [VentaController::class, 'updatePago'])     ->middleware('caja.abierta');
-        Route::post('/casadets/ventas/{venta}/reducir-saldo', [VentaController::class, 'reducirSaldo'])   ->middleware('caja.abierta');
-        Route::post('/casadets/ventas/{venta}/estado',        [VentaController::class, 'updateEstado'])   ->middleware('caja.abierta');
-        Route::delete('/casadets/ventas/{venta}',             [VentaController::class, 'destroy'])        ->middleware('caja.abierta');
+        // ── Pago múltiple (estático, antes de {venta}) ────────────────────
+        Route::get('/casadets/ventas/pago-multiple',  [VentaController::class, 'pagoMultiple'])
+            ->middleware(['permiso:ventas.pago', 'caja.abierta']);
+        Route::post('/casadets/ventas/pago-multiple', [VentaController::class, 'updatePagoMultiple'])
+            ->middleware(['permiso:ventas.pago', 'caja.abierta']);
+
+        // ── Importar ventas (estático, antes de {venta}) ──────────────────
+        Route::get('/casadets/ventas/import',          [VentaImportController::class, 'form'])
+            ->middleware('permiso:ventas.importar');
+        Route::post('/casadets/ventas/import',         [VentaImportController::class, 'preview'])
+            ->middleware(['permiso:ventas.importar', 'caja.abierta']);
+        Route::post('/casadets/ventas/import/confirm', [VentaImportController::class, 'confirm'])
+            ->middleware(['permiso:ventas.importar', 'caja.abierta']);
+
+        // ── Wildcard {venta} — sólo lectura ───────────────────────────────
+        Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
+
+        // ── Editar venta ───────────────────────────────────────────────────
+        Route::get('/casadets/ventas/{venta}/edit',    [VentaController::class, 'edit'])
+            ->middleware('permiso:ventas.editar');
+        Route::put('/casadets/ventas/{venta}',         [VentaController::class, 'update'])
+            ->middleware(['permiso:ventas.editar', 'caja.abierta']);
+        Route::post('/casadets/ventas/{venta}/estado', [VentaController::class, 'updateEstado'])
+            ->middleware(['permiso:ventas.editar', 'caja.abierta']);
+
+        // ── Eliminar venta ─────────────────────────────────────────────────
+        Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy'])
+            ->middleware(['permiso:ventas.eliminar', 'caja.abierta']);
+
+        // ── Registrar pago ─────────────────────────────────────────────────
+        Route::get('/casadets/ventas/{venta}/pago',           [VentaController::class, 'pago'])
+            ->middleware('permiso:ventas.pago');
+        Route::post('/casadets/ventas/{venta}/pago',          [VentaController::class, 'updatePago'])
+            ->middleware(['permiso:ventas.pago', 'caja.abierta']);
+        Route::post('/casadets/ventas/{venta}/reducir-saldo', [VentaController::class, 'reducirSaldo'])
+            ->middleware(['permiso:ventas.pago', 'caja.abierta']);
     });
 
     // Saldos a favor
