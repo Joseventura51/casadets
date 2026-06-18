@@ -1,0 +1,160 @@
+Internal Server Error
+
+Copy as Markdown
+Illuminate\Database\UniqueConstraintViolationException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'B006' for key 'series_codigo_unique' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: bd_casadets, SQL: insert into `series` (`codigo`, `tipo_documento`, `correlativo_actual`, `caja_id`, `activa`, `updated_at`, `created_at`) values (B006, nota_credito, 0, ?, 1, 2026-06-18 15:22:44, 2026-06-18 15:22:44))
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 23000
+500
+POST
+http://127.0.0.1:8000/admin/series
+
+Exception trace
+15 vendor frames
+
+Illuminate\Database\Eloquent\Model::__callStatic(string, array)
+app\Http\Controllers\Admin\SerieController.php:42
+
+37            'activa'              => 'boolean',
+38        ], [
+39            'codigo.unique' => 'Ya existe una serie con ese código para el mismo tipo de documento.',
+40        ]);
+41
+42        $serie = Serie::create([
+43            'codigo'             => strtoupper(trim($data['codigo'])),
+44            'tipo_documento'     => $data['tipo_documento'],
+45            'correlativo_actual' => $data['correlativo_actual'],
+46            'caja_id'            => $data['caja_id'] ?? null,
+47            'activa'             => $request->boolean('activa', true),
+48        ]);
+49
+50        return redirect('/admin/series')->with('success', "Serie {$serie->codigo} creada.");
+51    }
+52
+53    public function edit(Serie $serie)
+54
+5 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckRol.php:24
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 100
+mysql
+select * from `sessions` where `id` = 'c1MocZVBozhrkgwxHmdwwV3mEqZXQWeuOK1rOc98' limit 1
+1.74ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.38ms
+mysql
+select * from `roles` where `roles`.`id` = 1 limit 1
+0.38ms
+mysql
+select count(*) as aggregate from `series` where `codigo` = 'B006' and (`tipo_documento` = 'nota_credito')
+0.45ms
+mysql
+select exists(select * from `caja_sesiones` where `caja_id` is not null and date(`fecha`) = '2026-06-18' and `estado` = 'abierta') as `exists`
+0.66ms
+mysql
+select exists(select * from `caja_sesiones` where `caja_id` is not null and date(`fecha`) = '2026-06-18' and `estado` = 'abierta') as `exists`
+0.95ms
+mysql
+select exists(select * from `caja_sesiones` where `caja_id` is not null and date(`fecha`) = '2026-06-18' and `estado` = 'abierta') as `exists`
+0.76ms
+mysql
+select exists(select * from `caja_sesiones` where `caja_id` is not null and date(`fecha`) = '2026-06-18' and `estado` = 'abierta') as `exists`
+0.54ms
+mysql
+select exists(select * from `caja_sesiones` where `caja_id` is not null and date(`fecha`) = '2026-06-18' and `estado` = 'abierta') as `exists`
+0.54ms
+mysql
+select exists(select * from `caja_sesiones` where `caja_id` is not null and date(`fecha`) = '2026-06-18' and `estado` = 'abierta') as `exists`
+0.5ms
+
+
+1
+2
+3
+4
+5
+...
+10
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+content-length
+126
+cache-control
+max-age=0
+sec-ch-ua
+"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+dnt
+1
+upgrade-insecure-requests
+1
+content-type
+application/x-www-form-urlencoded
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+origin
+http://127.0.0.1:8000
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/admin/series/create
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6ImUweUxSSWlLc0NsTyt4RHErM0p0UlE9PSIsInZhbHVlIjoiVktaRTZaRkRUNCtyNitHSVRaRThGYWF2UUlBQTdLV2xwUHloRSs1dzFYSWJKaTI4QlBZWU5iUThXN0tqTk1CN0VJTHJKdW1jeU1CWGZVSEN2Y3MxbnBtVnFaeHViKzhBb0Z4ankwNmkwUDR5cG82d3JiZzdrM1ZGYmFMTTJpMmsiLCJtYWMiOiI2NWJmNzAzOTY5OGJhMGI4ZDBmNWZjZjNkZTVlMjVlYTBjYjhmYzllZGY4NmYxOWI3M2QxZTM0OGJhMDI1ZjRhIiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6Ik5tZmxSQlFjWmNqVnlBcWF4bG1BUEE9PSIsInZhbHVlIjoicVhiMHowQlQzeG43TDBrVWY0VzhNZE5uQ2ppUXowNkJ1TjRNMjZiWmJZUytnWXVwaGs1U1B2UHpuTFZEdXp2YkZ5UUp6UHpPNjlPZ1lITDJqYnlQSTdGTlJZWE1nTE9XZHF2akpUVHZ6NGxjWHJycmNZY3B4a3pHT1pQUy8yYnAiLCJtYWMiOiI4MmIyNzc2NmJjZTFkNzI5ZjY1NGE4ODk2Nzc1N2VmYjlkODFmOGVkNTE3ZjFiMDEzZDEwMTM0ODk4ZWRlNTFjIiwidGFnIjoiIn0%3D
+Body
+{
+    "_token": "hcMntCLVJtk0dX0TFAOHoiqS34QXFfkLiEGfJiHJ",
+    "codigo": "B006",
+    "tipo_documento": "nota_credito",
+    "correlativo_actual": "0",
+    "caja_id": null,
+    "activa": "1"
+}
+Routing
+controller
+App\Http\Controllers\Admin\SerieController@store
+middleware
+web, auth, check.activo, rol:admin.series
+Routing parameters
+// No routing parameters
