@@ -553,13 +553,21 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
     const fd = new FormData(formFiltros);
     if (forceTodas) {
         fd.set('todas', '1');
-        fd.set('page', '1');  // Reset to page 1 when searching globally
+        fd.set('page', '1');
     } else if (pageNum !== null) {
         fd.set('page', pageNum.toString());
     }
     const url = formFiltros.action + '?' + new URLSearchParams(fd).toString();
     if (ajaxController) ajaxController.abort();
     ajaxController = new AbortController();
+
+    // Guardar foco y posición del cursor antes de reemplazar el DOM
+    const activeEl = document.activeElement;
+    const focusName  = activeEl?.name  || null;
+    const focusId    = activeEl?.id    || null;
+    const selStart   = activeEl?.selectionStart ?? null;
+    const selEnd     = activeEl?.selectionEnd   ?? null;
+
     try {
         const res = await fetch(url, { signal: ajaxController.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
         const text = await res.text();
@@ -570,6 +578,16 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
         if (newContainer && oldContainer) {
             oldContainer.replaceWith(newContainer);
             rebindTableBehaviors();
+
+            // Restaurar foco y posición del cursor
+            const restored = (focusId   && document.getElementById(focusId))
+                          || (focusName && document.querySelector(`[name="${focusName}"]`));
+            if (restored) {
+                restored.focus();
+                if (selStart !== null && restored.setSelectionRange) {
+                    try { restored.setSelectionRange(selStart, selEnd); } catch (_) {}
+                }
+            }
         }
     } catch (err) {
         if (err.name !== 'AbortError') console.error('AJAX filter error', err);
