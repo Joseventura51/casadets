@@ -62,12 +62,15 @@ class VentaController extends Controller
             $seriesDisponibles = Serie::where('caja_id', $cajaId)->orderBy('codigo')->get();
 
             if ($seriesCodigos->isNotEmpty()) {
-                // Mostrar SOLO ventas cuyo documento_numero pertenece a esta caja
+                // Mostrar ventas cuyo documento_numero pertenece a esta caja,
+                // más notas de crédito (NC) que no tienen serie asignada.
                 $query->where(function ($q) use ($cajaId, $seriesCodigos) {
                     foreach ($seriesCodigos as $cod) {
                         $q->orWhere('documento_numero', 'like', $cod . '-%');
                     }
-                    // También incluir ventas sin número de documento propias de esta caja
+                    // Notas de crédito: siempre visibles para la caja activa
+                    $q->orWhere('documento_tipo', 'nota_credito');
+                    // Ventas sin número de documento propias de esta caja
                     $q->orWhere(fn ($q2) => $q2->where('caja_id', $cajaId)->whereNull('documento_numero'));
                 });
             } else {
