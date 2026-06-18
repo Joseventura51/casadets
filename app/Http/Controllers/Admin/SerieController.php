@@ -23,12 +23,20 @@ class SerieController extends Controller
 
     public function store(Request $request)
     {
+        $tipo = $request->input('tipo_documento');
         $data = $request->validate([
-            'codigo'              => 'required|string|max:20|unique:series,codigo',
+            'codigo'              => [
+                'required', 'string', 'max:20',
+                \Illuminate\Validation\Rule::unique('series')->where(
+                    fn ($q) => $q->where('tipo_documento', $tipo)
+                ),
+            ],
             'tipo_documento'      => 'required|in:boleta,factura,proforma,nota_credito',
             'correlativo_actual'  => 'required|integer|min:0',
             'caja_id'             => 'nullable|exists:cajas,id',
             'activa'              => 'boolean',
+        ], [
+            'codigo.unique' => 'Ya existe una serie con ese código para el mismo tipo de documento.',
         ]);
 
         $serie = Serie::create([
@@ -50,12 +58,20 @@ class SerieController extends Controller
 
     public function update(Request $request, Serie $serie)
     {
+        $tipo = $request->input('tipo_documento');
         $data = $request->validate([
-            'codigo'             => 'required|string|max:20|unique:series,codigo,' . $serie->id,
+            'codigo'             => [
+                'required', 'string', 'max:20',
+                \Illuminate\Validation\Rule::unique('series')
+                    ->where(fn ($q) => $q->where('tipo_documento', $tipo))
+                    ->ignore($serie->id),
+            ],
             'tipo_documento'     => 'required|in:boleta,factura,proforma,nota_credito',
             'correlativo_actual' => 'required|integer|min:0',
             'caja_id'            => 'nullable|exists:cajas,id',
             'activa'             => 'boolean',
+        ], [
+            'codigo.unique' => 'Ya existe una serie con ese código para el mismo tipo de documento.',
         ]);
 
         $serie->update([

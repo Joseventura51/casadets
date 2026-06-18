@@ -102,8 +102,6 @@ class CajaController extends Controller
                     foreach ($seriesCodigos as $cod) {
                         $q->orWhere('documento_numero', 'like', $cod . '-%');
                     }
-                    // Notas de crédito: siempre visibles
-                    $q->orWhere('documento_tipo', 'nota_credito');
                     $q->orWhere(fn ($q2) => $q2->where('caja_id', $cajaSeleccionada->id)->whereNull('documento_numero'));
                 });
             } else {

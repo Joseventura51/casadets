@@ -354,9 +354,18 @@ class VentaImportController extends Controller
                 }
 
                 // Detectar caja por serie del documento
+                // Si el tipo es nota_credito, buscar primero una serie NC con ese código;
+                // si no existe, buscar cualquier serie con ese código.
                 $cajaIdVenta = session('caja_id');
                 if (!empty($g['serie'])) {
-                    $serieModel = \App\Models\Serie::where('codigo', strtoupper(trim($g['serie'])))->first();
+                    $codigoBuscado = strtoupper(trim($g['serie']));
+                    $serieModel = \App\Models\Serie::where('codigo', $codigoBuscado)
+                        ->when($esNC, fn ($q) => $q->where('tipo_documento', 'nota_credito'))
+                        ->first();
+                    if (!$serieModel && $esNC) {
+                        // Fallback: cualquier serie con ese código
+                        $serieModel = \App\Models\Serie::where('codigo', $codigoBuscado)->first();
+                    }
                     if ($serieModel && $serieModel->caja_id) {
                         $cajaIdVenta = $serieModel->caja_id;
                     }
