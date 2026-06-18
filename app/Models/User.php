@@ -139,7 +139,7 @@ class User extends Authenticatable
             'ventas.eliminar'      => ['Administrador', 'Supervisor'],
             'ventas.pago'          => ['Administrador', 'Supervisor', 'Cajero'],
             'ventas.anular'        => ['Administrador', 'Supervisor'],
-            'ventas.importar'      => ['Administrador', 'Supervisor'],
+            'ventas.importar'      => ['Administrador', 'Supervisor', 'Cajero'],
             'productos.crear'      => ['Administrador', 'Supervisor'],
             'productos.editar'     => ['Administrador', 'Supervisor'],
             'productos.eliminar'   => ['Administrador', 'Supervisor'],

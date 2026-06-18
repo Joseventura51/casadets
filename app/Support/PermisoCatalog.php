@@ -103,7 +103,7 @@ class PermisoCatalog
                 'dashboard','caja','ventas','pendientes','productos','clientes','saldos-favor',
             ],
             'permisos' => [
-                'ventas.crear','ventas.pago',
+                'ventas.crear','ventas.editar','ventas.pago','ventas.importar',
                 'clientes.crear','clientes.editar',
                 'caja.abrir','caja.cerrar',
                 'saldos.aplicar',
