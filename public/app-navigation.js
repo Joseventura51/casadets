@@ -186,8 +186,14 @@
                 return;
             }
 
+            const finalUrl = new URL(res.url || url.href, window.location.href);
+            if (!sameOrigin(finalUrl)) {
+                window.location.href = finalUrl.href;
+                return;
+            }
+
             const html = await res.text();
-            render(html, url, push);
+            render(html, finalUrl, push);
         } catch (error) {
             if (error.name !== 'AbortError') window.location.href = url.href;
         }
