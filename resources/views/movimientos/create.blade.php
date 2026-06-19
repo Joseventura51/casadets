@@ -59,10 +59,18 @@
 
                 <div class="col-md-4">
                     <label class="form-label">Empresa</label>
-                    <select name="empresa" class="form-select">
-                        <option value="casadets" {{ old('empresa', 'casadets') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
-                        <option value="zendy"    {{ old('empresa') === 'zendy' ? 'selected' : '' }}>ZENDY</option>
-                    </select>
+                    @if($cajaActiva)
+                        {{-- Empresa fijada por la caja activa en sesión --}}
+                        <input type="hidden" name="empresa" value="{{ $cajaActiva->empresa }}">
+                        <input type="text" class="form-control bg-light" value="{{ strtoupper($cajaActiva->empresa) }} — {{ $cajaActiva->codigo }}" readonly>
+                        <div class="form-text"><i class="bi bi-info-circle me-1"></i>Fijada por la caja activa.</div>
+                    @else
+                        <select name="empresa" class="form-select">
+                            <option value="casadets" {{ old('empresa', $empresaPreselect) === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+                            <option value="zendy"    {{ old('empresa', $empresaPreselect) === 'zendy' ? 'selected' : '' }}>ZENDY</option>
+                        </select>
+                        <div class="form-text text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Sin caja activa en sesión.</div>
+                    @endif
                 </div>
 
                 <div class="col-md-6">

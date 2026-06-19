@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Caja;
 use App\Models\Devolucion;
 use App\Models\Movimiento;
 use App\Models\Pago;
@@ -111,7 +112,11 @@ class MovimientoController extends Controller
             ? Vendedor::where('activo', true)->orderBy('nombre')->get(['id', 'nombre'])
             : collect();
 
-        return view('movimientos.create', compact('tipo', 'vendedores'));
+        // Empresa de la caja activa en sesión (para preseleccionar en el form)
+        $cajaActiva       = session('caja_id') ? Caja::find(session('caja_id')) : null;
+        $empresaPreselect = $cajaActiva?->empresa ?? 'casadets';
+
+        return view('movimientos.create', compact('tipo', 'vendedores', 'empresaPreselect', 'cajaActiva'));
     }
 
     /* ─── Anular un movimiento ───────────────────────────────────── */
@@ -218,6 +223,11 @@ class MovimientoController extends Controller
 
         $request->validate($rules);
 
+        // Derivar empresa desde la caja activa en sesión para garantizar consistencia.
+        // Si no hay caja en sesión, usar el valor del form (fallback).
+        $cajaActiva = session('caja_id') ? Caja::find(session('caja_id')) : null;
+        $empresa    = $cajaActiva?->empresa ?? $request->input('empresa', 'casadets');
+
         Movimiento::create(array_merge(
             $request->only([
                 'tipo', 'categoria', 'metodo_pago', 'documento_tipo',
@@ -227,7 +237,7 @@ class MovimientoController extends Controller
                 'subtipo' => 'manual',
                 'origen'  => 'manual',
                 'estado'  => 'activo',
-                'empresa' => $request->input('empresa', 'casadets'),
+                'empresa' => $empresa,
                 'caja_id' => session('caja_id'),
                 'user_id' => auth()->id(),
             ]
