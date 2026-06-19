@@ -44,7 +44,7 @@ class DevolucionController extends Controller
 
         $anuladas = Venta::with(['cliente'])
             ->where('estado', 'anulado')
-            ->orderByDesc('updated_at')
+            ->orderByDesc('fecha')
             ->limit(20)
             ->get();
 
@@ -55,7 +55,8 @@ class DevolucionController extends Controller
 
     public function show(Venta $venta)
     {
-        $venta->load(['cliente', 'detalles', 'vendedor']);
+        // Eager load incluyendo producto para evitar N+1 en la vista
+        $venta->load(['cliente', 'detalles.producto', 'vendedor', 'caja']);
 
         // Cantidad ya devuelta por producto (de devoluciones anteriores)
         $yaDevuelto = DevolucionDetalle::whereHas('devolucion', fn ($d) => $d->where('venta_id', $venta->id))
@@ -64,7 +65,8 @@ class DevolucionController extends Controller
             ->pluck('total_devuelto', 'venta_detalle_id')
             ->toArray();
 
-        $devoluciones = Devolucion::with(['detalles.producto', 'user'])
+        // Eager load ventaDetalle para mostrar nombre de producto en historial sin N+1
+        $devoluciones = Devolucion::with(['detalles.ventaDetalle', 'user'])
             ->where('venta_id', $venta->id)
             ->orderByDesc('created_at')
             ->get();
@@ -89,7 +91,7 @@ class DevolucionController extends Controller
         $cantidades = $request->input('cantidades', []);
 
         // Calcular monto a devolver y validar cantidades
-        $venta->load(['detalles']);
+        $venta->load(['detalles', 'caja']);
 
         $yaDevuelto = DevolucionDetalle::whereHas('devolucion', fn ($d) => $d->where('venta_id', $venta->id))
             ->selectRaw('venta_detalle_id, SUM(cantidad_devuelta) as total_devuelto')
@@ -239,9 +241,9 @@ class DevolucionController extends Controller
 
         DB::transaction(function () use ($venta, $request) {
             $cajaId  = session('caja_id');
+            $venta->load(['detalles', 'caja']);
             $empresa = $venta->caja?->empresa ?? session('empresa', 'casadets');
-
-            $venta->load('detalles');
+            $docRef  = $venta->documento_numero ?: '#' . $venta->id;
 
             // 1. Crear registro de devolución total
             $devolucion = Devolucion::create([
@@ -256,11 +258,8 @@ class DevolucionController extends Controller
                 'caja_id'        => $cajaId,
             ]);
 
-            // 2. Retornar todo el stock
+            // 2. Registrar todos los detalles y retornar stock de los que tienen producto vinculado
             foreach ($venta->detalles as $detalle) {
-                if (!$detalle->producto_id) {
-                    continue;
-                }
                 DevolucionDetalle::create([
                     'devolucion_id'     => $devolucion->id,
                     'venta_detalle_id'  => $detalle->id,
@@ -269,17 +268,20 @@ class DevolucionController extends Controller
                     'precio_unitario'   => (float) $detalle->precio_unitario,
                     'subtotal'          => (float) $detalle->subtotal,
                 ]);
-                StockMovimiento::create([
-                    'producto_id'     => $detalle->producto_id,
-                    'tipo'            => 'entrada',
-                    'cantidad'        => (float) $detalle->cantidad,
-                    'precio_unitario' => (float) $detalle->precio_unitario,
-                    'referencia_tipo' => 'devolucion',
-                    'referencia_id'   => $devolucion->id,
-                    'fecha'           => today(),
-                    'observaciones'   => 'Anulación venta #' . $venta->id,
-                ]);
-                Producto::find($detalle->producto_id)?->recalcularStock();
+
+                if ($detalle->producto_id) {
+                    StockMovimiento::create([
+                        'producto_id'     => $detalle->producto_id,
+                        'tipo'            => 'entrada',
+                        'cantidad'        => (float) $detalle->cantidad,
+                        'precio_unitario' => (float) $detalle->precio_unitario,
+                        'referencia_tipo' => 'devolucion',
+                        'referencia_id'   => $devolucion->id,
+                        'fecha'           => today(),
+                        'observaciones'   => 'Anulación venta #' . $venta->id,
+                    ]);
+                    Producto::find($detalle->producto_id)?->recalcularStock();
+                }
             }
 
             // 3. Anular movimientos del ledger relacionados a pagos
@@ -296,7 +298,27 @@ class DevolucionController extends Controller
                     });
             }
 
-            // 4. Si había pagos, crear saldo a favor
+            // 4. Movimiento de salida en el ledger por la anulación
+            if ($cajaId) {
+                Movimiento::create([
+                    'tipo'            => 'salida',
+                    'subtipo'         => 'anulacion',
+                    'origen'          => 'auto',
+                    'estado'          => 'activo',
+                    'empresa'         => $empresa,
+                    'caja_id'         => $cajaId,
+                    'categoria'       => 'devolucion',
+                    'referencia_tipo' => 'devolucion',
+                    'referencia_id'   => $devolucion->id,
+                    'cliente_id'      => $venta->cliente_id,
+                    'user_id'         => auth()->id(),
+                    'monto'           => (float) $venta->total_a_cobrar,
+                    'fecha'           => today(),
+                    'observaciones'   => 'Anulación de vale ' . $docRef,
+                ]);
+            }
+
+            // 5. Si había pagos, crear saldo a favor
             $pagado = (float) $venta->pagado;
             if ($pagado > 0 && $venta->cliente_id) {
                 SaldoFavor::create([
@@ -307,13 +329,13 @@ class DevolucionController extends Controller
                     'monto_original'   => $pagado,
                     'monto_disponible' => $pagado,
                     'estado'           => 'disponible',
-                    'descripcion'      => 'Anulación de vale ' . ($venta->documento_numero ?: '#' . $venta->id),
+                    'descripcion'      => 'Anulación de vale ' . $docRef,
                     'fecha'            => today(),
                 ]);
                 $devolucion->update(['saldo_generado' => $pagado]);
             }
 
-            // 5. Marcar venta como anulada
+            // 6. Marcar venta como anulada
             $venta->update(['estado' => 'anulado']);
         });
 

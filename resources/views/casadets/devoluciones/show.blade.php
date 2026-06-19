@@ -111,7 +111,8 @@
                         <div class="mt-1">
                             @foreach($dev->detalles as $dd)
                                 <div class="text-muted" style="font-size:.75rem;">
-                                    · {{ $dd->producto->nombre ?? 'Producto' }} —
+                                    {{-- Usa el texto del venta_detalle (funciona incluso sin producto_id) --}}
+                                    · {{ $dd->ventaDetalle->getRawOriginal('producto') ?? $dd->ventaDetalle->producto ?? 'Producto' }} —
                                     {{ rtrim(rtrim(number_format($dd->cantidad_devuelta, 2), '0'), '.') }} unid.
                                     × S/ {{ number_format($dd->precio_unitario, 2) }}
                                 </div>
@@ -172,18 +173,18 @@
                                         $cantVendida    = (float) $detalle->cantidad;
                                         $yaDevueltoItem = (float) ($yaDevuelto[$detalle->id] ?? 0);
                                         $disponible     = max(0, $cantVendida - $yaDevueltoItem);
+                                        // number_format con punto decimal explícito para evitar problemas de locale en JS
+                                        $precioJs       = number_format((float) $detalle->getRawOriginal('precio_unitario'), 4, '.', '');
+                                        $disponibleJs   = number_format($disponible, 4, '.', '');
                                     @endphp
                                     <tr class="{{ $disponible <= 0 ? 'table-secondary text-muted' : '' }}">
                                         <td>
-                                            @php $nombreProducto = $detalle->getRawOriginal('producto') ?? $detalle->producto; @endphp
-                                            <div class="fw-semibold small">{{ $nombreProducto }}</div>
-                                            @if($detalle->producto_id)
-                                                @php $prodModel = \App\Models\Producto::find($detalle->producto_id); @endphp
-                                                @if($prodModel)
-                                                <div class="text-muted" style="font-size:.7rem;">
-                                                    Stock: {{ number_format($prodModel->stock_actual, 2) }}
-                                                </div>
-                                                @endif
+                                            <div class="fw-semibold small">{{ $detalle->getRawOriginal('producto') ?? $detalle->producto }}</div>
+                                            {{-- Producto ya eager-loaded: no N+1 --}}
+                                            @if($detalle->producto)
+                                            <div class="text-muted" style="font-size:.7rem;">
+                                                Stock: {{ number_format($detalle->producto->stock_actual, 2) }}
+                                            </div>
                                             @endif
                                         </td>
                                         <td class="text-end small">{{ rtrim(rtrim(number_format($cantVendida, 2), '0'), '.') }}</td>
@@ -193,19 +194,18 @@
                                         <td class="text-end small {{ $disponible <= 0 ? 'text-danger' : 'fw-semibold text-success' }}">
                                             {{ rtrim(rtrim(number_format($disponible, 2), '0'), '.') }}
                                         </td>
-                                        <td class="text-end small">S/ {{ number_format($detalle->precio_unitario, 2) }}</td>
+                                        <td class="text-end small">S/ {{ number_format((float) $detalle->precio_unitario, 2) }}</td>
                                         <td>
                                             @if($disponible > 0)
                                             <input type="number"
                                                    name="cantidades[{{ $detalle->id }}]"
                                                    class="form-control form-control-sm text-end cant-input"
                                                    min="0"
-                                                   max="{{ $disponible }}"
+                                                   max="{{ $disponibleJs }}"
                                                    step="0.01"
-                                                   value="{{ old("cantidades.{$detalle->id}", 0) }}"
-                                                   data-precio="{{ $detalle->precio_unitario }}"
-                                                   data-max="{{ $disponible }}"
-                                                   oninput="recalcTotal()">
+                                                   value="{{ old("cantidades.{$detalle->id}", '') }}"
+                                                   data-precio="{{ $precioJs }}"
+                                                   data-max="{{ $disponibleJs }}">
                                             @else
                                                 <span class="text-muted small">Agotado</span>
                                             @endif
@@ -235,7 +235,8 @@
                         </div>
 
                         <div class="d-flex gap-2 align-items-center">
-                            <button type="submit" class="btn btn-warning fw-semibold" id="btnDevolver" disabled>
+                            <button type="button" class="btn btn-warning fw-semibold" id="btnDevolver" disabled
+                                    onclick="abrirConfirmDevolucion()">
                                 <i class="bi bi-arrow-return-left me-1"></i>Registrar Devolución
                             </button>
                             <span class="text-muted small" id="resumenDevolucion"></span>
@@ -272,7 +273,36 @@
     </div>
 </div>
 
-{{-- Modal de confirmación de anulación --}}
+{{-- Modal de confirmación de DEVOLUCIÓN PARCIAL --}}
+<div class="modal fade" id="modalConfirmDevolucion" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-warning"><i class="bi bi-arrow-return-left me-2"></i>Confirmar Devolución</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2 small">Se registrará la devolución parcial del siguiente vale:</p>
+                <div class="bg-light rounded p-2 mb-3">
+                    <strong>{{ ucfirst($venta->documento_tipo ?? 'Vale') }} {{ $venta->documento_numero ?? '#'.$venta->id }}</strong><br>
+                    <span class="text-muted small">{{ $venta->cliente->nombre ?? '—' }} · {{ $venta->fecha->format('d/m/Y') }}</span>
+                </div>
+                <div class="alert alert-warning py-2 small mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Total a devolver: <strong id="confirmMontoDevolver">S/ 0.00</strong>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning fw-semibold" id="btnConfirmDevolucionOk">
+                    <i class="bi bi-arrow-return-left me-1"></i>Confirmar Devolución
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Modal de confirmación de ANULACIÓN COMPLETA --}}
 <div class="modal fade" id="modalAnular" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -302,7 +332,7 @@
                                placeholder="Ej: Error en el pedido, duplicado...">
                     </div>
                     <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="confirmarAnular" required>
+                        <input type="checkbox" class="form-check-input" id="confirmarAnular">
                         <label class="form-check-label small" for="confirmarAnular">
                             Entiendo que esta acción <strong>no se puede deshacer</strong>.
                         </label>
@@ -320,29 +350,40 @@
 </div>
 
 <script>
+/* ── Parseo seguro de números con coma o punto decimal ── */
+function parseNum(str) {
+    if (str === null || str === undefined || str === '') return 0;
+    return parseFloat(String(str).replace(',', '.')) || 0;
+}
+
+/* ── Recalcula subtotales y total al escribir cantidades ── */
 function recalcTotal() {
-    const rows   = document.querySelectorAll('#tablaProductos tbody tr');
+    const rows = document.querySelectorAll('#tablaProductos tbody tr');
     let total    = 0;
     let hayItems = false;
 
-    rows.forEach(row => {
+    rows.forEach(function(row) {
         const input = row.querySelector('.cant-input');
         const cell  = row.querySelector('.subtotal-cell');
         if (!input || !cell) return;
 
-        const cant    = parseFloat(input.value) || 0;
-        const precio  = parseFloat(input.dataset.precio) || 0;
-        const max     = parseFloat(input.dataset.max) || 0;
+        const cant     = parseNum(input.value);
+        const precio   = parseNum(input.getAttribute('data-precio'));
+        const max      = parseNum(input.getAttribute('data-max'));
         const subtotal = Math.round(cant * precio * 100) / 100;
 
         cell.textContent = 'S/ ' + subtotal.toFixed(2);
-        if (cant > max) {
+
+        if (cant > 0 && max > 0 && cant > max) {
             input.classList.add('is-invalid');
         } else {
             input.classList.remove('is-invalid');
         }
-        if (cant > 0) hayItems = true;
-        total += subtotal;
+
+        if (cant > 0 && cant <= max) {
+            hayItems = true;
+            total += subtotal;
+        }
     });
 
     total = Math.round(total * 100) / 100;
@@ -359,9 +400,37 @@ function recalcTotal() {
     }
 }
 
-// Checkbox confirmar anulación
-document.getElementById('confirmarAnular')?.addEventListener('change', function () {
-    document.getElementById('btnAnularConfirm').disabled = !this.checked;
+/* ── Abrir modal de confirmación de devolución parcial ── */
+function abrirConfirmDevolucion() {
+    const total = document.getElementById('totalDevolver').textContent;
+    document.getElementById('confirmMontoDevolver').textContent = total;
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmDevolucion'));
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    /* Bind oninput de cada campo de cantidad */
+    document.querySelectorAll('.cant-input').forEach(function(input) {
+        input.addEventListener('input', recalcTotal);
+    });
+
+    /* Botón OK del modal de confirmación: envía el form real */
+    var btnOk = document.getElementById('btnConfirmDevolucionOk');
+    if (btnOk) {
+        btnOk.addEventListener('click', function () {
+            var modalEl = document.getElementById('modalConfirmDevolucion');
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+            document.getElementById('formDevolucion').submit();
+        });
+    }
+
+    /* Checkbox de anulación habilita el botón de anular */
+    var chkAnular = document.getElementById('confirmarAnular');
+    if (chkAnular) {
+        chkAnular.addEventListener('change', function () {
+            document.getElementById('btnAnularConfirm').disabled = !this.checked;
+        });
+    }
 });
 </script>
 @endsection
