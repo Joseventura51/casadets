@@ -132,7 +132,7 @@
                     $productosStr = $v->detalles->map(fn($d) => $d->producto)->join(', ');
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                     $docTxt      = ($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '');
-                    $saldoPend   = max(0, (float) bcsub((string) $v->total, (string) $v->pagado, 2));
+                    $saldoPend   = (float) $v->saldo_pendiente;
                 @endphp
                 <tr class="fila-pendiente {{ $filaClass }}"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"

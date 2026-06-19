@@ -6,8 +6,8 @@
     $metodoLabels = ['ninguno'=>'Ninguno (dejar pendiente)','efectivo'=>'Efectivo','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','transferencia'=>'Transferencia'];
 
     $yaPagedo       = (float) $venta->pagado;
-    $totalVenta     = (float) $venta->total;
-    $saldoPendiente = max(0, $totalVenta - $yaPagedo);
+    $totalVenta     = (float) $venta->total_a_cobrar;
+    $saldoPendiente = (float) $venta->saldo_pendiente;
     $ventaPagada    = $venta->estado === 'pagado';
 
     $metodosActuales = array_filter(explode(',', $venta->metodo_pago ?? ''));
