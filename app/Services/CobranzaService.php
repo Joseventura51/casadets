@@ -28,6 +28,16 @@ class CobranzaService
         ?int $userId = null,
         string $empresa = 'casadets'
     ): array {
+        // Derivar empresa desde la caja real de la venta o la sesión activa,
+        // ignorar el parámetro por defecto 'casadets' si hay información más precisa.
+        $cajaReal  = $venta->caja ?? ($venta->caja_id ? \App\Models\Caja::find($venta->caja_id) : null);
+        if (!$cajaReal && session('caja_id')) {
+            $cajaReal = \App\Models\Caja::find(session('caja_id'));
+        }
+        if ($cajaReal?->empresa) {
+            $empresa = $cajaReal->empresa;
+        }
+
         return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId, $empresa) {
 
             $pagosReales = collect($pagosInput)
@@ -174,6 +184,14 @@ class CobranzaService
         ?int $userId = null,
         string $empresa = 'casadets'
     ): array {
+        // Derivar empresa desde la caja activa en sesión
+        if (session('caja_id')) {
+            $cajaReal = \App\Models\Caja::find(session('caja_id'));
+            if ($cajaReal?->empresa) {
+                $empresa = $cajaReal->empresa;
+            }
+        }
+
         return DB::transaction(function () use ($ventaIds, $pagosInput, $userId, $empresa) {
 
             // Cargar ventas pendientes/parciales en orden FIFO
@@ -323,6 +341,14 @@ class CobranzaService
         ?int $userId = null,
         string $empresa = 'casadets'
     ): array {
+        $cajaReal = $venta->caja ?? ($venta->caja_id ? \App\Models\Caja::find($venta->caja_id) : null);
+        if (!$cajaReal && session('caja_id')) {
+            $cajaReal = \App\Models\Caja::find(session('caja_id'));
+        }
+        if ($cajaReal?->empresa) {
+            $empresa = $cajaReal->empresa;
+        }
+
         return DB::transaction(function () use ($venta, $monto, $userId, $empresa) {
 
             if ($venta->estado === 'anulado') {
@@ -407,6 +433,14 @@ class CobranzaService
      */
     public function aplicarSaldoFavor(SaldoFavor $saldo, Venta $venta, float $monto, ?int $userId = null, string $empresa = 'casadets'): array
     {
+        $cajaReal = $venta->caja ?? ($venta->caja_id ? \App\Models\Caja::find($venta->caja_id) : null);
+        if (!$cajaReal && session('caja_id')) {
+            $cajaReal = \App\Models\Caja::find(session('caja_id'));
+        }
+        if ($cajaReal?->empresa) {
+            $empresa = $cajaReal->empresa;
+        }
+
         return DB::transaction(function () use ($saldo, $venta, $monto, $userId, $empresa) {
 
             if ($saldo->cliente_id !== $venta->cliente_id) {
