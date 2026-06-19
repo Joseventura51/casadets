@@ -48,10 +48,6 @@
                 <li>
                     <a href="/casadets/pendientes" class="nav-link {{ request()->is('casadets/pendientes*') ? 'active' : '' }}">
                         <i class="bi bi-clock-history me-2"></i>Pendientes
-                        @php $nPend = \App\Models\Venta::where('estado','pendiente')->whereDate('fecha','<',today())->count(); @endphp
-                        @if($nPend > 0)
-                            <span class="badge bg-danger ms-auto">{{ $nPend }}</span>
-                        @endif
                     </a>
                 </li>
                 @endif
@@ -68,10 +64,6 @@
                 <li>
                     <a href="/casadets/productos" class="nav-link {{ request()->is('casadets/productos*') ? 'active' : '' }}">
                         <i class="bi bi-box-seam me-2"></i>Productos
-                        @php $nStockBajo = \App\Models\Producto::where('activo', true)->where('stock_actual', '<=', 0)->count(); @endphp
-                        @if($nStockBajo > 0)
-                            <span class="badge bg-warning text-dark ms-auto">{{ $nStockBajo }}</span>
-                        @endif
                     </a>
                 </li>
                 @endif
@@ -96,10 +88,6 @@
                 <li>
                     <a href="/casadets/saldos-favor" class="nav-link {{ request()->is('casadets/saldos-favor*') ? 'active' : '' }}">
                         <i class="bi bi-wallet2 me-2"></i>Saldos a favor
-                        @php $nSaldos = \App\Models\SaldoFavor::whereIn('estado',['disponible','parcialmente_usado'])->where('monto_disponible','>',0)->distinct('cliente_id')->count('cliente_id'); @endphp
-                        @if($nSaldos > 0)
-                            <span class="badge bg-info text-dark ms-auto">{{ $nSaldos }}</span>
-                        @endif
                     </a>
                 </li>
                 @endif
