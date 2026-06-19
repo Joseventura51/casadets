@@ -8,6 +8,7 @@ use App\Models\DetallePagoFactura;
 use App\Models\Movimiento;
 use App\Models\Producto;
 use App\Models\SaldoFavor;
+use App\Models\Serie;
 use App\Models\StockMovimiento;
 use App\Models\Venta;
 use Illuminate\Http\Request;
@@ -19,11 +20,33 @@ class DevolucionController extends Controller
 
     public function index(Request $request)
     {
+        // ── Filtro por caja activa ─────────────────────────────────────────
+        $cajaId        = session('caja_id');
+        $seriesCodigos = $cajaId
+            ? Serie::where('caja_id', $cajaId)->pluck('codigo')
+            : collect();
+
+        // Closure reutilizable: restringe una query de Venta a las series de la caja
+        $aplicarFiltroCaja = function ($query) use ($cajaId, $seriesCodigos) {
+            if (!$cajaId) return;
+            if ($seriesCodigos->isNotEmpty()) {
+                $query->where(function ($q) use ($cajaId, $seriesCodigos) {
+                    foreach ($seriesCodigos as $cod) {
+                        $q->orWhere('documento_numero', 'like', $cod . '-%');
+                    }
+                    $q->orWhere(fn ($q2) => $q2->where('caja_id', $cajaId)->whereNull('documento_numero'));
+                });
+            } else {
+                $query->where('caja_id', $cajaId);
+            }
+        };
+
+        // ── Búsqueda de vales ─────────────────────────────────────────────
         $ventas = collect();
 
         if ($request->filled('q')) {
             $q = trim($request->input('q'));
-            $ventas = Venta::with(['cliente', 'detalles'])
+            $ventasQuery = Venta::with(['cliente', 'detalles'])
                 ->where('estado', '!=', 'anulado')
                 ->where(function ($query) use ($q) {
                     $query->where('documento_numero', 'like', "%$q%")
@@ -33,20 +56,33 @@ class DevolucionController extends Controller
                         );
                 })
                 ->orderByDesc('fecha')
-                ->limit(30)
-                ->get();
+                ->limit(30);
+
+            $aplicarFiltroCaja($ventasQuery);
+            $ventas = $ventasQuery->get();
         }
 
-        $recientes = Devolucion::with(['venta.cliente', 'user'])
+        // ── Devoluciones recientes (filtradas por series de la caja) ───────
+        $recientesQuery = Devolucion::with(['venta.cliente', 'user'])
             ->orderByDesc('created_at')
-            ->limit(20)
-            ->get();
+            ->limit(20);
 
-        $anuladas = Venta::with(['cliente'])
+        if ($cajaId) {
+            $recientesQuery->whereHas('venta', function ($q) use ($aplicarFiltroCaja) {
+                $aplicarFiltroCaja($q);
+            });
+        }
+
+        $recientes = $recientesQuery->get();
+
+        // ── Vales anulados (filtrados por series de la caja) ──────────────
+        $anuladasQuery = Venta::with(['cliente'])
             ->where('estado', 'anulado')
             ->orderByDesc('fecha')
-            ->limit(20)
-            ->get();
+            ->limit(20);
+
+        $aplicarFiltroCaja($anuladasQuery);
+        $anuladas = $anuladasQuery->get();
 
         return view('casadets.devoluciones.index', compact('ventas', 'recientes', 'anuladas'));
     }
