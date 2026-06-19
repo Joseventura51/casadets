@@ -180,10 +180,11 @@
                                     <tr class="{{ $disponible <= 0 ? 'table-secondary text-muted' : '' }}">
                                         <td>
                                             <div class="fw-semibold small">{{ $detalle->getRawOriginal('producto') ?? $detalle->producto }}</div>
-                                            {{-- Producto ya eager-loaded: no N+1 --}}
-                                            @if($detalle->producto)
+                                            {{-- getRelation() evita conflicto entre columna 'producto' y relación 'producto()' --}}
+                                            @php $prodModel = $detalle->relationLoaded('producto') ? $detalle->getRelation('producto') : null; @endphp
+                                            @if($prodModel)
                                             <div class="text-muted" style="font-size:.7rem;">
-                                                Stock: {{ number_format($detalle->producto->stock_actual, 2) }}
+                                                Stock: {{ number_format($prodModel->stock_actual, 2) }}
                                             </div>
                                             @endif
                                         </td>

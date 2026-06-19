@@ -1,0 +1,166 @@
+Internal Server Error
+
+Copy as Markdown
+ErrorException
+resources\views\casadets\devoluciones\show.blade.php:186
+Attempt to read property "stock_actual" on string
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 0
+500
+GET
+http://127.0.0.1:8000/casadets/devoluciones/25
+
+Exception trace
+Illuminate\Foundation\Bootstrap\HandleExceptions->Illuminate\Foundation\Bootstrap\{closure}(integer, string, string, integer)
+resources\views\casadets\devoluciones\show.blade.php:186
+
+181                                        <td>
+182                                            <div class="fw-semibold small">{{ $detalle->getRawOriginal('producto') ?? $detalle->producto }}</div>
+183                                            {{-- Producto ya eager-loaded: no N+1 --}}
+184                                            @if($detalle->producto)
+185                                            <div class="text-muted" style="font-size:.7rem;">
+186                                                Stock: {{ number_format($detalle->producto->stock_actual, 2) }}
+187                                            </div>
+188                                            @endif
+189                                        </td>
+190                                        <td class="text-end small">{{ rtrim(rtrim(number_format($cantVendida, 2), '0'), '.') }}</td>
+191                                        <td class="text-end small {{ $yaDevueltoItem > 0 ? 'text-warning fw-semibold' : 'text-muted' }}">
+192                                            {{ $yaDevueltoItem > 0 ? rtrim(rtrim(number_format($yaDevueltoItem, 2), '0'), '.') : '—' }}
+193                                        </td>
+194                                        <td class="text-end small {{ $disponible <= 0 ? 'text-danger' : 'fw-semibold text-success' }}">
+195                                            {{ rtrim(rtrim(number_format($disponible, 2), '0'), '.') }}
+196                                        </td>
+197                                        <td class="text-end small">S/ {{ number_format((float) $detalle->precio_unitario, 2) }}</td>
+198
+13 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckRol.php:24
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 100
+mysql
+select * from `sessions` where `id` = 'UfMWLdHFKBvJQmooSmaOzrpRAJAJc9txP8S2Uxf2' limit 1
+2.21ms
+mysql
+select * from `users` where `id` = 1 limit 1
+0.46ms
+mysql
+select * from `ventas` where `id` = '25' and `ventas`.`deleted_at` is null limit 1
+0.49ms
+mysql
+select * from `roles` where `roles`.`id` = 1 limit 1
+0.47ms
+mysql
+select * from `clientes` where `clientes`.`id` in (17) and `clientes`.`deleted_at` is null
+0.45ms
+mysql
+select * from `venta_detalles` where `venta_detalles`.`venta_id` in (25)
+0.49ms
+mysql
+select * from `productos` where `productos`.`id` in (21)
+0.41ms
+mysql
+select * from `vendedores` where `vendedores`.`id` in (2) and `vendedores`.`deleted_at` is null
+0.4ms
+mysql
+select * from `cajas` where `cajas`.`id` in (1)
+0.45ms
+mysql
+select venta_detalle_id, SUM(cantidad_devuelta) as total_devuelto from `devolucion_detalles` where exists (select * from `devoluciones` where `devolucion_detalles`.`devolucion_id` = `devoluciones`.`id` and `venta_id` = 25) group by `venta_detalle_id`
+0.61ms
+
+
+1
+2
+3
+4
+5
+...
+10
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+cache-control
+max-age=0
+sec-ch-ua
+"Google Chrome";v="149", "Chromium";v="149", "Not)A;Brand";v="24"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+dnt
+1
+upgrade-insecure-requests
+1
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/login
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6ImRSdEdaSklOcFlEL3FFeDc3NG5oQ2c9PSIsInZhbHVlIjoiYnpiclk3SUZlWjFOYkgxRmRIVnlVbm8rNmFKZHN5NG5GTnIxNHpnUEh2b1UwSDRDd1MwZGp4WkVUOG5xMk14cGE4SVY3NjEyYjFOZUF4NkJKS3NoM29tMmd1WEpPaFZUdElMRmlLMkE3bGllMWF0dVhkQUdBOHlvalIyNE9WOGYiLCJtYWMiOiI0OWM5NTRkYTNkMDY1Nzk4NjE2ODA3MDllNDZhMzNjNjI5NzMzMDU4NWUxYmRiYzAxNjAxMDAzZGI0NjkxMGM2IiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6Imp3Z01WanEzMnB3R0ZXdjE2NXBnZlE9PSIsInZhbHVlIjoiemE1Q3ZOTWpiTUF1RGFuSmg0cDc0UXc0eXFxbDZ6TkVwMkJzRVlBNldhM0t3UUtyU0V0SXJraGczQ0RLZkhyZEY3OU9ZTlBOdUtHL2crS3BBRXJEclh2aERybGVQeS9NRTEwTE9EUlNpaVZDY1UxZXJHc2gvaElKVGh2NEhrb1giLCJtYWMiOiI5OWJjMGE2NGEzZDVjYTI0YmRlMTlhYjlkZDI1N2Y2MzgyYjZlNmQ1ZDJmYTQ0NTgyOWNiZDk1ZmJlNTI3NTg3IiwidGFnIjoiIn0%3D
+Body
+// No request body
+Routing
+controller
+App\Http\Controllers\DevolucionController@show
+middleware
+web, auth, check.activo, rol:devoluciones
+Routing parameters
+{
+    "venta": {
+        "id": 25,
+        "vendedor_id": 2,
+        "user_id": null,
+        "total": "2301.00",
+        "ajuste": "0.00",
+        "pagado": "0.00",
+        "metodo_pago": null,
+        "documento_tipo": "proforma",
+        "documento_numero": "0006-67656",
+        "observaciones": "Importado desde Excel",
+        "es_referencia_fiscal": false,
+        "estado": "pendiente",
+        "fecha": "2026-06-14T05:00:00.000000Z",
+        "created_at": "2026-06-19T18:28:42.000000Z",
+        "updated_at": "2026-06-19T18:28:42.000000Z",
+        "cliente_id": 17,
+        "deleted_at": null,
+        "caja_id": 1
+    }
+}
