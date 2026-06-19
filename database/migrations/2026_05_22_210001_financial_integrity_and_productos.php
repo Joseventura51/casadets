@@ -14,10 +14,14 @@ return new class extends Migration
             $table->string('documento_numero')->nullable()->change();
 
             // estado auditado (activo / anulado / revertido)
-            $table->string('estado')->default('activo')->after('origen');
+            if (!Schema::hasColumn('movimientos', 'estado')) {
+                $table->string('estado')->default('activo')->after('origen');
+            }
 
             // empresa para separar CASADETS / ZENDY
-            $table->string('empresa')->default('casadets')->after('estado');
+            if (!Schema::hasColumn('movimientos', 'empresa')) {
+                $table->string('empresa')->default('casadets')->after('estado');
+            }
         });
 
         // ── BUG #2: quitar DEFAULT 'efectivo' de ventas.metodo_pago ──────
@@ -27,43 +31,63 @@ return new class extends Migration
         });
 
         // ── empresa en productos ─────────────────────────────────────────
-        Schema::table('productos', function (Blueprint $table) {
-            $table->string('empresa')->default('casadets')->after('codigo');
-        });
+        if (!Schema::hasColumn('productos', 'empresa')) {
+            Schema::table('productos', function (Blueprint $table) {
+                $table->string('empresa')->default('casadets')->after('codigo');
+            });
+        }
 
         // ── Índices de performance ────────────────────────────────────────
-        Schema::table('saldos_favor', function (Blueprint $table) {
-            $table->index(['cliente_id', 'estado'], 'saldos_favor_cliente_estado_idx');
-        });
+        // Usamos try/catch para no fallar si el índice ya existe
+        try {
+            Schema::table('saldos_favor', function (Blueprint $table) {
+                $table->index(['cliente_id', 'estado'], 'saldos_favor_cliente_estado_idx');
+            });
+        } catch (\Exception $e) {}
 
-        Schema::table('compra_venta_detalle', function (Blueprint $table) {
-            $table->index('venta_detalle_id', 'cvd_venta_detalle_idx');
-        });
+        try {
+            Schema::table('compra_venta_detalle', function (Blueprint $table) {
+                $table->index('venta_detalle_id', 'cvd_venta_detalle_idx');
+            });
+        } catch (\Exception $e) {}
 
-        Schema::table('movimientos', function (Blueprint $table) {
-            $table->index('estado', 'movimientos_estado_idx');
-            $table->index(['empresa', 'tipo', 'fecha'], 'movimientos_empresa_tipo_fecha_idx');
-        });
+        try {
+            Schema::table('movimientos', function (Blueprint $table) {
+                $table->index('estado', 'movimientos_estado_idx');
+                $table->index(['empresa', 'tipo', 'fecha'], 'movimientos_empresa_tipo_fecha_idx');
+            });
+        } catch (\Exception $e) {}
     }
 
     public function down(): void
     {
         Schema::table('movimientos', function (Blueprint $table) {
-            $table->dropColumn(['estado', 'empresa']);
-            $table->dropIndex('movimientos_estado_idx');
-            $table->dropIndex('movimientos_empresa_tipo_fecha_idx');
+            if (Schema::hasColumn('movimientos', 'estado')) {
+                $table->dropColumn('estado');
+            }
+            if (Schema::hasColumn('movimientos', 'empresa')) {
+                $table->dropColumn('empresa');
+            }
+            try { $table->dropIndex('movimientos_estado_idx'); } catch (\Exception $e) {}
+            try { $table->dropIndex('movimientos_empresa_tipo_fecha_idx'); } catch (\Exception $e) {}
         });
         Schema::table('ventas', function (Blueprint $table) {
             $table->string('metodo_pago')->default('efectivo')->change();
         });
-        Schema::table('productos', function (Blueprint $table) {
-            $table->dropColumn('empresa');
-        });
-        Schema::table('saldos_favor', function (Blueprint $table) {
-            $table->dropIndex('saldos_favor_cliente_estado_idx');
-        });
-        Schema::table('compra_venta_detalle', function (Blueprint $table) {
-            $table->dropIndex('cvd_venta_detalle_idx');
-        });
+        if (Schema::hasColumn('productos', 'empresa')) {
+            Schema::table('productos', function (Blueprint $table) {
+                $table->dropColumn('empresa');
+            });
+        }
+        try {
+            Schema::table('saldos_favor', function (Blueprint $table) {
+                $table->dropIndex('saldos_favor_cliente_estado_idx');
+            });
+        } catch (\Exception $e) {}
+        try {
+            Schema::table('compra_venta_detalle', function (Blueprint $table) {
+                $table->dropIndex('cvd_venta_detalle_idx');
+            });
+        } catch (\Exception $e) {}
     }
 };
