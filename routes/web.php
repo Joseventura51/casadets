@@ -47,9 +47,10 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
 
     // Movimientos
     Route::middleware('rol:movimientos')->group(function () {
-        Route::get('/movimientos',               [MovimientoController::class, 'index']);
-        Route::get('/movimientos/create/{tipo}', [MovimientoController::class, 'create']);
-        Route::post('/movimientos',              [MovimientoController::class, 'store']);
+        Route::get('/movimientos',                          [MovimientoController::class, 'index']);
+        Route::get('/movimientos/create/{tipo}',            [MovimientoController::class, 'create']);
+        Route::post('/movimientos',                         [MovimientoController::class, 'store']);
+        Route::post('/movimientos/{movimiento}/anular',     [MovimientoController::class, 'anular']);
     });
 
     // Caja

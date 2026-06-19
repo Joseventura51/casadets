@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Devolucion;
 use App\Models\Movimiento;
+use App\Models\Pago;
 use App\Models\Vendedor;
 use App\Services\VendedorScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MovimientoController extends Controller
 {
@@ -110,6 +113,91 @@ class MovimientoController extends Controller
 
         return view('movimientos.create', compact('tipo', 'vendedores'));
     }
+
+    /* ─── Anular un movimiento ───────────────────────────────────── */
+
+    public function anular(Request $request, Movimiento $movimiento)
+    {
+        if ($movimiento->estado === 'anulado') {
+            return back()->with('info', 'Este movimiento ya está anulado.');
+        }
+
+        $request->validate([
+            'motivo' => 'nullable|string|max:255',
+        ]);
+
+        DB::transaction(function () use ($movimiento, $request) {
+            $motivo  = trim($request->input('motivo') ?: 'Anulación de movimiento');
+            $empresa = $movimiento->empresa ?? session('empresa', 'casadets');
+            $cajaId  = $movimiento->caja_id;
+
+            // 1. Marcar el movimiento como anulado
+            $movimiento->update([
+                'estado'        => 'anulado',
+                'observaciones' => trim(($movimiento->observaciones ?? '') . ' [ANULADO: ' . $motivo . ']'),
+            ]);
+
+            // 2. Si está vinculado a un pago: revertir y registrar en Devoluciones
+            if ($movimiento->referencia_tipo === 'pago' && $movimiento->referencia_id) {
+                $pago = Pago::with(['detalles.venta'])->find($movimiento->referencia_id);
+
+                if ($pago && $pago->estado !== 'anulado') {
+                    foreach ($pago->detalles as $dpf) {
+                        $venta = $dpf->venta;
+                        if (!$venta || $venta->estado === 'anulado') {
+                            continue;
+                        }
+
+                        // Restar el monto aplicado del campo pagado de la venta
+                        $montoAplicado = (float) $dpf->monto_aplicado;
+                        $nuevoPagado   = max(0, round((float) $venta->pagado - $montoAplicado, 2));
+                        $venta->update(['pagado' => $nuevoPagado]);
+                        $venta->refresh();
+                        $venta->recalcularEstado(); // → vuelve a 'pendiente' si pagado cae a 0
+
+                        // Registrar en módulo de Devoluciones
+                        Devolucion::create([
+                            'venta_id'       => $venta->id,
+                            'user_id'        => auth()->id(),
+                            'tipo'           => 'parcial',
+                            'monto_devuelto' => $montoAplicado,
+                            'saldo_generado' => 0,
+                            'motivo'         => 'Anulación de movimiento #' . $movimiento->id . ' — ' . $motivo,
+                            'fecha'          => today(),
+                            'empresa'        => $empresa,
+                            'caja_id'        => $cajaId,
+                        ]);
+                    }
+
+                    // Marcar el pago como anulado
+                    $pago->update(['estado' => 'anulado']);
+                }
+            }
+
+            // 3. Crear movimiento contable de contrapartida para dejar el ledger balanceado
+            $tipoContra = $movimiento->tipo === 'ingreso' ? 'salida' : 'ingreso';
+            Movimiento::create([
+                'tipo'            => $tipoContra,
+                'subtipo'         => 'anulacion',
+                'origen'          => 'auto',
+                'estado'          => 'activo',
+                'empresa'         => $empresa,
+                'caja_id'         => $cajaId,
+                'categoria'       => 'anulacion',
+                'referencia_tipo' => 'movimiento',
+                'referencia_id'   => $movimiento->id,
+                'cliente_id'      => $movimiento->cliente_id,
+                'user_id'         => auth()->id(),
+                'monto'           => (float) $movimiento->monto,
+                'fecha'           => today(),
+                'observaciones'   => 'Contrapartida anulación Mov. #' . $movimiento->id . ' — ' . $motivo,
+            ]);
+        });
+
+        return back()->with('success', 'Movimiento #' . $movimiento->id . ' anulado correctamente.');
+    }
+
+    /* ─── Registrar movimiento manual ───────────────────────────── */
 
     public function store(Request $request)
     {

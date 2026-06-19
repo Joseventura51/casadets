@@ -500,6 +500,29 @@
                                     @endif
 
                                 </div>{{-- /row --}}
+
+                                {{-- Botón anular (solo activos) --}}
+                                @if($m->estado === 'activo')
+                                <div class="border-top mt-3 pt-3 d-flex align-items-center gap-2">
+                                    <button type="button"
+                                            class="btn btn-outline-danger btn-sm"
+                                            onclick="abrirModalAnularMov({{ $m->id }}, '{{ number_format($m->monto, 2) }}', '{{ addslashes($m->categoria) }}', {{ $m->referencia_tipo === 'pago' ? 'true' : 'false' }})">
+                                        <i class="bi bi-x-circle me-1"></i>Anular Movimiento
+                                    </button>
+                                    @if($m->referencia_tipo === 'pago')
+                                        <span class="text-muted small">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            Anular este movimiento también marcará el pago como inválido y revertirá el estado del vale.
+                                        </span>
+                                    @else
+                                        <span class="text-muted small">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            Se creará una contrapartida contable para anular el efecto financiero.
+                                        </span>
+                                    @endif
+                                </div>
+                                @endif
+
                             </div>
                         </div>
                     </td>
@@ -524,6 +547,88 @@
 @endif
 
 </form>
+
+{{-- Alertas de sesión --}}
+@if(session('success'))
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+    <div class="alert alert-success alert-dismissible fade show shadow-sm py-2" role="alert">
+        <i class="bi bi-check-circle me-1"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+</div>
+@endif
+@if(session('info'))
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+    <div class="alert alert-info alert-dismissible fade show shadow-sm py-2" role="alert">
+        <i class="bi bi-info-circle me-1"></i>{{ session('info') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+</div>
+@endif
+@if(session('error'))
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100;">
+    <div class="alert alert-danger alert-dismissible fade show shadow-sm py-2" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+</div>
+@endif
+
+{{-- Modal confirmación anulación de movimiento --}}
+<div class="modal fade" id="modalAnularMov" tabindex="-1" aria-labelledby="modalAnularMovLabel">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title text-danger" id="modalAnularMovLabel">
+                    <i class="bi bi-x-circle me-2"></i>Anular Movimiento
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formAnularMov" method="POST" action="">
+                @csrf
+                <div class="modal-body">
+                    <div class="bg-light rounded p-3 mb-3 small">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted" id="anularMovCategoria">—</span>
+                            <strong class="text-danger" id="anularMovMonto">S/ 0.00</strong>
+                        </div>
+                    </div>
+
+                    {{-- Aviso especial para movimientos de pago --}}
+                    <div id="avisoPago" class="alert alert-warning py-2 small d-none">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        <strong>Este movimiento está vinculado a un pago de venta.</strong><br>
+                        Al anularlo:
+                        <ul class="mb-0 mt-1 ps-3">
+                            <li>El pago quedará marcado como <strong>inválido</strong></li>
+                            <li>El vale volverá a estado <strong>Pendiente</strong></li>
+                            <li>Se registrará en el módulo de <strong>Devoluciones</strong></li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Motivo de anulación <span class="text-muted fw-normal">(opcional)</span></label>
+                        <input type="text" name="motivo" class="form-control form-control-sm"
+                               placeholder="Ej: Error de registro, pago duplicado...">
+                    </div>
+
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="confirmarAnularMov">
+                        <label class="form-check-label small" for="confirmarAnularMov">
+                            Entiendo que esta acción <strong>no se puede deshacer</strong>.
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger" id="btnAnularMovConfirm" disabled>
+                        <i class="bi bi-x-circle me-1"></i>Anular Movimiento
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script>
 document.querySelectorAll('.mov-table thead tr.align-top [name]').forEach(el => {
@@ -572,6 +677,31 @@ document.querySelectorAll('.mov-row').forEach(function(row) {
         row.querySelector('.toggle-icon')?.classList.replace('bi-chevron-down', 'bi-chevron-right');
         row.classList.remove('table-active');
     });
+});
+
+/* ── Modal de anulación de movimiento ── */
+function abrirModalAnularMov(id, monto, categoria, esPago) {
+    document.getElementById('anularMovMonto').textContent    = 'S/ ' + monto;
+    document.getElementById('anularMovCategoria').textContent = categoria;
+    document.getElementById('formAnularMov').action          = '/movimientos/' + id + '/anular';
+
+    var avisoPago = document.getElementById('avisoPago');
+    if (esPago) {
+        avisoPago.classList.remove('d-none');
+    } else {
+        avisoPago.classList.add('d-none');
+    }
+
+    // Reset estado del modal
+    document.getElementById('confirmarAnularMov').checked   = false;
+    document.getElementById('btnAnularMovConfirm').disabled = true;
+    document.querySelector('#formAnularMov input[name="motivo"]').value = '';
+
+    new bootstrap.Modal(document.getElementById('modalAnularMov')).show();
+}
+
+document.getElementById('confirmarAnularMov')?.addEventListener('change', function () {
+    document.getElementById('btnAnularMovConfirm').disabled = !this.checked;
 });
 </script>
 @endsection
