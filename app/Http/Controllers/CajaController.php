@@ -127,7 +127,7 @@ class CajaController extends Controller
         $balance      = round($totalVentasCobradas + $totalOtrosIngresos - $totalSalidas, 2);
 
         // ── Desglose por método de pago ─────────────────────────────────────
-        $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas, $cajaSeleccionada?->id);
+        $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas, $cajaSeleccionada?->id, $movActivos);
 
         // ── Efectivo actual en caja ─────────────────────────────────────────
         $comprasQuery = Compra::where('metodo_pago', 'efectivo')
@@ -262,9 +262,29 @@ class CajaController extends Controller
             ->with('success', 'Caja cerrada correctamente.');
     }
 
-    private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas, ?int $cajaId = null): \Illuminate\Support\Collection
+    private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas, ?int $cajaId = null, $movActivos = null): \Illuminate\Support\Collection
     {
-        // Solo pagos vinculados a ventas de ESTA caja (ya filtradas en $ventasCobradas)
+        // Fuente primaria: movimientos activos de pago_venta con referencia_tipo='pago'.
+        // Esto es consistente con el KPI "Ventas cobradas" y cubre pagos parciales.
+        if ($movActivos !== null) {
+            $pagoIdsDeMovimientos = $movActivos
+                ->where('subtipo', 'pago_venta')
+                ->where('referencia_tipo', 'pago')
+                ->pluck('referencia_id')
+                ->filter()
+                ->unique();
+
+            if ($pagoIdsDeMovimientos->isNotEmpty()) {
+                return PagoMetodo::whereIn('pago_id', $pagoIdsDeMovimientos)
+                    ->selectRaw('metodo, SUM(monto) as total')
+                    ->groupBy('metodo')
+                    ->pluck('total', 'metodo')
+                    ->map(fn ($t) => round((float) $t, 2))
+                    ->sortKeys();
+            }
+        }
+
+        // Fallback: pagos vinculados a ventas totalmente cobradas (comportamiento original)
         $ventaIds = $ventasCobradas->pluck('id');
         $pagoIds = $ventaIds->isNotEmpty()
             ? DetallePagoFactura::whereIn('venta_id', $ventaIds)->pluck('pago_id')->unique()
