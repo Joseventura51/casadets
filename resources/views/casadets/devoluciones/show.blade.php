@@ -421,6 +421,14 @@ document.addEventListener('DOMContentLoaded', function () {
         btnOk.addEventListener('click', function () {
             var modalEl = document.getElementById('modalConfirmDevolucion');
             bootstrap.Modal.getInstance(modalEl)?.hide();
+
+            /* Estado de carga en el botón principal de devolución */
+            var btnDevolver = document.getElementById('btnDevolver');
+            if (btnDevolver) {
+                btnDevolver.disabled = true;
+                btnDevolver.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Registrando devolución…';
+            }
+
             document.getElementById('formDevolucion').submit();
         });
     }
@@ -430,6 +438,18 @@ document.addEventListener('DOMContentLoaded', function () {
     if (chkAnular) {
         chkAnular.addEventListener('change', function () {
             document.getElementById('btnAnularConfirm').disabled = !this.checked;
+        });
+    }
+
+    /* Estado de carga al confirmar anulación del vale */
+    var formAnular = document.querySelector('form[action*="/anular"]');
+    if (formAnular) {
+        formAnular.addEventListener('submit', function () {
+            var btnAnular = document.getElementById('btnAnularConfirm');
+            if (btnAnular) {
+                btnAnular.disabled = true;
+                btnAnular.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Anulando vale…';
+            }
         });
     }
 });
