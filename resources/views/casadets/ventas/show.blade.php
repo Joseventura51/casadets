@@ -191,6 +191,62 @@
     @endif
 </div>
 
+{{-- Reporte de devoluciones --}}
+@php
+    $devoluciones      = $venta->devoluciones ?? collect();
+    $totalDevuelto     = $devoluciones->sum('monto_devuelto');
+    $totalReal         = max(0, (float) $venta->total_a_cobrar - $totalDevuelto);
+@endphp
+@if($devoluciones->isNotEmpty())
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white fw-semibold d-flex align-items-center gap-2">
+        <i class="bi bi-arrow-counterclockwise text-warning"></i> Reporte de devoluciones
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Motivo</th>
+                    <th class="text-end">Monto devuelto</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($devoluciones as $dev)
+                <tr>
+                    <td class="text-muted small">{{ $dev->fecha ? $dev->fecha->format('d/m/Y') : '—' }}</td>
+                    <td>
+                        @if($dev->tipo === 'total')
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Anulación total</span>
+                        @else
+                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Parcial</span>
+                        @endif
+                    </td>
+                    <td class="text-muted small">{{ $dev->motivo ?: '—' }}</td>
+                    <td class="text-end text-danger fw-semibold">- S/ {{ number_format($dev->monto_devuelto, 2) }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <td colspan="3" class="text-end text-muted small">Total a cobrar original</td>
+                    <td class="text-end text-muted">S/ {{ number_format($venta->total_a_cobrar, 2) }}</td>
+                </tr>
+                <tr>
+                    <td colspan="3" class="text-end text-muted small">Total devuelto</td>
+                    <td class="text-end text-danger">- S/ {{ number_format($totalDevuelto, 2) }}</td>
+                </tr>
+                <tr>
+                    <td colspan="3" class="text-end fw-bold">TOTAL REAL COBRADO</td>
+                    <td class="text-end fw-bold fs-5 text-success">S/ {{ number_format($totalReal, 2) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+@endif
+
 {{-- Análisis de utilidad --}}
 @php
     $filaUtilidad    = [];

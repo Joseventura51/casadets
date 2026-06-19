@@ -62,6 +62,11 @@ class Venta extends Model
         return $this->hasMany(DetallePagoFactura::class);
     }
 
+    public function devoluciones(): HasMany
+    {
+        return $this->hasMany(Devolucion::class);
+    }
+
     public function pagosAplicados()
     {
         return $this->belongsToMany(Pago::class, 'detalle_pago_factura')

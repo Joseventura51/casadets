@@ -168,7 +168,7 @@ class VentaController extends Controller
     public function show(Venta $venta)
     {
         $this->authorizeVenta($venta);
-        $venta->load(['vendedor', 'cliente', 'detalles.compras.lineas', 'detalles.producto']);
+        $venta->load(['vendedor', 'cliente', 'detalles.compras.lineas', 'detalles.producto', 'devoluciones']);
         return view('casadets.ventas.show', compact('venta'));
     }
 
