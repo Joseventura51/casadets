@@ -95,11 +95,14 @@ class User extends Authenticatable
     {
         $rol = $this->rol;
 
+        // Primero: verificar módulos configurados en la BD
         if ($rol && !empty($rol->modulos)) {
-            return $rol->tieneModulo($modulo);
+            if ($rol->tieneModulo($modulo)) {
+                return true;
+            }
         }
 
-        // Fallback estático para roles sin módulos configurados aún
+        // Fallback estático: mínimo garantizado por nombre de rol
         $mapa = [
             'dashboard'      => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
             'caja'           => ['Administrador', 'Supervisor', 'Cajero'],
@@ -128,11 +131,14 @@ class User extends Authenticatable
     {
         $rol = $this->rol;
 
+        // Primero: verificar permisos configurados en la BD
         if ($rol && !empty($rol->permisos)) {
-            return $rol->tienePermiso($permiso);
+            if ($rol->tienePermiso($permiso)) {
+                return true;
+            }
         }
 
-        // Fallback estático para roles sin permisos configurados aún
+        // Fallback estático: mínimo garantizado por nombre de rol
         $defaults = [
             'ventas.crear'         => ['Administrador', 'Supervisor', 'Cajero', 'Vendedor'],
             'ventas.editar'        => ['Administrador', 'Supervisor', 'Cajero'],
