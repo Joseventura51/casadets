@@ -15,6 +15,7 @@ class PermisoCatalog
         'vendedores'     => ['label' => 'Vendedores',                 'grupo' => 'CASADETS'],
         'saldos-favor'   => ['label' => 'Saldos a favor',            'grupo' => 'CASADETS'],
         'movimientos'    => ['label' => 'Movimientos',                'grupo' => 'CASADETS'],
+        'devoluciones'   => ['label' => 'Devoluciones / Anulados',   'grupo' => 'CASADETS'],
         'zendy'          => ['label' => 'Zendy',                      'grupo' => 'ZENDY'],
         'reportes'       => ['label' => 'Reportes',                   'grupo' => 'General'],
         'admin.usuarios' => ['label' => 'Administración / Usuarios',  'grupo' => 'Administración'],
@@ -62,13 +63,16 @@ class PermisoCatalog
             'saldos.crear'   => 'Crear saldo a favor',
             'saldos.aplicar' => 'Aplicar saldo a favor',
         ],
+        'Devoluciones' => [
+            'devoluciones.procesar' => 'Procesar devoluciones / anulaciones',
+        ],
     ];
 
     const DEFAULTS = [
         'Administrador' => [
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
-                'clientes','vendedores','saldos-favor','movimientos','zendy',
+                'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy',
                 'reportes','admin.usuarios','admin.roles','admin.cajas','admin.series',
             ],
             'permisos' => [
@@ -80,12 +84,13 @@ class PermisoCatalog
                 'caja.abrir','caja.cerrar',
                 'movimientos.crear',
                 'saldos.crear','saldos.aplicar',
+                'devoluciones.procesar',
             ],
         ],
         'Supervisor' => [
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
-                'clientes','vendedores','saldos-favor','movimientos','zendy','reportes',
+                'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy','reportes',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',
@@ -96,17 +101,19 @@ class PermisoCatalog
                 'caja.abrir','caja.cerrar',
                 'movimientos.crear',
                 'saldos.crear','saldos.aplicar',
+                'devoluciones.procesar',
             ],
         ],
         'Cajero' => [
             'modulos' => [
-                'dashboard','caja','ventas','pendientes','productos','clientes','saldos-favor',
+                'dashboard','caja','ventas','pendientes','productos','clientes','saldos-favor','devoluciones',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.pago','ventas.importar',
                 'clientes.crear','clientes.editar',
                 'caja.abrir','caja.cerrar',
                 'saldos.aplicar',
+                'devoluciones.procesar',
             ],
         ],
         'Vendedor' => [

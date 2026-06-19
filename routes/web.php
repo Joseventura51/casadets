@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\RolController;
 use App\Http\Controllers\Admin\CajaAdminController;
 use App\Http\Controllers\Admin\SerieController;
+use App\Http\Controllers\DevolucionController;
 
 // ── Autenticación (rutas públicas) ─────────────────────────────────────────
 Route::get('/login',  [AuthController::class, 'showLogin'])->name('login');
@@ -125,6 +126,16 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
             ->middleware(['permiso:ventas.pago', 'caja.abierta']);
         Route::post('/casadets/ventas/{venta}/reducir-saldo', [VentaController::class, 'reducirSaldo'])
             ->middleware(['permiso:ventas.pago', 'caja.abierta']);
+    });
+
+    // Devoluciones y Anulaciones
+    Route::middleware('rol:devoluciones')->group(function () {
+        Route::get('/casadets/devoluciones',                         [DevolucionController::class, 'index']);
+        Route::get('/casadets/devoluciones/{venta}',                 [DevolucionController::class, 'show']);
+        Route::post('/casadets/devoluciones/{venta}',                [DevolucionController::class, 'store'])
+            ->middleware('permiso:devoluciones.procesar');
+        Route::post('/casadets/devoluciones/{venta}/anular',         [DevolucionController::class, 'anular'])
+            ->middleware('permiso:devoluciones.procesar');
     });
 
     // Saldos a favor

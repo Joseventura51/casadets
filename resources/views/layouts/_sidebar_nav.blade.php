@@ -14,7 +14,8 @@
         $showCasadets = $user && (
             $user->puedeVer('caja') || $user->puedeVer('ventas') || $user->puedeVer('pendientes') ||
             $user->puedeVer('compras') || $user->puedeVer('productos') || $user->puedeVer('clientes') ||
-            $user->puedeVer('vendedores') || $user->puedeVer('saldos-favor') || $user->puedeVer('movimientos')
+            $user->puedeVer('vendedores') || $user->puedeVer('saldos-favor') || $user->puedeVer('movimientos') ||
+            $user->puedeVer('devoluciones')
         );
     @endphp
 
@@ -107,6 +108,14 @@
                 <li>
                     <a href="/movimientos" class="nav-link {{ request()->is('movimientos*') ? 'active' : '' }}">
                         <i class="bi bi-arrow-left-right me-2"></i>Movimientos
+                    </a>
+                </li>
+                @endif
+
+                @if($user->puedeVer('devoluciones'))
+                <li>
+                    <a href="/casadets/devoluciones" class="nav-link {{ request()->is('casadets/devoluciones*') ? 'active' : '' }}">
+                        <i class="bi bi-arrow-return-left me-2"></i>Devoluciones
                     </a>
                 </li>
                 @endif
