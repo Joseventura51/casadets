@@ -73,13 +73,35 @@ class CajaService
 
     /**
      * Verifica si la caja seleccionada está abierta.
+     * Si no hay caja_id en sesión, intenta auto-seleccionar una y verifica por empresa como fallback.
      */
     public static function cajaAbierta(): bool
     {
         $cajaId = session('caja_id');
-        if (!$cajaId) return false;
 
-        return CajaSesion::where('caja_id', $cajaId)
+        // Si hay caja_id en sesión, verificar directamente
+        if ($cajaId) {
+            return CajaSesion::where('caja_id', $cajaId)
+                ->whereDate('fecha', now()->toDateString())
+                ->where('estado', 'abierta')
+                ->exists();
+        }
+
+        // Intentar auto-seleccionar si solo hay una caja disponible
+        $cajasDisponibles = self::cajasUsuario();
+        if ($cajasDisponibles->count() === 1) {
+            $cajaId = $cajasDisponibles->first()->id;
+            session(['caja_id' => $cajaId]);
+
+            return CajaSesion::where('caja_id', $cajaId)
+                ->whereDate('fecha', now()->toDateString())
+                ->where('estado', 'abierta')
+                ->exists();
+        }
+
+        // Fallback: verificar si hay alguna caja abierta hoy (sin filtro por caja_id)
+        $empresa = session('empresa', 'casadets');
+        return CajaSesion::where('empresa', $empresa)
             ->whereDate('fecha', now()->toDateString())
             ->where('estado', 'abierta')
             ->exists();

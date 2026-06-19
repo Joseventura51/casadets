@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Cliente;
 use App\Models\SaldoFavor;
 use App\Models\Venta;
+use App\Services\CajaService;
 use App\Services\CobranzaService;
 use App\Services\VendedorScope;
 use Illuminate\Http\Request;
@@ -76,6 +77,8 @@ class SaldoFavorController extends Controller
             ->whereNull('cliente_id')
             ->count();
 
+        $cajaAbierta = CajaService::cajaAbierta();
+
         return view('casadets.saldos_favor.index', compact(
             'clientes',
             'totalDisponible',
@@ -83,7 +86,8 @@ class SaldoFavorController extends Controller
             'totalRegistros',
             'todosClientes',
             'notasCreditoPendientes',
-            'notasCreditoSinCliente'
+            'notasCreditoSinCliente',
+            'cajaAbierta'
         ));
     }
 

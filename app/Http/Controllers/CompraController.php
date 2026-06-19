@@ -9,6 +9,7 @@ use App\Models\StockMovimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use Illuminate\Http\Request;
+use App\Services\CajaService;
 use App\Services\VendedorScope;
 use Illuminate\Support\Facades\DB;
 
@@ -44,7 +45,9 @@ class CompraController extends Controller
 
         $compras = $query->paginate(50)->withQueryString();
 
-        return view('casadets.compras.index', compact('compras', 'desde', 'hasta'));
+        $cajaAbierta = CajaService::cajaAbierta();
+
+        return view('casadets.compras.index', compact('compras', 'desde', 'hasta', 'cajaAbierta'));
     }
 
     public function create()

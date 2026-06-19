@@ -10,6 +10,7 @@ use App\Models\StockMovimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Models\Vendedor;
+use App\Services\CajaService;
 use App\Services\CobranzaService;
 use App\Services\VendedorScope;
 use Illuminate\Http\Request;
@@ -139,10 +140,12 @@ class VentaController extends Controller
 
         $todas = $request->boolean('todas');
 
+        $cajaAbierta = CajaService::cajaAbierta();
+
         return view('casadets.ventas.index', compact(
             'ventas', 'vendedores', 'desde', 'hasta', 'todas',
             'estado', 'fecha', 'vendedor', 'cliente', 'pago', 'documento', 'serie',
-            'total', 'seriesDisponibles'
+            'total', 'seriesDisponibles', 'cajaAbierta'
         ));
     }
 
