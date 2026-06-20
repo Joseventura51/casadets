@@ -36,6 +36,13 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
 
     Route::view('/zendy/letras', 'zendy.letras')->middleware('rol:zendy');
 
+    // Reportes de Caja
+    Route::middleware('rol:reportes-caja')->group(function () {
+        Route::get('/casadets/reportes-caja',                    [\App\Http\Controllers\ReporteCajaController::class, 'index']);
+        Route::get('/casadets/reportes-caja/{reporte}/descargar',[\App\Http\Controllers\ReporteCajaController::class, 'descargar']);
+        Route::post('/casadets/reportes-caja/{reporte}/regenerar',[\App\Http\Controllers\ReporteCajaController::class, 'regenerar']);
+    });
+
     // Reportes
     Route::middleware('rol:reportes')->group(function () {
         Route::get('/reportes',                  [ReporteController::class, 'index']);

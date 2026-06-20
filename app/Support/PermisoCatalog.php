@@ -18,6 +18,7 @@ class PermisoCatalog
         'devoluciones'   => ['label' => 'Devoluciones / Anulados',   'grupo' => 'CASADETS'],
         'zendy'          => ['label' => 'Zendy',                      'grupo' => 'ZENDY'],
         'reportes'       => ['label' => 'Reportes',                   'grupo' => 'General'],
+        'reportes-caja'  => ['label' => 'Reportes de Caja',           'grupo' => 'General'],
         'admin.usuarios' => ['label' => 'Administración / Usuarios',  'grupo' => 'Administración'],
         'admin.roles'    => ['label' => 'Administración / Roles',     'grupo' => 'Administración'],
         'admin.cajas'    => ['label' => 'Administración / Cajas',     'grupo' => 'Administración'],
@@ -73,7 +74,7 @@ class PermisoCatalog
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
                 'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy',
-                'reportes','admin.usuarios','admin.roles','admin.cajas','admin.series',
+                'reportes','reportes-caja','admin.usuarios','admin.roles','admin.cajas','admin.series',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',
@@ -90,7 +91,7 @@ class PermisoCatalog
         'Supervisor' => [
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
-                'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy','reportes',
+                'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy','reportes','reportes-caja',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',

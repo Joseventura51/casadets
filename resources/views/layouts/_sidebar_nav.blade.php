@@ -134,8 +134,16 @@
 
     @if($user && $user->puedeVer('reportes'))
     <li class="nav-item mt-2">
-        <a href="/reportes" class="nav-link {{ request()->is('reportes*') ? 'active' : '' }}">
+        <a href="/reportes" class="nav-link {{ request()->is('reportes') || request()->is('reportes/*') ? 'active' : '' }}">
             <i class="bi bi-bar-chart-line me-2"></i>Reportes
+        </a>
+    </li>
+    @endif
+
+    @if($user && $user->puedeVer('reportes-caja'))
+    <li class="nav-item mt-1">
+        <a href="/casadets/reportes-caja" class="nav-link {{ request()->is('casadets/reportes-caja*') ? 'active' : '' }}">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Reportes de Caja
         </a>
     </li>
     @endif

@@ -12,6 +12,7 @@ use App\Models\PagoMetodo;
 use App\Models\Serie;
 use App\Models\Venta;
 use App\Services\CajaService;
+use App\Services\ReporteCajaService;
 use App\Services\VendedorScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -236,12 +237,13 @@ class CajaController extends Controller
         if ($cajaId) {
             $caja = Caja::findOrFail($cajaId);
             try {
-                CajaService::cerrarCaja($caja, (float) $request->monto_cierre);
+                $sesion = CajaService::cerrarCaja($caja, (float) $request->monto_cierre);
             } catch (\RuntimeException $e) {
                 return back()->with('error', $e->getMessage());
             }
+            try { ReporteCajaService::generar($sesion); } catch (\Throwable) {}
             return redirect("/casadets/caja?empresa={$request->empresa}&caja_id={$caja->id}")
-                ->with('success', "Caja {$caja->codigo} cerrada correctamente.");
+                ->with('success', "Caja {$caja->codigo} cerrada correctamente. Se generó el reporte Excel.");
         }
 
         // Fallback sin caja
@@ -257,9 +259,11 @@ class CajaController extends Controller
         }
 
         $sesion->update(['monto_cierre' => $request->monto_cierre, 'estado' => 'cerrada']);
+        $sesion->refresh();
+        try { ReporteCajaService::generar($sesion); } catch (\Throwable) {}
 
         return redirect("/casadets/caja?empresa={$request->empresa}")
-            ->with('success', 'Caja cerrada correctamente.');
+            ->with('success', 'Caja cerrada correctamente. Se generó el reporte Excel.');
     }
 
     private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas, ?int $cajaId = null, $movActivos = null): \Illuminate\Support\Collection
