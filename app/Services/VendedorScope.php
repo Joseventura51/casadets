@@ -151,24 +151,32 @@ class VendedorScope
         $cajas = static::cajaIds();
         $series = static::serieCodigos();
         if ($cajas !== null || $series !== null) {
-            $query->whereHas('ventaOrigen', function (Builder $q) use ($cajas, $series) {
-                if ($cajas !== null) {
-                    $q->whereIn('caja_id', $cajas);
-                }
-                if ($series !== null) {
-                    foreach ($series as $serie) {
-                        $q->orWhere('documento_numero', 'like', $serie . '%');
-                    }
-                }
+            // Incluir saldos manuales (sin venta origen) y saldos cuya venta origen coincida
+            $query->where(function (Builder $outer) use ($cajas, $series) {
+                $outer->whereNull('venta_origen_id')
+                      ->orWhereHas('ventaOrigen', function (Builder $q) use ($cajas, $series) {
+                          if ($cajas !== null) {
+                              $q->whereIn('caja_id', $cajas);
+                          }
+                          if ($series !== null) {
+                              foreach ($series as $serie) {
+                                  $q->orWhere('documento_numero', 'like', $serie . '%');
+                              }
+                          }
+                      });
             });
             return $query;
         }
 
         $ids = static::ids();
         if ($ids !== null) {
-            $query->whereHas('ventaOrigen', fn ($q) =>
-                $q->whereIn('vendedor_id', $ids)
-            );
+            // Incluir saldos manuales (sin venta origen) y saldos del vendedor
+            $query->where(function (Builder $outer) use ($ids) {
+                $outer->whereNull('venta_origen_id')
+                      ->orWhereHas('ventaOrigen', fn (Builder $q) =>
+                          $q->whereIn('vendedor_id', $ids)
+                      );
+            });
         }
         return $query;
     }
