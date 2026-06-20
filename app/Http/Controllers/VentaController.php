@@ -433,10 +433,13 @@ class VentaController extends Controller
             ->where('es_referencia_fiscal', false)
             ->whereDate('fecha', '<=', today());
 
-        VendedorScope::aplicar($query);
+        // Si el usuario NO tiene permiso de ver todos, aplicar filtros de caja/vendedor
+        if (!auth()->user()?->puedeHacer('pendientes.ver_todos')) {
+            VendedorScope::aplicar($query);
 
-        if (session('caja_id')) {
-            $query->where('caja_id', session('caja_id'));
+            if (session('caja_id')) {
+                $query->where('caja_id', session('caja_id'));
+            }
         }
 
         if ($request->filled('vendedor_id')) $query->where('vendedor_id', $request->vendedor_id);

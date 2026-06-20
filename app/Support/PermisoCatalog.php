@@ -60,6 +60,9 @@ class PermisoCatalog
         'Movimientos' => [
             'movimientos.crear' => 'Crear movimientos',
         ],
+        'Pendientes' => [
+            'pendientes.ver_todos' => 'Ver todos los pendientes (sin filtro de caja)',
+        ],
         'Saldos a favor' => [
             'saldos.crear'     => 'Crear saldo a favor',
             'saldos.aplicar'   => 'Aplicar saldo a favor',
@@ -85,6 +88,7 @@ class PermisoCatalog
                 'vendedores.crear','vendedores.editar','vendedores.eliminar',
                 'caja.abrir','caja.cerrar',
                 'movimientos.crear',
+                'pendientes.ver_todos',
                 'saldos.crear','saldos.aplicar','saldos.ver_todos',
                 'devoluciones.procesar',
             ],
@@ -102,6 +106,7 @@ class PermisoCatalog
                 'vendedores.crear','vendedores.editar','vendedores.eliminar',
                 'caja.abrir','caja.cerrar',
                 'movimientos.crear',
+                'pendientes.ver_todos',
                 'saldos.crear','saldos.aplicar','saldos.ver_todos',
                 'devoluciones.procesar',
             ],
@@ -114,6 +119,7 @@ class PermisoCatalog
                 'ventas.crear','ventas.editar','ventas.pago','ventas.importar',
                 'clientes.crear','clientes.editar',
                 'caja.abrir','caja.cerrar',
+                'pendientes.ver_todos',
                 'saldos.aplicar',
                 'devoluciones.procesar',
             ],
