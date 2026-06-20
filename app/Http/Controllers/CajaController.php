@@ -241,7 +241,15 @@ class CajaController extends Controller
             } catch (\RuntimeException $e) {
                 return back()->with('error', $e->getMessage());
             }
-            try { ReporteCajaService::generar($sesion); } catch (\Throwable) {}
+            try {
+                ReporteCajaService::generar($sesion);
+            } catch (\Throwable $e) {
+                \Log::error('ReporteCaja::generar falló', [
+                    'sesion_id' => $sesion->id,
+                    'error'     => $e->getMessage(),
+                    'file'      => basename($e->getFile()) . ':' . $e->getLine(),
+                ]);
+            }
             return redirect("/casadets/caja?empresa={$request->empresa}&caja_id={$caja->id}")
                 ->with('success', "Caja {$caja->codigo} cerrada correctamente. Se generó el reporte Excel.");
         }
@@ -260,7 +268,15 @@ class CajaController extends Controller
 
         $sesion->update(['monto_cierre' => $request->monto_cierre, 'estado' => 'cerrada']);
         $sesion->refresh();
-        try { ReporteCajaService::generar($sesion); } catch (\Throwable) {}
+        try {
+            ReporteCajaService::generar($sesion);
+        } catch (\Throwable $e) {
+            \Log::error('ReporteCaja::generar falló (fallback)', [
+                'sesion_id' => $sesion->id,
+                'error'     => $e->getMessage(),
+                'file'      => basename($e->getFile()) . ':' . $e->getLine(),
+            ]);
+        }
 
         return redirect("/casadets/caja?empresa={$request->empresa}")
             ->with('success', 'Caja cerrada correctamente. Se generó el reporte Excel.');
