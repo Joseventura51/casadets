@@ -164,6 +164,36 @@ class CajaController extends Controller
 
         $esRango = $desde !== $hasta;
 
+        // ── Reset al cerrar caja ─────────────────────────────────────────────
+        // Cuando la sesión de hoy está CERRADA y se ve el día actual (sin rango
+        // personalizado), mostramos todo en cero: la caja está lista para la
+        // próxima apertura y los datos del cierre están guardados en el reporte.
+        $cajaCerradaHoy = !$esRango
+            && $desde === $hoy
+            && $sesionHoy !== null
+            && !$sesionHoy->estaAbierta();
+
+        if ($cajaCerradaHoy) {
+            $ventas               = collect();
+            $ventasCobradas       = collect();
+            $ventasPendientes     = collect();
+            $movimientos          = collect();
+            $movActivos           = collect();
+            $totalVentasCobradas  = 0.0;
+            $totalOtrosIngresos   = 0.0;
+            $totalCompras         = 0.0;
+            $totalSalidas         = 0.0;
+            $balance              = 0.0;
+            $ventasPorMetodo      = collect();
+            $ventasPorVendedor    = collect();
+            $comprasEnEfectivo    = 0.0;
+            $ingresosManualEfectivo = 0.0;
+            $salidasManualEfectivo  = 0.0;
+            $efectivoEntradas     = 0.0;
+            $efectivoSalidas      = 0.0;
+            $efectivoEnCaja       = 0.0;
+        }
+
         return view('casadets.caja.index', compact(
             'desde', 'hasta', 'hoy', 'esRango', 'empresa',
             'cajasDisponibles', 'cajaSeleccionada',
@@ -174,7 +204,8 @@ class CajaController extends Controller
             'totalSalidas', 'balance',
             'ventasPorMetodo', 'ventasPorVendedor',
             'comprasEnEfectivo', 'ingresosManualEfectivo', 'salidasManualEfectivo',
-            'efectivoEntradas', 'efectivoSalidas', 'efectivoEnCaja'
+            'efectivoEntradas', 'efectivoSalidas', 'efectivoEnCaja',
+            'cajaCerradaHoy'
         ));
     }
 

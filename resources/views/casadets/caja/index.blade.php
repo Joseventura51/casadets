@@ -186,6 +186,19 @@
 </div>
 @endif
 
+@if($cajaCerradaHoy)
+<div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-3" role="alert">
+    <i class="bi bi-info-circle-fill fs-5"></i>
+    <div>
+        <strong>Caja cerrada.</strong>
+        Los datos del día han sido archivados en el reporte.
+        Para ver el historial puedes cambiar el rango de fechas, o bien
+        <a href="/casadets/reportes-caja" class="alert-link">ver Reportes de Caja</a>.
+        Abre la caja para comenzar una nueva sesión.
+    </div>
+</div>
+@endif
+
 {{-- KPI Cards --}}
 <div class="row g-3 mb-4">
     <div class="col-md-3">
