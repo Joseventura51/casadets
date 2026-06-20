@@ -21,10 +21,15 @@ class SaldoFavorController extends Controller
             ->where('monto_disponible', '>', 0)
             ->orderBy('created_at', 'desc');
 
-        VendedorScope::aplicarSaldos($saldosActivos);
+        // Si el usuario NO tiene permiso de ver todos, aplicar filtros de caja/vendedor
+        $verTodos = auth()->user()?->puedeHacer('saldos.ver_todos');
 
-        if (session('caja_id')) {
-            $saldosActivos->where('caja_id', session('caja_id'));
+        if (!$verTodos) {
+            VendedorScope::aplicarSaldos($saldosActivos);
+
+            if (session('caja_id')) {
+                $saldosActivos->where('caja_id', session('caja_id'));
+            }
         }
 
         $saldosActivos = $saldosActivos->get();
