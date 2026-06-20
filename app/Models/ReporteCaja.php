@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReporteCaja extends Model
 {
-    protected $fillable = ['caja_sesion_id', 'caja_id', 'fecha', 'archivo', 'generado_at'];
+    protected $fillable = [
+        'caja_sesion_id', 'caja_id', 'fecha', 'archivo', 'generado_at',
+        'total_cobradas', 'total_otros', 'total_salidas', 'balance', 'efectivo_esperado',
+    ];
 
     protected $casts = [
         'fecha'        => 'date',

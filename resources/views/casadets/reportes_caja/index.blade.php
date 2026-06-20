@@ -87,11 +87,13 @@
                         <tr>
                             <th class="ps-4">Fecha</th>
                             <th>Caja</th>
-                            <th>Sesión ID</th>
-                            <th>Apertura (S/)</th>
-                            <th>Cierre (S/)</th>
-                            <th>Diferencia (S/)</th>
-                            <th>Generado</th>
+                            <th class="text-end">Ventas cobradas</th>
+                            <th class="text-end">Otros ingresos</th>
+                            <th class="text-end">Salidas</th>
+                            <th class="text-end">Balance</th>
+                            <th class="text-end">Ef. esperado</th>
+                            <th class="text-end">Ef. declarado</th>
+                            <th class="text-end">Diferencia ef.</th>
                             <th>Archivo</th>
                             <th class="pe-4">Acciones</th>
                         </tr>
@@ -99,41 +101,76 @@
                     <tbody>
                         @foreach($reportes as $r)
                         @php
-                            $sesion    = $r->sesion;
-                            $apertura  = (float) ($sesion?->monto_apertura ?? 0);
-                            $cierre    = $sesion?->monto_cierre !== null ? (float) $sesion->monto_cierre : null;
+                            $sesion           = $r->sesion;
+                            $cierreDeclarado  = $sesion?->monto_cierre !== null ? (float) $sesion->monto_cierre : null;
+                            $efectivoEsperado = $r->efectivo_esperado !== null ? (float) $r->efectivo_esperado : null;
+                            $difEfectivo      = ($cierreDeclarado !== null && $efectivoEsperado !== null)
+                                                ? round($cierreDeclarado - $efectivoEsperado, 2)
+                                                : null;
                         @endphp
                         <tr>
-                            <td class="ps-4 fw-semibold">{{ $r->fecha->format('d/m/Y') }}</td>
+                            <td class="ps-4 fw-semibold">
+                                {{ $r->fecha->format('d/m/Y') }}
+                                <br><small class="text-muted fw-normal">Sesión #{{ $r->caja_sesion_id }}</small>
+                            </td>
                             <td>
                                 <span class="badge bg-primary bg-opacity-10 text-primary fw-semibold">
                                     {{ $r->caja?->codigo ?? '—' }}
                                 </span>
-                                <small class="text-muted ms-1">{{ $r->caja?->nombre }}</small>
+                                <small class="text-muted d-block">{{ $r->caja?->nombre }}</small>
                             </td>
-                            <td><span class="text-muted small">#{{ $r->caja_sesion_id }}</span></td>
-                            <td>S/ {{ number_format($apertura, 2) }}</td>
-                            <td>
-                                @if($cierre !== null)
-                                    S/ {{ number_format($cierre, 2) }}
+                            <td class="text-end">
+                                @if($r->total_cobradas !== null)
+                                    <span class="text-success fw-semibold">S/ {{ number_format($r->total_cobradas, 2) }}</span>
                                 @else
-                                    <span class="text-muted small">N/D</span>
+                                    <span class="text-muted small">—</span>
                                 @endif
                             </td>
-                            <td>
-                                @if($cierre !== null)
-                                    @php $dif = round($cierre - $apertura, 2); @endphp
-                                    <span class="fw-semibold {{ $dif < 0 ? 'text-danger' : ($dif > 0 ? 'text-success' : 'text-muted') }}">
-                                        {{ $dif >= 0 ? '+' : '' }}{{ number_format($dif, 2) }}
+                            <td class="text-end">
+                                @if($r->total_otros !== null)
+                                    S/ {{ number_format($r->total_otros, 2) }}
+                                @else
+                                    <span class="text-muted small">—</span>
+                                @endif
+                            </td>
+                            <td class="text-end">
+                                @if($r->total_salidas !== null)
+                                    <span class="text-danger">S/ {{ number_format($r->total_salidas, 2) }}</span>
+                                @else
+                                    <span class="text-muted small">—</span>
+                                @endif
+                            </td>
+                            <td class="text-end">
+                                @if($r->balance !== null)
+                                    <span class="fw-bold {{ $r->balance >= 0 ? 'text-success' : 'text-danger' }}">
+                                        S/ {{ number_format($r->balance, 2) }}
                                     </span>
                                 @else
                                     <span class="text-muted small">—</span>
                                 @endif
                             </td>
-                            <td>
-                                <small class="text-muted">
-                                    {{ $r->generado_at ? $r->generado_at->format('d/m/Y H:i') : '—' }}
-                                </small>
+                            <td class="text-end">
+                                @if($efectivoEsperado !== null)
+                                    S/ {{ number_format($efectivoEsperado, 2) }}
+                                @else
+                                    <span class="text-muted small">—</span>
+                                @endif
+                            </td>
+                            <td class="text-end">
+                                @if($cierreDeclarado !== null)
+                                    S/ {{ number_format($cierreDeclarado, 2) }}
+                                @else
+                                    <span class="text-muted small">N/D</span>
+                                @endif
+                            </td>
+                            <td class="text-end">
+                                @if($difEfectivo !== null)
+                                    <span class="fw-semibold {{ $difEfectivo < 0 ? 'text-danger' : ($difEfectivo > 0 ? 'text-success' : 'text-muted') }}">
+                                        {{ $difEfectivo >= 0 ? '+' : '' }}S/ {{ number_format($difEfectivo, 2) }}
+                                    </span>
+                                @else
+                                    <span class="text-muted small">—</span>
+                                @endif
                             </td>
                             <td>
                                 @if($r->existeArchivo())
@@ -145,6 +182,9 @@
                                         <i class="bi bi-exclamation-triangle me-1"></i>No encontrado
                                     </span>
                                 @endif
+                                <small class="text-muted d-block" style="font-size:.7rem;">
+                                    {{ $r->generado_at ? $r->generado_at->format('d/m/Y H:i') : '' }}
+                                </small>
                             </td>
                             <td class="pe-4">
                                 <div class="d-flex gap-1">
@@ -154,13 +194,10 @@
                                         <i class="bi bi-download me-1"></i>Excel
                                     </a>
                                     @endif
-
-                                    @can('rol:reportes-caja')
-                                    @endcan
                                     <form method="POST" action="/casadets/reportes-caja/{{ $r->id }}/regenerar"
                                           onsubmit="return confirm('¿Regenerar el reporte de esta sesión?')">
                                         @csrf
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Regenerar">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Regenerar reporte">
                                             <i class="bi bi-arrow-clockwise"></i>
                                         </button>
                                     </form>

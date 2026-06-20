@@ -67,10 +67,15 @@ class ReporteCajaService
         $reporte = ReporteCaja::updateOrCreate(
             ['caja_sesion_id' => $sesion->id],
             [
-                'caja_id'      => $caja?->id,
-                'fecha'        => $fecha->toDateString(),
-                'archivo'      => $ruta,
-                'generado_at'  => now(),
+                'caja_id'          => $caja?->id,
+                'fecha'            => $fecha->toDateString(),
+                'archivo'          => $ruta,
+                'generado_at'      => now(),
+                'total_cobradas'   => $kpis['total_cobradas'],
+                'total_otros'      => $kpis['total_otros'],
+                'total_salidas'    => $kpis['total_salidas'],
+                'balance'          => $kpis['balance'],
+                'efectivo_esperado'=> $kpis['efectivo_en_caja'],
             ]
         );
 
@@ -128,14 +133,13 @@ class ReporteCajaService
                 ->whereDate('fecha', $desde)
                 ->sum('monto_total'), 2);
         }
-        $ingManualEfec   = round($movActivos->filter(fn ($m) => $m->tipo === 'ingreso' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
-        $salManualEfec   = round($movActivos->filter(fn ($m) => $m->tipo === 'salida'  && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
-        $efectivoEnCaja  = round($sesion->monto_apertura + $metodos['efectivo'] ?? 0 + $ingManualEfec - $comprasEfectivo - $salManualEfec, 2);
+        $ingManualEfec = round($movActivos->filter(fn ($m) => $m->tipo === 'ingreso' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
+        $salManualEfec = round($movActivos->filter(fn ($m) => $m->tipo === 'salida'  && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
 
         // Métodos de pago
         $metodos = self::calcularMetodos($movActivos, $ventasCobradas);
 
-        // Efectivo en caja (recalcular con métodos ya disponibles)
+        // Efectivo esperado en caja al momento del cierre
         $efectivoEnCaja = round((float)$sesion->monto_apertura + ($metodos->get('efectivo', 0)) + $ingManualEfec - $comprasEfectivo - $salManualEfec, 2);
 
         $diferencia = $sesion->monto_cierre !== null
