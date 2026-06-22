@@ -27,6 +27,14 @@ class ClienteController extends Controller
             });
         }
 
+        if ($request->filled('empresa')) {
+            $query->where('empresa', $request->empresa);
+        }
+
+        if ($request->input('activo') !== null && $request->input('activo') !== '') {
+            $query->where('activo', (bool) $request->activo);
+        }
+
         $clientes = $query->paginate(50)->withQueryString();
 
         return view('casadets.clientes.index', compact('clientes'));

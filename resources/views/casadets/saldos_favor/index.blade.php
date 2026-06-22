@@ -312,6 +312,21 @@
 </div>
 @else
 
+{{-- Buscador de cliente ──────────────────────────────────── --}}
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-search text-muted"></i>
+            <input type="text" id="buscarCliente"
+                   class="form-control form-control-sm"
+                   placeholder="Buscar cliente por nombre o documento…"
+                   style="max-width:380px;"
+                   autocomplete="off">
+            <span id="saldosBuscadorInfo" class="text-muted small ms-1"></span>
+        </div>
+    </div>
+</div>
+
 {{-- Una card por cliente ─────────────────────────────────── --}}
 @foreach($clientes as $cliente)
 @php
@@ -448,6 +463,33 @@ $clientesJsonAc = $todosClientes->map(fn($c) => [
 @endphp
 
 <script>
+/* ── Buscador de cliente en listado de saldos ─────────────── */
+(function () {
+    const inp  = document.getElementById('buscarCliente');
+    const info = document.getElementById('saldosBuscadorInfo');
+    if (!inp) return;
+
+    function norm(s) {
+        return (s || '').toLowerCase()
+            .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e')
+            .replace(/[íìï]/g,'i').replace(/[óòö]/g,'o')
+            .replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+    }
+
+    inp.addEventListener('input', function () {
+        const term = norm(this.value.trim());
+        const cards = document.querySelectorAll('.saldo-card[id^="card-cliente-"]');
+        let visibles = 0;
+        cards.forEach(card => {
+            const header = norm(card.querySelector('.card-header')?.textContent || '');
+            const mostrar = !term || header.includes(term);
+            card.style.display = mostrar ? '' : 'none';
+            if (mostrar) visibles++;
+        });
+        if (info) info.textContent = term ? visibles + ' resultado(s)' : '';
+    });
+})();
+
 /* ══════════════════════════════════════════════════════════════
    Modal 1 — Aplicar saldo
    Estado interno del modal

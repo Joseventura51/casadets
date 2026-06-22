@@ -117,8 +117,8 @@ class VentaController extends Controller
             $query->where('documento_numero', 'like', $serie . '-%');
         }
 
-        if ($total) {
-            $query->where('total', 'like', '%' . $total . '%');
+        if ($total !== null && $total !== '') {
+            $query->whereRaw('ROUND(total, 2) = ?', [(float) $total]);
         }
 
         $ventas = $query

@@ -140,8 +140,11 @@
             @if($compras->count())
             <tfoot>
                 <tr class="table-light">
-                    <th colspan="5" class="text-end">Total (esta página)</th>
-                    <th class="text-end">S/ {{ number_format($compras->getCollection()->sum('monto_total'), 2) }}</th>
+                    <th colspan="5" class="text-end">
+                        Total del período
+                        @if($compras->hasPages()) <span class="fw-normal text-muted" style="font-size:.78rem;">(todas las páginas)</span> @endif
+                    </th>
+                    <th class="text-end">S/ {{ number_format($totalFiltrado, 2) }}</th>
                     <th colspan="2"></th>
                 </tr>
             </tfoot>

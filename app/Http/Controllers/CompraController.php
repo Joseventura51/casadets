@@ -43,11 +43,12 @@ class CompraController extends Controller
         $query->whereDate('fecha', '>=', $desde)
             ->whereDate('fecha', '<=', $hasta);
 
+        $totalFiltrado = (clone $query)->sum('monto_total');
         $compras = $query->paginate(50)->withQueryString();
 
         $cajaAbierta = CajaService::cajaAbierta();
 
-        return view('casadets.compras.index', compact('compras', 'desde', 'hasta', 'cajaAbierta'));
+        return view('casadets.compras.index', compact('compras', 'desde', 'hasta', 'cajaAbierta', 'totalFiltrado'));
     }
 
     public function create()

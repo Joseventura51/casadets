@@ -72,6 +72,7 @@
                     <option value="compra" {{ request('subtipo') === 'compra' ? 'selected' : '' }}>Compra</option>
                     <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo favor</option>
                     <option value="manual" {{ request('subtipo') === 'manual' ? 'selected' : '' }}>Manual</option>
+                    <option value="anulacion" {{ request('subtipo') === 'anulacion' ? 'selected' : '' }}>Anulación</option>
                 </select>
             </div>
             <div>
@@ -205,6 +206,7 @@
                             <option value="compra"            {{ request('subtipo') === 'compra'            ? 'selected' : '' }}>Compra</option>
                             <option value="saldo_favor_usado" {{ request('subtipo') === 'saldo_favor_usado' ? 'selected' : '' }}>Saldo favor</option>
                             <option value="manual"            {{ request('subtipo') === 'manual'            ? 'selected' : '' }}>Manual</option>
+                            <option value="anulacion"         {{ request('subtipo') === 'anulacion'         ? 'selected' : '' }}>Anulación</option>
                         </select>
                     </td>
                     {{-- Categoría --}}

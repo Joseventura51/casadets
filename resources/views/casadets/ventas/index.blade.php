@@ -400,7 +400,7 @@ function aplicarFiltros() {
             (!vals.cliente   || d.cliente.includes(vals.cliente))     &&
             (!vals.pago      || d.pago.includes(vals.pago))           &&
             (!vals.documento || d.documento.includes(vals.documento)) &&
-            (!vals.total     || d.total.includes(vals.total))         &&
+            (!vals.total     || (parseFloat(d.total.replace(/,/g,'')) === parseFloat(vals.total))) &&
             (!fecha          || fechaFila === fecha);
 
         tr.classList.toggle('fila-oculta', !ok);
@@ -429,8 +429,9 @@ formFiltros?.addEventListener('submit', guardarFiltrosTabla);
     fetchFiltersAjax(false);
 }));
 fFecha.addEventListener('change', () => {
-    // Filtering by a specific date implies leaving "all dates" mode
-    const h = formFiltros?.querySelector('input[name="todas"]'); if (h) h.value = '';
+    // Si se elige una fecha específica, activar "todas" para no chocar con el rango desde/hasta
+    const h = formFiltros?.querySelector('input[name="todas"]');
+    if (h) h.value = fFecha.value ? '1' : '';
     fetchFiltersAjax(false);
 });
 

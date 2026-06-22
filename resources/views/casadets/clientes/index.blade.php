@@ -19,6 +19,22 @@
                 <input type="text" name="buscar" value="{{ request('buscar') }}"
                        class="form-control form-control-sm" placeholder="Nombre, DNI o RUC…">
             </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Empresa</label>
+                <select name="empresa" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    <option value="casadets" {{ request('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>
+                    <option value="zendy"    {{ request('empresa') === 'zendy'    ? 'selected' : '' }}>ZENDY</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Estado</label>
+                <select name="activo" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="1" {{ request('activo') === '1' ? 'selected' : '' }}>Activos</option>
+                    <option value="0" {{ request('activo') === '0' ? 'selected' : '' }}>Inactivos</option>
+                </select>
+            </div>
             <div class="col-auto d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary">Buscar</button>
                 <a href="/casadets/clientes" class="btn btn-sm btn-outline-secondary">Limpiar</a>
