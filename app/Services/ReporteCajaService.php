@@ -53,7 +53,7 @@ class ReporteCajaService
         $spreadsheet->setActiveSheetIndex(0);
 
         // ── Guardar archivo ───────────────────────────────────────────────
-        $directorio = 'reportes_caja';
+        $directorio = 'private/reportes_caja';
         $dirAbs     = storage_path("app/{$directorio}");
         if (!is_dir($dirAbs)) {
             mkdir($dirAbs, 0775, true);
