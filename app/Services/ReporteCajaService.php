@@ -54,7 +54,10 @@ class ReporteCajaService
 
         // ── Guardar archivo ───────────────────────────────────────────────
         $directorio = 'reportes_caja';
-        Storage::disk('local')->makeDirectory($directorio);
+        $dirAbs     = storage_path("app/{$directorio}");
+        if (!is_dir($dirAbs)) {
+            mkdir($dirAbs, 0775, true);
+        }
 
         $nombre   = "reporte_caja_{$caja?->id}_{$sesion->id}_{$fecha->format('Y-m-d')}.xlsx";
         $ruta     = "{$directorio}/{$nombre}";

@@ -272,17 +272,22 @@ class CajaController extends Controller
             } catch (\RuntimeException $e) {
                 return back()->with('error', $e->getMessage());
             }
+            $reporteOk = true;
             try {
                 ReporteCajaService::generar($sesion);
             } catch (\Throwable $e) {
+                $reporteOk = false;
                 \Log::error('ReporteCaja::generar falló', [
                     'sesion_id' => $sesion->id,
                     'error'     => $e->getMessage(),
                     'file'      => basename($e->getFile()) . ':' . $e->getLine(),
                 ]);
             }
+            $msg = $reporteOk
+                ? "Caja {$caja->codigo} cerrada. Reporte Excel generado correctamente."
+                : "Caja {$caja->codigo} cerrada, pero el reporte no pudo generarse. Revisa los logs o usa el botón Regenerar en Reportes de Caja.";
             return redirect("/casadets/caja?empresa={$request->empresa}&caja_id={$caja->id}")
-                ->with('success', "Caja {$caja->codigo} cerrada correctamente. Se generó el reporte Excel.");
+                ->with($reporteOk ? 'success' : 'warning', $msg);
         }
 
         // Fallback sin caja
@@ -299,9 +304,11 @@ class CajaController extends Controller
 
         $sesion->update(['monto_cierre' => $request->monto_cierre, 'estado' => 'cerrada']);
         $sesion->refresh();
+        $reporteOk = true;
         try {
             ReporteCajaService::generar($sesion);
         } catch (\Throwable $e) {
+            $reporteOk = false;
             \Log::error('ReporteCaja::generar falló (fallback)', [
                 'sesion_id' => $sesion->id,
                 'error'     => $e->getMessage(),
@@ -309,8 +316,11 @@ class CajaController extends Controller
             ]);
         }
 
+        $msg2 = $reporteOk
+            ? 'Caja cerrada correctamente. Reporte Excel generado.'
+            : 'Caja cerrada, pero el reporte no pudo generarse. Usa el botón Regenerar en Reportes de Caja.';
         return redirect("/casadets/caja?empresa={$request->empresa}")
-            ->with('success', 'Caja cerrada correctamente. Se generó el reporte Excel.');
+            ->with($reporteOk ? 'success' : 'warning', $msg2);
     }
 
     private function calcularMetodosDePago(string $desde, string $hasta, $ventasCobradas, ?int $cajaId = null, $movActivos = null): \Illuminate\Support\Collection

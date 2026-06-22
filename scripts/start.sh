@@ -49,10 +49,12 @@ EOF
 # Crear base de datos SQLite si no existe
 touch database/database.sqlite
 
-# Instalar dependencias PHP si no están
-if [ ! -f vendor/autoload.php ]; then
-  composer install --no-interaction --prefer-dist --optimize-autoloader
-fi
+# Crear directorios de storage necesarios
+mkdir -p storage/app/reportes_caja
+mkdir -p storage/logs
+
+# Instalar / sincronizar dependencias PHP (detecta paquetes nuevos)
+composer install --no-interaction --prefer-dist --optimize-autoloader
 
 # Correr migraciones
 php artisan migrate --force
