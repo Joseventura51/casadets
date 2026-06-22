@@ -6,6 +6,7 @@ use App\Models\Caja;
 use App\Models\CajaSesion;
 use App\Models\Compra;
 use App\Models\DetallePagoFactura;
+use App\Models\Devolucion;
 use App\Models\Movimiento;
 use App\Models\PagoMetodo;
 use App\Models\ReporteCaja;
@@ -39,14 +40,14 @@ class ReporteCajaService
             : \Carbon\Carbon::parse($sesion->fecha);
 
         // ── Recopilar datos ───────────────────────────────────────────────
-        [$ventas, $movimientos, $kpis, $metodos, $porVendedor] = self::recopilarDatos($sesion, $caja, $fecha);
+        [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas] = self::recopilarDatos($sesion, $caja, $fecha);
 
         // ── Generar Excel ─────────────────────────────────────────────────
         $spreadsheet = new Spreadsheet();
         $spreadsheet->getProperties()
             ->setTitle("Reporte Caja {$caja?->codigo} {$fecha->format('d/m/Y')}");
 
-        self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor, $ventas, $movimientos);
+        self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor, $ventas, $movimientos, $devoluciones, $ventasAnuladas);
         self::hojaVentas($spreadsheet, $ventas);
         self::hojaMovimientos($spreadsheet, $movimientos);
 
@@ -197,7 +198,22 @@ class ReporteCajaService
             ->groupBy(fn ($v) => $v->vendedor->nombre ?? 'Sin vendedor')
             ->map(fn ($g) => round($g->sum(fn ($v) => $v->total_cobrado ?? 0), 2));
 
-        return [$ventas, $movimientos, $kpis, $metodos, $porVendedor];
+        // ── Devoluciones de esta sesión ───────────────────────────────────
+        $devQuery = Devolucion::with(['venta:id,documento_tipo,documento_numero', 'user:id,name'])
+            ->whereDate('fecha', $desde)
+            ->where('created_at', '>=', $sesion->created_at);
+        if ($caja) {
+            $devQuery->where('caja_id', $caja->id);
+        }
+        if ($sesion->monto_cierre !== null && $sesion->updated_at) {
+            $devQuery->where('created_at', '<=', $sesion->updated_at);
+        }
+        $devoluciones = $devQuery->orderBy('id')->get();
+
+        // ── Ventas anuladas en esta sesión ────────────────────────────────
+        $ventasAnuladas = $ventas->where('estado', 'anulado');
+
+        return [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas];
     }
 
     private static function calcularMetodos($movActivos, $ventasCobradas): \Illuminate\Support\Collection
@@ -244,8 +260,10 @@ class ReporteCajaService
         array $kpis,
         $metodos,
         $porVendedor,
-        $ventas      = null,
-        $movimientos = null
+        $ventas         = null,
+        $movimientos    = null,
+        $devoluciones   = null,
+        $ventasAnuladas = null
     ): void {
         $sheet = $sp->getActiveSheet();
         $sheet->setTitle('Resumen');
@@ -448,10 +466,95 @@ class ReporteCajaService
             $row++;
         }
 
+        $row++;
+
+        // ══════════════════════════════════════════════════════════════
+        // ── Bloque: DEVOLUCIONES ──────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════
+        $devList = $devoluciones ?? collect();
+
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'DEVOLUCIONES');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        $colsDev = ['#', 'Venta / Doc.', 'Tipo', 'Motivo', 'Registrado por', 'Saldo generado (S/)', 'Monto devuelto (S/)'];
+        foreach ($colsDev as $ci => $label) {
+            $col = chr(65 + $ci);
+            $sheet->setCellValue("{$col}{$row}", $label);
+        }
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
+        $row++;
+
+        $n = 1;
+        foreach ($devList as $d) {
+            $docRef = $d->venta?->documento_numero ?? ('Venta #' . ($d->venta_id ?? '—'));
+            $sheet->setCellValue("A{$row}", $n++);
+            $sheet->setCellValue("B{$row}", $docRef);
+            $sheet->setCellValue("C{$row}", ucfirst($d->tipo ?? 'parcial'));
+            $sheet->setCellValue("D{$row}", $d->motivo ?? '—');
+            $sheet->setCellValue("E{$row}", $d->user?->name ?? '—');
+            $sheet->setCellValue("F{$row}", (float) ($d->saldo_generado ?? 0));
+            $sheet->setCellValue("G{$row}", (float) ($d->monto_devuelto ?? 0));
+            $sheet->getStyle("F{$row}:G{$row}")->getNumberFormat()->setFormatCode($montoFormat);
+            $sheet->getStyle("A{$row}:G{$row}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('FEF3C7');
+            $row++;
+        }
+        if ($devList->isEmpty()) {
+            $sheet->mergeCells("A{$row}:G{$row}");
+            $sheet->setCellValue("A{$row}", 'Sin devoluciones en esta sesión.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        $row++;
+
+        // ══════════════════════════════════════════════════════════════
+        // ── Bloque: VENTAS ANULADAS ───────────────────────────────────
+        // ══════════════════════════════════════════════════════════════
+        $anuladasList = $ventasAnuladas ?? collect();
+
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'VENTAS ANULADAS');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        $colsAnul = ['#', 'Tipo Doc.', 'Nro. Documento', 'Cliente', 'Vendedor', 'Total original (S/)', 'Estado'];
+        foreach ($colsAnul as $ci => $label) {
+            $col = chr(65 + $ci);
+            $sheet->setCellValue("{$col}{$row}", $label);
+        }
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
+        $row++;
+
+        $n = 1;
+        foreach ($anuladasList as $v) {
+            $sheet->setCellValue("A{$row}", $n++);
+            $sheet->setCellValue("B{$row}", ucfirst($v->documento_tipo ?? 'Venta'));
+            $sheet->setCellValue("C{$row}", $v->documento_numero ?? '—');
+            $sheet->setCellValue("D{$row}", $v->cliente->nombre ?? 'Sin cliente');
+            $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '—');
+            $sheet->setCellValue("F{$row}", (float) $v->total);
+            $sheet->getStyle("F{$row}")->getNumberFormat()->setFormatCode($montoFormat);
+            $sheet->setCellValue("G{$row}", 'Anulado');
+            $sheet->getStyle("A{$row}:G{$row}")->getFill()
+                ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB(self::ROJO);
+            $row++;
+        }
+        if ($anuladasList->isEmpty()) {
+            $sheet->mergeCells("A{$row}:G{$row}");
+            $sheet->setCellValue("A{$row}", 'Sin ventas anuladas en esta sesión.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
         // ── Anchos de columna ─────────────────────────────────────────
         $sheet->getColumnDimension('A')->setWidth(6);
-        $sheet->getColumnDimension('B')->setWidth(14);
-        $sheet->getColumnDimension('C')->setWidth(20);
+        $sheet->getColumnDimension('B')->setWidth(16);
+        $sheet->getColumnDimension('C')->setWidth(22);
         $sheet->getColumnDimension('D')->setWidth(28);
         $sheet->getColumnDimension('E')->setWidth(20);
         $sheet->getColumnDimension('F')->setWidth(22);
