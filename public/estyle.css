@@ -23,12 +23,21 @@ body {
     .card-header { font-size: 13px; }
 }
 
-/* SIDEBAR */
+/* SIDEBAR — fijo mientras el contenido scrollea */
 .sidebar {
     background: #1f2937;
-    min-height: 100vh;
     padding-top: 1rem;
+    /* sticky dentro del flex-row de Bootstrap */
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    align-self: flex-start;   /* clave: sin esto sticky no funciona en flex */
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex-shrink: 0;
+    scrollbar-width: none;    /* Firefox: oculta scrollbar interna del sidebar */
 }
+.sidebar::-webkit-scrollbar { display: none; } /* Chrome/Safari: idem */
 
 .sidebar h5 {
     color: #fff;

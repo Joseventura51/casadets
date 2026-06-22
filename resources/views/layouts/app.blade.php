@@ -37,7 +37,7 @@
     <div class="row">
 
         {{-- SIDEBAR ESCRITORIO (oculto en móvil) --}}
-        <div class="col-md-2 sidebar p-3 d-none d-md-flex flex-column" style="position:relative;min-height:100vh;padding-bottom:90px!important;">
+        <div class="col-md-2 sidebar p-3 d-none d-md-flex flex-column" style="padding-bottom:90px!important;">
             <h5 class="text-center fw-bold mb-4 text-white">Sistema</h5>
             <div id="sidebarDesktopNav" class="flex-grow-1">
                 @include('layouts._sidebar_nav')
