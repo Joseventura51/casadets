@@ -46,7 +46,7 @@ class ReporteCajaService
         $spreadsheet->getProperties()
             ->setTitle("Reporte Caja {$caja?->codigo} {$fecha->format('d/m/Y')}");
 
-        self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor);
+        self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor, $ventas, $movimientos);
         self::hojaVentas($spreadsheet, $ventas);
         self::hojaMovimientos($spreadsheet, $movimientos);
 
@@ -217,7 +217,9 @@ class ReporteCajaService
         \Carbon\Carbon $fecha,
         array $kpis,
         $metodos,
-        $porVendedor
+        $porVendedor,
+        $ventas      = null,
+        $movimientos = null
     ): void {
         $sheet = $sp->getActiveSheet();
         $sheet->setTitle('Resumen');
@@ -227,15 +229,20 @@ class ReporteCajaService
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::AZUL]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
         ];
-        $labelStyle = ['font' => ['bold' => true]];
+        $subHeaderStyle = [
+            'font'      => ['bold' => true],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBEAFE']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ];
         $montoFormat = '#,##0.00';
+        $COLS        = 7;   // ancho máximo de la sección detalle (A–G)
 
         $row = 1;
 
         // ── Bloque: Info de sesión ─────────────────────────────────────
-        $sheet->mergeCells("A{$row}:D{$row}");
+        $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'REPORTE DE CIERRE DE CAJA');
-        $sheet->getStyle("A{$row}:D{$row}")->applyFromArray($headerStyle);
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
@@ -260,9 +267,9 @@ class ReporteCajaService
         $row++;
 
         // ── Bloque: KPIs ─────────────────────────────────────────────
-        $sheet->mergeCells("A{$row}:D{$row}");
+        $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'RESUMEN FINANCIERO');
-        $sheet->getStyle("A{$row}:D{$row}")->applyFromArray($headerStyle);
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
@@ -276,9 +283,9 @@ class ReporteCajaService
         $row++;
 
         // ── Bloque: Métodos de pago ───────────────────────────────────
-        $sheet->mergeCells("A{$row}:D{$row}");
+        $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'INGRESOS POR MÉTODO DE PAGO');
-        $sheet->getStyle("A{$row}:D{$row}")->applyFromArray($headerStyle);
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
@@ -293,9 +300,9 @@ class ReporteCajaService
         $row++;
 
         // ── Bloque: Por vendedor ──────────────────────────────────────
-        $sheet->mergeCells("A{$row}:D{$row}");
+        $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'VENTAS COBRADAS POR VENDEDOR');
-        $sheet->getStyle("A{$row}:D{$row}")->applyFromArray($headerStyle);
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
@@ -310,9 +317,9 @@ class ReporteCajaService
         $row++;
 
         // ── Bloque: Conteo ventas ─────────────────────────────────────
-        $sheet->mergeCells("A{$row}:D{$row}");
+        $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'CONTEO DE VENTAS');
-        $sheet->getStyle("A{$row}:D{$row}")->applyFromArray($headerStyle);
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
@@ -320,11 +327,109 @@ class ReporteCajaService
         self::fila2col($sheet, $row, 'Cobradas',          $kpis['ventas_cobradas']);    $row++;
         self::fila2col($sheet, $row, 'Pendientes/Parcial',$kpis['ventas_pendientes']);  $row++;
 
-        // Ancho de columnas
-        $sheet->getColumnDimension('A')->setWidth(30);
-        $sheet->getColumnDimension('B')->setWidth(20);
-        $sheet->getColumnDimension('C')->setWidth(15);
-        $sheet->getColumnDimension('D')->setWidth(15);
+        $row++;
+
+        // ══════════════════════════════════════════════════════════════
+        // ── Bloque: DETALLE DE VALES COBRADOS ────────────────────────
+        // ══════════════════════════════════════════════════════════════
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'DETALLE DE VALES / DOCUMENTOS COBRADOS');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        // Cabecera de tabla
+        $colsVales = ['#', 'Tipo Doc.', 'Nro. Documento', 'Cliente', 'Vendedor', 'Método Pago', 'Total (S/)'];
+        foreach ($colsVales as $ci => $label) {
+            $col = chr(65 + $ci); // A, B, C…
+            $sheet->setCellValue("{$col}{$row}", $label);
+        }
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
+        $row++;
+
+        $ventasList = $ventas ?? collect();
+        $n = 1;
+        foreach ($ventasList as $v) {
+            $sheet->setCellValue("A{$row}", $n++);
+            $sheet->setCellValue("B{$row}", ucfirst($v->documento_tipo ?? 'Venta'));
+            $sheet->setCellValue("C{$row}", $v->documento_numero ?? '—');
+            $sheet->setCellValue("D{$row}", $v->cliente->nombre ?? 'Sin cliente');
+            $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '—');
+            $sheet->setCellValue("F{$row}", ucfirst($v->metodo_pago ?? '—'));
+            $sheet->setCellValue("G{$row}", (float) ($v->pagado ?? $v->total));
+            $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode($montoFormat);
+
+            $color = match ($v->estado ?? '') {
+                'pagado'   => self::VERDE,
+                'anulado'  => self::ROJO,
+                'parcial'  => self::AMARILLO,
+                default    => null,
+            };
+            if ($color) {
+                $sheet->getStyle("A{$row}:G{$row}")->getFill()
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($color);
+            }
+            $row++;
+        }
+        if ($ventasList->isEmpty()) {
+            $sheet->mergeCells("A{$row}:G{$row}");
+            $sheet->setCellValue("A{$row}", 'Sin vales registrados en esta sesión.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        $row++;
+
+        // ══════════════════════════════════════════════════════════════
+        // ── Bloque: DETALLE DE INGRESOS Y SALIDAS ────────────────────
+        // ══════════════════════════════════════════════════════════════
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'DETALLE DE INGRESOS Y SALIDAS (MOVIMIENTOS)');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        $colsMov = ['#', 'Tipo', 'Subtipo', 'Categoría', 'Método Pago', 'Observaciones', 'Monto (S/)'];
+        foreach ($colsMov as $ci => $label) {
+            $col = chr(65 + $ci);
+            $sheet->setCellValue("{$col}{$row}", $label);
+        }
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
+        $row++;
+
+        $movList = ($movimientos ?? collect())->where('estado', 'activo');
+        $n = 1;
+        foreach ($movList as $m) {
+            $sheet->setCellValue("A{$row}", $n++);
+            $sheet->setCellValue("B{$row}", ucfirst($m->tipo ?? ''));
+            $sheet->setCellValue("C{$row}", $m->subtipo ?? '');
+            $sheet->setCellValue("D{$row}", $m->categoria ?? '');
+            $sheet->setCellValue("E{$row}", ucfirst($m->metodo_pago ?? ''));
+            $sheet->setCellValue("F{$row}", $m->observaciones ?? '');
+            $sheet->setCellValue("G{$row}", (float) $m->monto);
+            $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode($montoFormat);
+
+            if ($m->tipo === 'salida') {
+                $sheet->getStyle("A{$row}:G{$row}")->getFill()
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB(self::ROJO);
+            }
+            $row++;
+        }
+        if ($movList->isEmpty()) {
+            $sheet->mergeCells("A{$row}:G{$row}");
+            $sheet->setCellValue("A{$row}", 'Sin movimientos activos en esta sesión.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        // ── Anchos de columna ─────────────────────────────────────────
+        $sheet->getColumnDimension('A')->setWidth(6);
+        $sheet->getColumnDimension('B')->setWidth(14);
+        $sheet->getColumnDimension('C')->setWidth(20);
+        $sheet->getColumnDimension('D')->setWidth(28);
+        $sheet->getColumnDimension('E')->setWidth(20);
+        $sheet->getColumnDimension('F')->setWidth(22);
+        $sheet->getColumnDimension('G')->setWidth(14);
     }
 
     private static function fila2col($sheet, int $row, string $label, $valor, ?string $format = null): void
