@@ -86,6 +86,17 @@ class CajaController extends Controller
             $movQuery->where('caja_id', $cajaSeleccionada->id);
         }
 
+        // Si es vista del día actual (sin rango personalizado) y hay sesión identificada,
+        // acotar movimientos al rango de esa sesión para que múltiples aperturas/cierres
+        // del mismo día no se mezclen entre sí.
+        $esHoy = ($desde === $hoy && $desde === $hasta);
+        if ($esHoy && $sesionHoy) {
+            $movQuery->where('movimientos.created_at', '>=', $sesionHoy->created_at);
+            if (!$sesionHoy->estaAbierta() && $sesionHoy->updated_at) {
+                $movQuery->where('movimientos.created_at', '<=', $sesionHoy->updated_at);
+            }
+        }
+
         $movimientos = $movQuery->get();
 
         // Ventas del período — filtradas por las series asignadas a la caja

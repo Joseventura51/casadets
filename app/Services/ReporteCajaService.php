@@ -95,13 +95,20 @@ class ReporteCajaService
         $desde = $fecha->toDateString();
         $hasta = $desde;
 
-        // Movimientos
+        // Movimientos — acotados al rango temporal de esta sesión específica
+        // para que múltiples sesiones del mismo día no se mezclen en el reporte.
         $movQuery = Movimiento::with('cliente:id,nombre')
             ->whereDate('fecha', $desde);
         if ($caja) {
             $movQuery->where('caja_id', $caja->id);
         } else {
             $movQuery->where('empresa', $sesion->empresa)->whereNull('caja_id');
+        }
+        // Desde la apertura de esta sesión
+        $movQuery->where('movimientos.created_at', '>=', $sesion->created_at);
+        // Hasta el cierre (updated_at al momento de cerrar) si la sesión ya está cerrada
+        if ($sesion->monto_cierre !== null && $sesion->updated_at) {
+            $movQuery->where('movimientos.created_at', '<=', $sesion->updated_at);
         }
         $movimientos = $movQuery->orderBy('id')->get();
         $movActivos  = $movimientos->where('estado', 'activo');
