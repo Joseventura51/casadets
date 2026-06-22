@@ -63,7 +63,10 @@
             </thead>
             <tbody>
                 @forelse($clientes as $c)
-                <tr class="{{ !$c->activo ? 'text-muted' : '' }}">
+                <tr class="{{ !$c->activo ? 'text-muted' : '' }}"
+                    data-buscar="{{ strtolower($c->nombre . ' ' . ($c->documento ?? '')) }}"
+                    data-empresa="{{ strtolower($c->empresa ?? '') }}"
+                    data-activo="{{ $c->activo ? '1' : '0' }}">
                     <td class="fw-semibold">{{ $c->nombre }}</td>
                     <td>{{ $c->documento ?? '—' }}</td>
                     <td>{{ $c->telefono ?? '—' }}</td>
@@ -105,4 +108,25 @@
     {{ $clientes->links() }}
 </div>
 @endif
+
+<script>
+(function () {
+    function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+    function aplicar() {
+        const tBuscar  = norm((document.querySelector('input[name="buscar"]')?.value || '').trim());
+        const tEmpresa = norm((document.querySelector('select[name="empresa"]')?.value || '').trim());
+        const tActivo  = (document.querySelector('select[name="activo"]')?.value || '');
+        document.querySelectorAll('tbody tr[data-buscar]').forEach(tr => {
+            const ok =
+                (!tBuscar  || norm(tr.dataset.buscar).includes(tBuscar))  &&
+                (!tEmpresa || norm(tr.dataset.empresa) === tEmpresa)       &&
+                (!tActivo  || tr.dataset.activo === tActivo);
+            tr.style.display = ok ? '' : 'none';
+        });
+    }
+    document.querySelector('input[name="buscar"]')?.addEventListener('input', aplicar);
+    document.querySelector('select[name="empresa"]')?.addEventListener('change', aplicar);
+    document.querySelector('select[name="activo"]')?.addEventListener('change', aplicar);
+})();
+</script>
 @endsection

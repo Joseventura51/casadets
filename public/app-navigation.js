@@ -218,7 +218,7 @@
         if (!shouldHandleForm(form)) return;
         if (event.target.matches('input[type="date"], select, input[type="checkbox"], input[type="radio"]')) return;
         window.clearTimeout(filterTimer);
-        filterTimer = window.setTimeout(() => navigate(formUrl(form)), 520);
+        filterTimer = window.setTimeout(() => navigate(formUrl(form)), 200);
     });
 
     document.addEventListener('change', (event) => {

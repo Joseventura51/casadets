@@ -552,11 +552,12 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
 
 const debouncedFetch = debounce(() => fetchFiltersAjax(false), 350);
 
-// Wire text inputs to live AJAX fetch
+// Filtrado INSTANTÁNEO client-side + AJAX debounced para paginación server-side
 [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => {
-    el?.addEventListener('input', debouncedFetch);
+    el?.addEventListener('input', () => {
+        aplicarFiltros();   // inmediato — oculta/muestra filas visibles ya en DOM
+        debouncedFetch();   // 350ms — trae resultados del server (otras páginas)
+    });
 });
-
-// Select and date listeners are registered above (lines 360-364) — do not duplicate here
 </script>
 @endsection

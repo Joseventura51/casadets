@@ -77,7 +77,11 @@
             </thead>
             <tbody>
                 @forelse($productos as $p)
-                <tr class="{{ !$p->activo ? 'text-muted' : '' }}">
+                <tr class="{{ !$p->activo ? 'text-muted' : '' }}"
+                    data-buscar="{{ strtolower($p->nombre . ' ' . ($p->codigo ?? '')) }}"
+                    data-empresa="{{ strtolower($p->empresa ?? 'casadets') }}"
+                    data-activo="{{ $p->activo ? '1' : '0' }}"
+                    data-stock="{{ $p->stock_actual <= 0 ? 'bajo' : 'ok' }}">
                     <td class="small text-muted">{{ $p->codigo ?? '—' }}</td>
                     <td>
                         <a href="/casadets/productos/{{ $p->id }}" class="fw-semibold text-decoration-none">
@@ -140,4 +144,28 @@
     {{ $productos->links() }}
 </div>
 @endif
+
+<script>
+(function () {
+    function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+    function aplicar() {
+        const tQ       = norm((document.querySelector('input[name="q"]')?.value || '').trim());
+        const tEmpresa = (document.querySelector('select[name="empresa"]')?.value || '');
+        const tActivo  = (document.querySelector('select[name="activo"]')?.value || '');
+        const tStock   = (document.querySelector('select[name="stock"]')?.value || '');
+        document.querySelectorAll('tbody tr[data-buscar]').forEach(tr => {
+            const ok =
+                (!tQ       || norm(tr.dataset.buscar).includes(tQ))                    &&
+                (!tEmpresa || tr.dataset.empresa === tEmpresa.toLowerCase())            &&
+                (!tActivo  || tr.dataset.activo === tActivo)                            &&
+                (!tStock   || tr.dataset.stock === tStock);
+            tr.style.display = ok ? '' : 'none';
+        });
+    }
+    document.querySelector('input[name="q"]')?.addEventListener('input', aplicar);
+    document.querySelector('select[name="empresa"]')?.addEventListener('change', aplicar);
+    document.querySelector('select[name="activo"]')?.addEventListener('change', aplicar);
+    document.querySelector('select[name="stock"]')?.addEventListener('change', aplicar);
+})();
+</script>
 @endsection

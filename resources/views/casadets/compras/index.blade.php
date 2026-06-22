@@ -69,7 +69,7 @@
             </thead>
             <tbody>
                 @forelse($compras as $c)
-                <tr>
+                <tr data-buscar="{{ strtolower($c->empresa . ' ' . $c->documento_numero . ' ' . $c->documento_tipo) }}">
                     <td>{{ $c->fecha->format('d/m/Y') }}</td>
                     <td>{{ $c->empresa }}</td>
                     <td class="text-muted small">{{ $c->documento_tipo ? ucfirst($c->documento_tipo) : '' }} {{ $c->documento_numero }}</td>
@@ -158,4 +158,18 @@
     {{ $compras->links() }}
 </div>
 @endif
+
+<script>
+(function () {
+    function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+    const inp = document.querySelector('input[name="empresa"]');
+    if (!inp) return;
+    inp.addEventListener('input', function () {
+        const t = norm(this.value.trim());
+        document.querySelectorAll('tbody tr[data-buscar]').forEach(tr => {
+            tr.style.display = (!t || norm(tr.dataset.buscar).includes(t)) ? '' : 'none';
+        });
+    });
+})();
+</script>
 @endsection

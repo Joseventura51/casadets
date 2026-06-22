@@ -272,6 +272,9 @@
                 <tr class="mov-row {{ $m->estado === 'anulado' ? 'text-muted' : '' }}"
                     data-bs-toggle="collapse"
                     data-bs-target="#det-{{ $m->id }}"
+                    data-cliente="{{ strtolower($m->cliente->nombre ?? '') }}"
+                    data-documento="{{ strtolower(($m->documento_tipo ?? '') . ' ' . ($m->documento_numero ?? '')) }}"
+                    data-categoria="{{ strtolower($m->categoria ?? '') }}"
                     style="cursor:pointer;"
                     aria-expanded="false">
                     <td class="text-center text-muted">
@@ -680,6 +683,36 @@ document.querySelectorAll('.mov-row').forEach(function(row) {
         row.classList.remove('table-active');
     });
 });
+
+/* ── Filtrado instantáneo en columnas de texto ── */
+(function () {
+    function norm(s) { return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+
+    function aplicarTexto() {
+        // Lee los inputs de texto tanto del panel de filtros superior como de la fila de columnas
+        const tCliente   = norm(document.querySelector('input[name="cliente"]')?.value  || '');
+        const tDocumento = norm(document.querySelector('input[name="documento"]')?.value || '');
+        const tCategoria = norm(document.querySelector('input[name="categoria"]')?.value  || '');
+
+        document.querySelectorAll('tr.mov-row[data-cliente]').forEach(tr => {
+            const ok =
+                (!tCliente   || norm(tr.dataset.cliente).includes(tCliente))     &&
+                (!tDocumento || norm(tr.dataset.documento).includes(tDocumento)) &&
+                (!tCategoria || norm(tr.dataset.categoria).includes(tCategoria));
+            tr.style.display = ok ? '' : 'none';
+            // También ocultar la fila de detalle colapsable
+            const target = tr.dataset.bsTarget;
+            if (target) {
+                const det = document.querySelector(target);
+                if (det) det.style.display = ok ? '' : 'none';
+            }
+        });
+    }
+
+    // Enlazar todos los inputs de texto de filtros (panel superior y columnas de tabla)
+    document.querySelectorAll('input[name="cliente"], input[name="documento"], input[name="categoria"]')
+        .forEach(el => el.addEventListener('input', aplicarTexto));
+})();
 
 /* ── Modal de anulación de movimiento ── */
 function abrirModalAnularMov(id, monto, categoria, esPago) {
