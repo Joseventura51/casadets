@@ -485,25 +485,12 @@ Object.values(filtros).forEach(el => el.addEventListener('input', actualizarExpo
 fFecha.addEventListener('input', actualizarExport);
 actualizarExport();
 
-// ── Filtrado instantáneo al escribir en inputs de texto ───────
-// (client-side inmediato + AJAX debounced para buscar en todas las páginas)
-const textInputsFiltro = [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].filter(Boolean);
-
 // ── AJAX live-search (debounced) ─────────────────────────────
 let ajaxController = null;
 function debounce(fn, ms) {
     let t;
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
-
-// Enlazar inputs de texto: filtrado local INMEDIATO + AJAX debounced 400ms
-const fetchDebounced = debounce(() => fetchFiltersAjax(false), 400);
-textInputsFiltro.forEach(el => {
-    el.addEventListener('input', () => {
-        aplicarFiltros();   // filtra las filas de la página actual al instante
-        fetchDebounced();   // luego trae resultados del servidor (otras páginas)
-    });
-});
 
 function rebindTableBehaviors() {
     // Los inputs de filtro (thead-filter) NUNCA se reemplazan — no re-enlazar.
@@ -535,6 +522,13 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
     } else if (pageNum !== null) {
         fd.set('page', pageNum.toString());
     }
+    // Incluir inputs de texto que están fuera del <form> (están en el <thead>)
+    [['vendedor', filtros.vendedor], ['cliente', filtros.cliente],
+     ['documento', filtros.documento], ['total', filtros.total],
+     ['estado', filtros.estado], ['pago', filtros.pago], ['serie', filtros.serie],
+     ['fecha', fFecha]].forEach(([key, el]) => {
+        if (el?.value) fd.set(key, el.value);
+    });
     const url = formFiltros.action + '?' + new URLSearchParams(fd).toString();
     if (ajaxController) ajaxController.abort();
     ajaxController = new AbortController();
