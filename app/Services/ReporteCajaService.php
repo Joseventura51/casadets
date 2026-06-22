@@ -199,16 +199,17 @@ class ReporteCajaService
             ->map(fn ($g) => round($g->sum(fn ($v) => $v->total_cobrado ?? 0), 2));
 
         // ── Devoluciones de esta sesión ───────────────────────────────────
+        // Filtramos solo por fecha. caja_id puede ser nulo en varias devoluciones,
+        // por eso aceptamos también las que no tienen caja asignada (orWhereNull).
         $devQuery = Devolucion::with(['venta:id,documento_tipo,documento_numero', 'user:id,name'])
-            ->whereDate('fecha', $desde)
-            ->where('created_at', '>=', $sesion->created_at);
+            ->whereDate('devoluciones.fecha', $desde);
         if ($caja) {
-            $devQuery->where('caja_id', $caja->id);
+            $devQuery->where(function ($q) use ($caja) {
+                $q->where('devoluciones.caja_id', $caja->id)
+                  ->orWhereNull('devoluciones.caja_id');
+            });
         }
-        if ($sesion->monto_cierre !== null && $sesion->updated_at) {
-            $devQuery->where('created_at', '<=', $sesion->updated_at);
-        }
-        $devoluciones = $devQuery->orderBy('id')->get();
+        $devoluciones = $devQuery->orderBy('devoluciones.id')->get();
 
         // ── Ventas anuladas en esta sesión ────────────────────────────────
         $ventasAnuladas = $ventas->where('estado', 'anulado');
@@ -535,8 +536,8 @@ class ReporteCajaService
             $sheet->setCellValue("A{$row}", $n++);
             $sheet->setCellValue("B{$row}", ucfirst($v->documento_tipo ?? 'Venta'));
             $sheet->setCellValue("C{$row}", $v->documento_numero ?? '—');
-            $sheet->setCellValue("D{$row}", $v->cliente->nombre ?? 'Sin cliente');
-            $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '—');
+            $sheet->setCellValue("D{$row}", $v->cliente?->nombre ?? 'Sin cliente');
+            $sheet->setCellValue("E{$row}", $v->vendedor?->nombre ?? '—');
             $sheet->setCellValue("F{$row}", (float) $v->total);
             $sheet->getStyle("F{$row}")->getNumberFormat()->setFormatCode($montoFormat);
             $sheet->setCellValue("G{$row}", 'Anulado');
