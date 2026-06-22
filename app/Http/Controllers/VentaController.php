@@ -130,7 +130,7 @@ class VentaController extends Controller
             ->orderBy('documento_numero')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc')
-            ->paginate(20)
+            ->paginate(9999)
             ->withQueryString();
 
         $vendedores = Vendedor::select('id', 'nombre')
