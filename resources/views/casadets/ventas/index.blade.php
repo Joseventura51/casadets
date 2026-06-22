@@ -481,7 +481,7 @@ function actualizarExport() {
 }
 if (fDesde) fDesde.addEventListener('change', actualizarExport);
 if (fHasta) fHasta.addEventListener('change', actualizarExport);
-Object.values(filtros).forEach(el => el.addEventListener('input', actualizarExport));
+Object.values(filtros).forEach(el => el?.addEventListener('input', actualizarExport));
 fFecha.addEventListener('input', actualizarExport);
 actualizarExport();
 
@@ -559,12 +559,9 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
 
 const debouncedFetch = debounce(() => fetchFiltersAjax(false), 350);
 
-// Filtrado INSTANTÁNEO client-side + AJAX debounced para paginación server-side
+// Búsqueda en vivo — igual que Pendientes: solo client-side al escribir
 [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => {
-    el?.addEventListener('input', () => {
-        aplicarFiltros();   // inmediato — oculta/muestra filas visibles ya en DOM
-        debouncedFetch();   // 350ms — trae resultados del server (otras páginas)
-    });
+    el?.addEventListener('input', aplicarFiltros);
 });
 </script>
 @endsection
