@@ -23,21 +23,32 @@ body {
     .card-header { font-size: 13px; }
 }
 
-/* SIDEBAR — fijo mientras el contenido scrollea */
+/* SIDEBAR */
 .sidebar {
     background: #1f2937;
     padding-top: 1rem;
-    /* sticky dentro del flex-row de Bootstrap */
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    align-self: flex-start;   /* clave: sin esto sticky no funciona en flex */
-    overflow-y: auto;
-    overflow-x: hidden;
-    flex-shrink: 0;
-    scrollbar-width: none;    /* Firefox: oculta scrollbar interna del sidebar */
 }
-.sidebar::-webkit-scrollbar { display: none; } /* Chrome/Safari: idem */
+
+/* SIDEBAR ESCRITORIO — fijo en pantalla, solo el contenido scrollea */
+@media (min-width: 768px) {
+    .sidebar:not(.offcanvas) {
+        position: fixed !important;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 16.666667%;   /* igual que col-md-2 */
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: none;
+        z-index: 100;
+    }
+    .sidebar:not(.offcanvas)::-webkit-scrollbar { display: none; }
+
+    /* El área de contenido debe compensar el espacio del sidebar fijo */
+    .content-area {
+        margin-left: 16.666667% !important;
+    }
+}
 
 .sidebar h5 {
     color: #fff;
