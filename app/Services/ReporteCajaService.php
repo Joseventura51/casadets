@@ -53,15 +53,18 @@ class ReporteCajaService
         $spreadsheet->setActiveSheetIndex(0);
 
         // ── Guardar archivo ───────────────────────────────────────────────
-        $directorio = 'private/reportes_caja';
-        $dirAbs     = storage_path("app/{$directorio}");
+        // El disco 'local' tiene root = storage_path('app/private'),
+        // así que $ruta es relativa a ese root (sin incluir "private/").
+        // La ruta física absoluta sí incluye /private/.
+        $subdirectorio = 'reportes_caja';
+        $dirAbs        = storage_path("app/private/{$subdirectorio}");
         if (!is_dir($dirAbs)) {
             mkdir($dirAbs, 0775, true);
         }
 
-        $nombre   = "reporte_caja_{$caja?->id}_{$sesion->id}_{$fecha->format('Y-m-d')}.xlsx";
-        $ruta     = "{$directorio}/{$nombre}";
-        $rutaAbs  = storage_path("app/{$ruta}");
+        $nombre  = "reporte_caja_{$caja?->id}_{$sesion->id}_{$fecha->format('Y-m-d')}.xlsx";
+        $ruta    = "{$subdirectorio}/{$nombre}";          // relativa al disk 'local'
+        $rutaAbs = storage_path("app/private/{$ruta}");   // ruta física absoluta
 
         $writer = new Xlsx($spreadsheet);
         $writer->save($rutaAbs);
