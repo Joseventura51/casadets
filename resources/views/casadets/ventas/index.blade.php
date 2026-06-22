@@ -376,7 +376,7 @@ function normalizar(str) {
 
 function aplicarFiltros() {
     const vals = {};
-    for (const [k, el] of Object.entries(filtros)) vals[k] = normalizar(el.value.trim());
+    for (const [k, el] of Object.entries(filtros)) vals[k] = el ? normalizar(el.value.trim()) : '';
     const fecha = fFecha.value;
     const hayFiltro = Object.values(vals).some(v => v !== '') || fecha;
 
@@ -549,13 +549,7 @@ async function fetchFiltersAjax(forceTodas = false, pageNum = null) {
     }
 }
 
-const debouncedFetch = debounce(() => {
-    if (formFiltros) {
-        const h = formFiltros.querySelector('input[name="todas"]');
-        if (h) h.value = '1';
-    }
-    fetchFiltersAjax(true);
-}, 200);
+const debouncedFetch = debounce(() => fetchFiltersAjax(false), 350);
 
 // Wire text inputs to live AJAX fetch
 [filtros.vendedor, filtros.cliente, filtros.documento, filtros.total].forEach(el => {
