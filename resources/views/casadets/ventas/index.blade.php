@@ -127,7 +127,6 @@
                     <th>Fecha</th>
                     <th>Vendedor</th>
                     <th>Cliente</th>
-                    <th>Productos</th>
                     <th>Pago</th>
                     <th>Documento</th>
                     <th class="text-end">Total</th>
@@ -147,7 +146,6 @@
                     <td><input type="date" id="fFecha" name="fecha" value="{{ $fecha ?? '' }}" class="filter-input" style="font-size:.76rem;"></td>
                     <td><input type="text" id="fVendedor" name="vendedor" value="{{ $vendedor ?? '' }}" class="filter-input" placeholder="Buscar…"></td>
                     <td><input type="text" id="fCliente" name="cliente" value="{{ $cliente ?? '' }}" class="filter-input" placeholder="Nombre o RUC…"></td>
-                    <td><input type="text" id="fProducto" name="producto" class="filter-input" placeholder="Producto…"></td>
                     <td>
                         <select id="fPago" name="pago" class="filter-input">
                             <option value="">Todos</option>
@@ -182,18 +180,16 @@
             <tbody id="ventasTbody">
                 @forelse($ventas as $v)
                 @php
-                    $metodosArr   = array_filter(explode(',', $v->metodo_pago ?? ''));
-                    $estado       = $v->estado ?? 'pendiente';
-                    $filaClase    = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
-                    $clienteTxt   = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
-                    $esRefFiscal  = ($v->es_referencia_fiscal ?? false) || $estado === 'canjeada';
-                    $authU        = auth()->user();
-                    $productosStr = $v->detalles->map(fn($d) => $d->producto)->join(', ');
+                    $metodosArr  = array_filter(explode(',', $v->metodo_pago ?? ''));
+                    $estado      = $v->estado ?? 'pendiente';
+                    $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
+                    $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
+                    $esRefFiscal = ($v->es_referencia_fiscal ?? false) || $estado === 'canjeada';
+                    $authU       = auth()->user();
                 @endphp
                 <tr class="{{ $filaClase }} fila-venta"
                     data-vendedor="{{ strtolower($v->vendedor->nombre ?? '') }}"
                     data-cliente="{{ strtolower($clienteTxt) }}"
-                    data-producto="{{ strtolower($productosStr) }}"
                     data-estado="{{ $estado }}"
                     data-fecha="{{ $v->fecha->format('Y-m-d') }}"
                     data-documento="{{ strtolower(($v->documento_tipo ?? '') . ' ' . ($v->documento_numero ?? '')) }}"
@@ -223,16 +219,6 @@
                         @if($v->cliente)
                             <span class="fw-semibold">{{ $v->cliente->nombre }}</span>
                             @if($v->cliente->documento)<br><small class="text-muted">{{ $v->cliente->documento }}</small>@endif
-                        @else
-                            <span class="text-muted">—</span>
-                        @endif
-                    </td>
-                    <td style="max-width:200px;">
-                        @if($v->detalles->count() === 1)
-                            <span class="small">{{ $v->detalles->first()->producto }}</span>
-                        @elseif($v->detalles->count() > 1)
-                            <span class="small">{{ $v->detalles->first()->producto }}</span>
-                            <span class="badge bg-info text-dark ms-1">+{{ $v->detalles->count() - 1 }}</span>
                         @else
                             <span class="text-muted">—</span>
                         @endif
