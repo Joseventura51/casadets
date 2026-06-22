@@ -137,17 +137,6 @@
                     &nbsp;·&nbsp;
                     Cierre contado: <strong>S/ {{ number_format($sesionHoy->monto_cierre, 2) }}</strong>
                 </span>
-                @php
-                    $diferencia = round($sesionHoy->monto_cierre - $efectivoEnCaja, 2);
-                @endphp
-                @if($diferencia != 0)
-                    <span class="badge {{ $diferencia > 0 ? 'bg-success' : 'bg-danger' }} ms-1" style="font-size:.78rem;">
-                        {{ $diferencia > 0 ? '+' : '' }}S/ {{ number_format($diferencia, 2) }}
-                        {{ $diferencia > 0 ? 'sobrante' : 'faltante' }}
-                    </span>
-                @else
-                    <span class="badge bg-success" style="font-size:.78rem;"><i class="bi bi-check2 me-1"></i>Cuadrado</span>
-                @endif
                 <button class="btn btn-success btn-sm ms-auto" data-bs-toggle="collapse" data-bs-target="#formApertura">
                     <i class="bi bi-box-arrow-in-right me-1"></i>Abrir caja
                 </button>
