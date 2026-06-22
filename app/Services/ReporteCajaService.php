@@ -122,7 +122,26 @@ class ReporteCajaService
                 $ventasQuery->where('caja_id', $caja->id);
             }
         }
-        $ventas           = $ventasQuery->orderBy('id')->get();
+        $ventas = $ventasQuery->orderBy('id')->get();
+
+        // Complementar con ventas cobradas en esta sesión según los movimientos pago_venta
+        // (cubre casos donde la venta no tiene caja_id o serie asignada)
+        $pagoMovIds = $movActivos
+            ->where('subtipo', 'pago_venta')
+            ->where('referencia_tipo', 'pago')
+            ->pluck('referencia_id')->filter()->unique();
+
+        if ($pagoMovIds->isNotEmpty()) {
+            $ventaIdsFromPagos = DetallePagoFactura::whereIn('pago_id', $pagoMovIds)
+                ->pluck('venta_id')->unique();
+            $missingIds = $ventaIdsFromPagos->diff($ventas->pluck('id'));
+            if ($missingIds->isNotEmpty()) {
+                $ventasExtra = Venta::with(['vendedor', 'cliente', 'detalles'])
+                    ->whereIn('id', $missingIds)->get();
+                $ventas = $ventas->merge($ventasExtra)->sortBy('id')->values();
+            }
+        }
+
         $ventasCobradas   = $ventas->where('estado', 'pagado');
 
         // KPIs
