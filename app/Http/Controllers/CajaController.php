@@ -248,7 +248,6 @@ class CajaController extends Controller
         $sesion = CajaSesion::where('empresa', $request->empresa)
             ->whereNull('caja_id')
             ->whereDate('fecha', $hoy)
-            ->first();
 
         if ($sesion && $sesion->estado === 'abierta') {
             return back()->with('error', 'La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura.');
