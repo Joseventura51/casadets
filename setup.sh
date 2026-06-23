@@ -12,14 +12,6 @@ mkdir -p database
 touch database/database.sqlite
 echo "[OK] Base de datos SQLite lista"
 
-DB_PATH="$(pwd)/database/database.sqlite"
-if grep -q "^DB_DATABASE=" .env; then
-    sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${DB_PATH}|" .env
-else
-    sed -i "s|^DB_CONNECTION=sqlite|DB_CONNECTION=sqlite\nDB_DATABASE=${DB_PATH}|" .env
-fi
-echo "[OK] Ruta de base de datos configurada: ${DB_PATH}"
-
 php artisan key:generate
 php artisan config:clear
 php artisan route:clear
