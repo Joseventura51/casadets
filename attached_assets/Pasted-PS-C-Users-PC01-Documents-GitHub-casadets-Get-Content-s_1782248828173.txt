@@ -1,0 +1,32 @@
+PS C:\Users\PC01\Documents\GitHub\casadets> Get-Content storage\logs\laravel.log -Tail 30
+#45 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1220): Illuminate/Foundation/Http/Kernel->handle(Object(Illuminate/Http/Request))
+#46 C:/Users/PC01/Documents/GitHub/casadets/public/index.php(20): Illuminate/Foundation/Application->handleRequest(Object(Illuminate/Http/Request))
+#47 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php(23): require_once('C://Users//PC01//D...')
+#48 {main}
+"} 
+[2026-06-23 16:05:05] production.ERROR: No application encryption key has been specified. {"exception":"[object] (Illuminate\\Encryption\\MissingAppKeyException(code: 0): No application encryption key has been specified. at C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Encryption/EncryptionServiceProvider.php:83)
+[stacktrace]
+#0 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Support/helpers.php(393): Illuminate/Encryption/EncryptionServiceProvider->Illuminate/Encryption/{closure}(NULL)
+#1 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Encryption/EncryptionServiceProvider.php(81): tap(NULL, Object(Closure))
+#2 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Encryption/EncryptionServiceProvider.php(64): Illuminate/Encryption/EncryptionServiceProvider->key(Array)
+#3 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Encryption/EncryptionServiceProvider.php(32): Illuminate/Encryption/EncryptionServiceProvider->parseKey(Array)
+#4 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(1115): Illuminate/Encryption/EncryptionServiceProvider->Illuminate/Encryption/{closure}(Object(Illuminate/Foundation/Application), Array)
+#5 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(933): Illuminate/Container/Container->build(Object(Closure))
+#6 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1078): Illuminate/Container/Container->resolve('encrypter', Array, true)
+#7 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(864): Illuminate/Foundation/Application->resolve('encrypter', Array)
+#8 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1058): Illuminate/Container/Container->make('encrypter', Array)
+#9 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(1336): Illuminate/Foundation/Application->make('encrypter')
+#10 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(1237): Illuminate/Container/Container->resolveClass(Object(ReflectionParameter), 'Illuminate//Cont...')
+#11 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(1162): Illuminate/Container/Container->resolveDependencies(Array)
+#12 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(933): Illuminate/Container/Container->build('Illuminate//Cook...')
+#13 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1078): Illuminate/Container/Container->resolve('Illuminate//Cook...', Array, true)
+#14 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Container/Container.php(864): Illuminate/Foundation/Application->resolve('Illuminate//Cook...', Array)
+#15 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1058): Illuminate/Container/Container->make('Illuminate//Cook...', Array)
+#16 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(257): Illuminate/Foundation/Application->make('Illuminate//Cook...')
+#17 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Http/Kernel.php(215): Illuminate/Foundation/Http/Kernel->terminateMiddleware(Object(Illuminate/Http/Request), Object(Illuminate/Http/Response))
+#18 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1222): Illuminate/Foundation/Http/Kernel->terminate(Object(Illuminate/Http/Request), Object(Illuminate/Http/Response))
+#19 C:/Users/PC01/Documents/GitHub/casadets/public/index.php(20): Illuminate/Foundation/Application->handleRequest(Object(Illuminate/Http/Request))
+#20 C:/Users/PC01/Documents/GitHub/casadets/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php(23): require_once('C://Users//PC01//D...')
+#21 {main}
+"} 
+PS C:\Users\PC01\Documents\GitHub\casadets> 
