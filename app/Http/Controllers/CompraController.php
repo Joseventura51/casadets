@@ -44,7 +44,7 @@ class CompraController extends Controller
             ->whereDate('fecha', '<=', $hasta);
 
         $totalFiltrado = (clone $query)->sum('monto_total');
-        $compras = $query->paginate(50)->withQueryString();
+        $compras = $query->paginate(9999)->withQueryString();
 
         $cajaAbierta = CajaService::cajaAbierta();
 
