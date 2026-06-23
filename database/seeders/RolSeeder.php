@@ -2,6 +2,8 @@
 
 namespace Database\Seeders;
 
+use App\Models\Caja;
+use App\Models\CajaSesion;
 use App\Models\Rol;
 use App\Models\User;
 use App\Support\PermisoCatalog;
@@ -38,6 +40,27 @@ class RolSeeder extends Seeder
                 'password' => Hash::make('12345678'),
                 'rol_id'   => $adminRol->id,
                 'activo'   => true,
+            ]
+        );
+
+        $caja = Caja::firstOrCreate(
+            ['codigo' => 'CAJA01'],
+            [
+                'nombre'  => 'Caja Principal',
+                'empresa' => 'casadets',
+                'activa'  => true,
+            ]
+        );
+
+        CajaSesion::firstOrCreate(
+            [
+                'caja_id' => $caja->id,
+                'fecha'   => now()->toDateString(),
+            ],
+            [
+                'empresa'        => 'casadets',
+                'monto_apertura' => 0,
+                'estado'         => 'abierta',
             ]
         );
     }
