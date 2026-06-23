@@ -1,0 +1,71 @@
+PC01@PC01 MINGW64 ~/Documents/GitHub/casadets (main)
+$ php artisan route:list --path=compras
+
+  GET|HEAD  casadets/compras .......................... CompraController@index
+  POST      casadets/compras .......................... CompraController@store
+  GET|HEAD  casadets/compras/create .................. CompraController@create
+  GET|HEAD  casadets/compras/{compra} .................. CompraController@show
+  PUT       casadets/compras/{compra} ................ CompraController@update
+  DELETE    casadets/compras/{compra} ............... CompraController@destroy
+  GET|HEAD  casadets/compras/{compra}/edit ............. CompraController@edit
+
+                                                            Showing [7] routes
+
+
+PC01@PC01 MINGW64 ~/Documents/GitHub/casadets (main)
+$ php artisan migrate:status
+
+  Migration name .............................................. Batch / Status
+  0001_01_01_000000_create_users_table ............................... [1] Ran
+  0001_01_01_000001_create_cache_table ............................... [1] Ran
+  0001_01_01_000002_create_jobs_table ................................ [1] Ran
+  2026_03_19_044051_create_movimientos_table ......................... [1] Ran
+  2026_04_14_000001_create_vendedores_table .......................... [1] Ran
+  2026_04_14_000002_create_ventas_table .............................. [1] Ran
+  2026_04_21_000001_restructure_ventas_for_multiple_products ......... [1] Ran
+  2026_04_21_000002_add_ajuste_to_ventas ............................. [1] Ran
+  2026_04_21_000003_create_compras_and_factura_unique ................ [1] Ran
+  2026_04_22_000001_compra_venta_detalle ............................. [1] Ran
+  2026_04_23_000001_add_cantidad_to_compra_venta_detalle ............. [1] Ran
+  2026_04_24_000001_add_estado_to_ventas ............................. [1] Ran
+  2026_04_25_000001_create_clientes_table ............................ [1] Ran
+  2026_05_14_215151_create_ventas_pagos_table ........................ [1] Ran
+  2026_05_20_000001_create_compra_lineas_table ....................... [1] Ran
+  2026_05_20_231532_add_codigo_to_venta_detalles ..................... [1] Ran
+  2026_05_21_023635_add_compra_linea_id_to_compra_venta_detalle ...... [1] Ran
+  2026_05_21_185227_add_performance_indexes .......................... [1] Ran
+  2026_05_22_111551_create_pagos_table ............................... [1] Ran
+  2026_05_22_111552_create_detalle_pago_factura_table ................ [1] Ran
+  2026_05_22_111553_create_saldos_favor_table ........................ [1] Ran
+  2026_05_22_111554_upgrade_movimientos_and_ventas_for_cobranza ...... [1] Ran
+  2026_05_22_200001_drop_ventas_pagos_table .......................... [1] Ran
+  2026_05_22_200002_create_productos_table ........................... [1] Ran
+  2026_05_22_200003_add_producto_id_to_detalles ...................... [1] Ran
+  2026_05_22_200004_create_stock_movimientos_table ................... [1] Ran
+  2026_05_22_200005_create_pago_metodos_table ........................ [1] Ran
+  2026_05_22_200006_add_softdeletes_to_main_tables ................... [1] Ran
+  2026_05_22_200007_add_audit_and_integrity_columns .................. [1] Ran
+  2026_05_22_210001_financial_integrity_and_productos ................ [1] Ran
+  2026_05_23_000001_add_venta_origen_id_to_saldos_favor .............. [1] Ran
+  2026_05_26_000001_create_caja_sesiones_table ....................... [1] Ran
+  2026_05_26_000002_add_metodo_pago_to_compras ....................... [1] Ran
+  2026_05_26_000003_add_descripcion_to_pago_metodos .................. [1] Ran
+  2026_05_29_000001_add_roles_and_auth_to_users ...................... [1] Ran
+  2026_05_29_000002_add_permisos_to_roles_table ...................... [1] Ran
+  2026_05_30_000001_add_es_referencia_fiscal_to_ventas ............... [1] Ran
+  2026_05_30_000002_add_vendedor_id_to_movimientos ................... [1] Ran
+  2026_06_03_020733_add_comision_porcentaje_to_vendedores ............ [1] Ran
+  2026_06_15_172904_create_cajas_table ............................... [1] Ran
+  2026_06_15_172905_create_series_table .............................. [1] Ran
+  2026_06_15_172906_create_usuario_caja_table ........................ [1] Ran
+  2026_06_15_172907_add_caja_id_to_existing_tables ................... [1] Ran
+  2026_06_16_000001_drop_unique_empresa_fecha_from_caja_sesiones ..... [1] Ran
+  2026_06_18_151315_change_series_unique_to_codigo_tipo .............. [1] Ran
+  2026_06_19_125116_add_ventas_importar_to_cajero_role ............... [1] Ran
+  2026_06_19_140355_create_devoluciones_table ........................ [1] Ran
+  2026_06_20_112501_create_reporte_cajas_table ....................... [1] Ran
+  2026_06_20_125151_add_kpis_to_reportes_caja_table .................. [1] Ran
+
+
+PC01@PC01 MINGW64 ~/Documents/GitHub/casadets (main)
+$
