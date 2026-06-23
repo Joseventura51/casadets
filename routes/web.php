@@ -185,11 +185,12 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
     Route::middleware('rol:compras')->group(function () {
         Route::get('/casadets/ventas/{venta}/detalles.json', [CompraController::class, 'detallesVenta']);
         Route::get('/casadets/compras',                      [CompraController::class, 'index']);
+        // create debe ir ANTES de {compra} para que el segmento literal no sea capturado por el wildcard
+        Route::get('/casadets/compras/create',               [CompraController::class, 'create']);
         Route::get('/casadets/compras/{compra}',             [CompraController::class, 'show']);
         Route::get('/casadets/compras/{compra}/edit',        [CompraController::class, 'edit']);
 
         Route::middleware('caja.abierta')->group(function () {
-            Route::get('/casadets/compras/create',     [CompraController::class, 'create']);
             Route::post('/casadets/compras',           [CompraController::class, 'store']);
             Route::put('/casadets/compras/{compra}',   [CompraController::class, 'update']);
             Route::delete('/casadets/compras/{compra}',[CompraController::class, 'destroy']);
