@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\DB;
 
 class VentaDetalle extends Model
 {
@@ -39,7 +40,22 @@ class VentaDetalle extends Model
     public function compras(): BelongsToMany
     {
         return $this->belongsToMany(Compra::class, 'compra_venta_detalle', 'venta_detalle_id', 'compra_id')
-            ->withPivot('cantidad', 'compra_linea_id')
+            ->withPivot('cantidad', 'compra_linea_id', 'costo_unitario', 'costo_total')
             ->withTimestamps();
+    }
+
+    public function cantidadCosteada(): float
+    {
+        return (float) DB::table('compra_venta_detalle')
+            ->where('venta_detalle_id', $this->id)
+            ->sum('cantidad');
+    }
+
+    public function estadoCosteo(): string
+    {
+        $costeada = $this->cantidadCosteada();
+        if ($costeada <= 0)                              return 'sin_costear';
+        if ($costeada >= (float) $this->cantidad)        return 'costeada';
+        return 'parcial';
     }
 }

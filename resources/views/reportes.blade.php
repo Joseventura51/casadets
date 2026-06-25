@@ -391,32 +391,96 @@
 
         {{-- TAB UTILIDAD --}}
         <div class="tab-pane fade p-3" id="tabUtilidad">
+
+            {{-- Fila 1: Estimada vs Real --}}
             <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge bg-secondary">Utilidad Estimada</span>
+                        <small class="text-muted">basada en precio_costo actual del catálogo</small>
+                    </div>
+                </div>
                 <div class="col-md-3 col-6">
                     <div class="bg-light rounded p-3 text-center">
-                        <div class="small text-muted">Utilidad total</div>
+                        <div class="small text-muted">Utilidad estimada</div>
                         <div class="fw-bold fs-5" style="color:#7c3aed;" id="utilTotal">S/ 0.00</div>
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
                     <div class="bg-light rounded p-3 text-center">
-                        <div class="small text-muted">Margen</div>
+                        <div class="small text-muted">Margen estimado</div>
                         <div class="fw-bold fs-5 text-warning" id="utilMargen">0%</div>
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
                     <div class="bg-light rounded p-3 text-center">
-                        <div class="small text-muted">Total invertido (costo)</div>
+                        <div class="small text-muted">Costo estimado</div>
                         <div class="fw-bold fs-5 text-danger" id="utilInvertido">S/ 0.00</div>
                     </div>
                 </div>
                 <div class="col-md-3 col-6">
                     <div class="bg-light rounded p-3 text-center">
-                        <div class="small text-muted">Total recuperado</div>
+                        <div class="small text-muted">Total ventas</div>
                         <div class="fw-bold fs-5 text-success" id="utilRecuperado">S/ 0.00</div>
                     </div>
                 </div>
             </div>
+
+            {{-- Fila 2: Utilidad Real --}}
+            <div class="row g-3 mb-3">
+                <div class="col-12">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <span class="badge bg-success">Utilidad Real</span>
+                        <small class="text-muted">basada en costos congelados al momento de la compra</small>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-success-subtle bg-success-subtle rounded p-3 text-center">
+                        <div class="small text-muted">Utilidad real</div>
+                        <div class="fw-bold fs-5 text-success" id="utilRealTotal">S/ 0.00</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-success-subtle bg-success-subtle rounded p-3 text-center">
+                        <div class="small text-muted">Margen real</div>
+                        <div class="fw-bold fs-5 text-success" id="utilRealMargen">0%</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-success-subtle bg-success-subtle rounded p-3 text-center">
+                        <div class="small text-muted">Costo real congelado</div>
+                        <div class="fw-bold fs-5 text-danger" id="utilRealCosto">S/ 0.00</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="card border-success-subtle bg-success-subtle rounded p-3 text-center">
+                        <div class="small text-muted">Ingreso costeado</div>
+                        <div class="fw-bold fs-5" id="utilRealIngreso">S/ 0.00</div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Fila 3: Cobertura de costeo --}}
+            <div class="card border-0 bg-light mb-3">
+                <div class="card-body py-2">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                        <span class="fw-semibold small"><i class="bi bi-shield-check me-1 text-success"></i>Cobertura de costeo</span>
+                        <span class="fw-bold" id="utilCoberturaTotal">—</span>
+                    </div>
+                    <div class="progress mb-2" style="height:10px;" title="% de líneas de venta costeadas">
+                        <div class="progress-bar bg-success" id="barCosteada" style="width:0%;"></div>
+                        <div class="progress-bar bg-warning" id="barParcial"  style="width:0%;"></div>
+                        <div class="progress-bar bg-danger"  id="barSinCostear" style="width:0%;"></div>
+                    </div>
+                    <div class="d-flex gap-3 flex-wrap" style="font-size:.78rem;">
+                        <span><span class="badge bg-success me-1" id="badgeCosteada">0</span>Costeadas</span>
+                        <span><span class="badge bg-warning text-dark me-1" id="badgeParcial">0</span>Parciales</span>
+                        <span><span class="badge bg-danger me-1" id="badgeSinCostear">0</span>Sin costear</span>
+                        <span class="text-muted ms-auto"><span id="badgeTotalLineas">0</span> líneas totales</span>
+                    </div>
+                </div>
+            </div>
+
             <div class="text-center">
                 <button class="btn btn-outline-purple btn-sm" style="border-color:#7c3aed;color:#7c3aed;"
                         onclick="abrirModalUtilidad()">
@@ -587,11 +651,29 @@ function renderDatos(data) {
     document.getElementById('cmpIgv').textContent   = fmt(c.igv);
     document.getElementById('cmpBase').textContent  = fmt(c.neto / 1.18);
 
-    // Tab Utilidad
-    document.getElementById('utilTotal').textContent    = fmt(u.utilidad);
-    document.getElementById('utilMargen').textContent   = u.margen + '%';
-    document.getElementById('utilInvertido').textContent= fmt(u.total_costo);
+    // Tab Utilidad — Estimada
+    document.getElementById('utilTotal').textContent     = fmt(u.utilidad);
+    document.getElementById('utilMargen').textContent    = u.margen + '%';
+    document.getElementById('utilInvertido').textContent = fmt(u.total_costo);
     document.getElementById('utilRecuperado').textContent= fmt(u.total_ventas);
+
+    // Tab Utilidad — Real (FASE 4)
+    document.getElementById('utilRealTotal').textContent  = fmt(u.utilidad_real  ?? 0);
+    document.getElementById('utilRealMargen').textContent = (u.margen_real ?? 0) + '%';
+    document.getElementById('utilRealCosto').textContent  = fmt(u.costo_real     ?? 0);
+    document.getElementById('utilRealIngreso').textContent= fmt(u.ingreso_real   ?? 0);
+
+    // Cobertura de costeo (FASE 2)
+    const cob = u.cobertura ?? { total:0, sin_costear:0, parcial:0, costeada:0, pct:0 };
+    const total = cob.total || 1;
+    document.getElementById('utilCoberturaTotal').textContent  = cob.pct + '% costeado';
+    document.getElementById('barCosteada').style.width         = Math.round(cob.costeada   / total * 100) + '%';
+    document.getElementById('barParcial').style.width          = Math.round(cob.parcial    / total * 100) + '%';
+    document.getElementById('barSinCostear').style.width       = Math.round(cob.sin_costear/ total * 100) + '%';
+    document.getElementById('badgeCosteada').textContent       = cob.costeada;
+    document.getElementById('badgeParcial').textContent        = cob.parcial;
+    document.getElementById('badgeSinCostear').textContent     = cob.sin_costear;
+    document.getElementById('badgeTotalLineas').textContent    = cob.total;
 
     // Gráficos
     renderChartVentas(v.por_dia, periodoLabel);

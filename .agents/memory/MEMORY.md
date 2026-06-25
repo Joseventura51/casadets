@@ -5,3 +5,4 @@
 - [Chart.js in layout](chartjs-layout.md) — Chart.js CDN loaded in layouts/app.blade.php; layout has @stack('scripts'); use @push('scripts') in views for chart initialization.
 - [Ajuste Manual de Cobro](ajuste-cobro.md) — total=Original (immutable), ajuste=delta, total_a_cobrar=total+ajuste; forms submit total_cobrar not ajuste; CobranzaService uses total_a_cobrar for debt calculations.
 - [Multi-Caja architecture](multi-caja.md) — cajas/series/usuario_caja tables; session('caja_id') is the active caja; all Movimiento/Venta/Compra/SaldoFavor.create must include caja_id; import detects caja via serie codigo lookup; AuthController auto-selects cajaPrincipal on login.
+- [CVD Costeo Architecture](cvd-costeo.md) — compra_venta_detalle has frozen costo_unitario/costo_total; validation in validarYBuildDetallesSync excludes current compra_id when recalculating venta_detalle saldo; new compra_lineas always have fresh IDs so no linea exclusion needed.

@@ -1,0 +1,227 @@
+# Prioridad de desarrollo: NO modificar reportes todavía
+
+Después de analizar el flujo real del negocio y la estructura actual de la base de datos, considero que NO debemos modificar todavía el cálculo de utilidad ni los reportes.
+
+Antes debemos resolver la integridad de las asignaciones en `compra_venta_detalle`.
+
+## Motivo
+
+La utilidad real que queremos construir dependerá completamente de las asignaciones entre:
+
+* compra_lineas
+* venta_detalles
+* compra_venta_detalle
+
+Actualmente existen brechas que permiten sobreasignaciones y datos inconsistentes.
+
+Si construimos la utilidad real sobre datos incorrectos, los reportes y las comisiones también serán incorrectos.
+
+---
+
+# FASE 1: Blindar las asignaciones
+
+## Problema 1
+
+Actualmente no existe validación que impida que la suma de cantidades asignadas supere la cantidad comprada de una `compra_linea`.
+
+Ejemplo incorrecto:
+
+CompraLinea:
+
+* cantidad = 100
+
+Asignaciones:
+
+* 80
+* 50
+
+Total asignado = 130
+
+Esto no debería permitirse.
+
+### Implementar
+
+Calcular:
+
+```php
+$asignadoCompra = CompraVentaDetalle::where('compra_linea_id', $compraLineaId)
+    ->sum('cantidad');
+
+$saldoCompra = $compraLinea->cantidad - $asignadoCompra;
+```
+
+Validar:
+
+```php
+if ($cantidadAsignada > $saldoCompra) {
+    throw ValidationException::withMessages([
+        'cantidad' => 'La cantidad asignada supera el saldo disponible de la compra.'
+    ]);
+}
+```
+
+---
+
+## Problema 2
+
+Actualmente no existe validación que impida que la suma de cantidades asignadas supere la cantidad vendida de un `venta_detalle`.
+
+Ejemplo incorrecto:
+
+VentaDetalle:
+
+* cantidad = 50
+
+Asignaciones:
+
+* 30
+* 40
+
+Total asignado = 70
+
+Esto tampoco debería permitirse.
+
+### Implementar
+
+Calcular:
+
+```php
+$asignadoVenta = CompraVentaDetalle::where('venta_detalle_id', $ventaDetalleId)
+    ->sum('cantidad');
+
+$saldoVenta = $ventaDetalle->cantidad - $asignadoVenta;
+```
+
+Validar:
+
+```php
+if ($cantidadAsignada > $saldoVenta) {
+    throw ValidationException::withMessages([
+        'cantidad' => 'La cantidad asignada supera la cantidad pendiente de costear de la venta.'
+    ]);
+}
+```
+
+---
+
+# FASE 2: Estados de costeo
+
+Necesitamos poder identificar rápidamente si una venta está costeada o no.
+
+Agregar lógica calculada:
+
+## SIN COSTEAR
+
+```text
+cantidad_costeada = 0
+```
+
+## PARCIALMENTE COSTEADA
+
+```text
+cantidad_costeada > 0
+cantidad_costeada < cantidad_vendida
+```
+
+## COSTEADA
+
+```text
+cantidad_costeada >= cantidad_vendida
+```
+
+---
+
+# FASE 3: Congelar costos históricos
+
+Agregar columnas a `compra_venta_detalle`:
+
+```sql
+ALTER TABLE compra_venta_detalle
+ADD COLUMN costo_unitario DECIMAL(12,4) NULL,
+ADD COLUMN costo_total DECIMAL(12,4) NULL;
+```
+
+Cuando se crea una asignación:
+
+```php
+$costoUnitario = $compraLinea->monto_unitario;
+$costoTotal = $cantidadAsignada * $costoUnitario;
+```
+
+Guardar ambos valores.
+
+Objetivo:
+
+La utilidad histórica NO debe depender de:
+
+```php
+productos.precio_costo
+```
+
+porque ese valor cambia constantemente.
+
+---
+
+# FASE 4: Nuevo cálculo de utilidad
+
+NO usar:
+
+```php
+cantidad * productos.precio_costo
+```
+
+para utilidad histórica.
+
+La utilidad real debe calcularse usando:
+
+```text
+venta_detalles
++
+compra_venta_detalle
+```
+
+Fórmula:
+
+Ingreso Real:
+SUM(cantidad_asignada × precio_venta_unitario)
+
+Costo Real:
+SUM(costo_total)
+
+Utilidad Real:
+Ingreso Real - Costo Real
+
+---
+
+# FASE 5: Reportes
+
+Una vez terminadas las fases anteriores:
+
+1. Mantener la utilidad actual como "Utilidad Estimada".
+2. Crear una nueva "Utilidad Real".
+3. Mostrar porcentaje de cobertura de costeo.
+4. Mostrar ventas:
+
+   * Sin costear
+   * Parcialmente costeadas
+   * Costeadas
+
+---
+
+# Importante
+
+No tocar todavía inventario, FIFO, costo promedio ni precio_costo.
+
+La prioridad actual del negocio es:
+
+1. Costeo correcto.
+2. Utilidad real.
+3. Comisiones correctas.
+
+La tabla central para lograrlo es:
+
+```text
+compra_venta_detalle
+```
+
+y debe convertirse en la fuente oficial de costos históricos.
