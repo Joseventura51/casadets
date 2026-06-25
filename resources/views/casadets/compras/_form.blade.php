@@ -434,38 +434,40 @@ async function cargarFactura(ventaId) {
 }
 
 function renderFactura(data) {
+    const docParts  = data.venta.documento.split(' ');
+    const docTipo   = docParts[0] || '';
+    const docNumero = docParts.slice(1).join(' ') || '';
+
     const card = document.createElement('div');
-    card.className = 'card mb-2 border-primary-subtle';
+    card.className = 'mb-3';
     card.dataset.ventaId = data.venta.id;
+    card.style.cssText = 'border:1px solid #d1d5db;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);';
     card.innerHTML = `
-        <div class="card-header bg-light d-flex justify-content-between align-items-center py-2">
-            <div>
-                <strong>${escHtml(data.venta.documento)}</strong>
-                <span class="text-muted small ms-2">${data.venta.fecha} · ${escHtml(data.venta.vendedor)}</span>
+        <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:.6rem 1rem;display:flex;justify-content:space-between;align-items:center;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:.68rem;font-weight:600;background:#3b82f6;color:#fff;border-radius:4px;padding:2px 7px;letter-spacing:.03em;">${escHtml(docTipo.toUpperCase())}</span>
+                <span style="font-weight:700;font-size:.95rem;color:#111;">${escHtml(docNumero)}</span>
+                <span style="font-size:.8rem;color:#6b7280;">· ${data.venta.fecha} · ${escHtml(data.venta.vendedor)}</span>
             </div>
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-sm btn-link p-0 btn-marcar-todos">Marcar todos</button>
-                <button type="button" class="btn btn-sm btn-outline-danger btn-quitar-factura"><i class="bi bi-x"></i></button>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none btn-marcar-todos" style="font-size:.8rem;color:#3b82f6;">Marcar todos</button>
+                <button type="button" class="btn btn-sm btn-outline-danger btn-quitar-factura px-2" style="line-height:1.2;"><i class="bi bi-x"></i></button>
             </div>
         </div>
         <div class="table-responsive">
-            <table class="table table-sm mb-0 align-middle">
-                <thead class="table-light"><tr>
-                    <th style="width:36px;"></th>
-                    <th>Producto de la venta</th>
-                    <th class="text-end" style="width:75px;">Cant.</th>
-                    <th class="text-end" style="width:85px;">Precio</th>
-                    <th class="text-end" style="width:95px;">Cant. comprada</th>
-                    <th style="min-width:190px;">Línea de compra que lo cubre</th>
-                </tr></thead>
+            <table class="table table-sm mb-0" style="border-collapse:separate;border-spacing:0;">
+                <thead>
+                    <tr style="background:#f3f4f6;font-size:.77rem;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;">
+                        <th style="width:36px;border-bottom:1px solid #e5e7eb;padding:.5rem .75rem;"></th>
+                        <th style="border-bottom:1px solid #e5e7eb;padding:.5rem .5rem;">Producto</th>
+                        <th class="text-end" style="width:65px;border-bottom:1px solid #e5e7eb;padding:.5rem .5rem;">Cant.</th>
+                        <th class="text-end" style="width:90px;border-bottom:1px solid #e5e7eb;padding:.5rem .5rem;">Precio</th>
+                        <th class="text-end" style="width:105px;border-bottom:1px solid #e5e7eb;padding:.5rem .5rem;">Cant.<br>comprada</th>
+                        <th style="min-width:180px;border-bottom:1px solid #e5e7eb;padding:.5rem .75rem;">Línea de compra</th>
+                    </tr>
+                </thead>
                 <tbody></tbody>
             </table>
-        </div>
-        <div class="card-footer bg-transparent border-0 py-1">
-            <small class="text-muted">
-                <strong>Cant. comprada</strong>: unidades de esta compra que cubren este producto.
-                <strong>Línea de compra</strong>: cuál producto de la compra corresponde.
-            </small>
         </div>`;
     const tbody = card.querySelector('tbody');
     data.detalles.forEach(d => {
@@ -484,37 +486,30 @@ function renderFactura(data) {
             if (total >= d.cantidad)     return 'costeada';
             return 'parcial';
         }
-        function colorDeFila(estado) {
-            if (estado === 'costeada') return '#d1fae5';
-            if (estado === 'parcial')  return '#fef9c3';
-            return '';
-        }
-        function estadoInicial() {
-            return calcularEstadoLocal(!!checked ? (parseFloat(cantPivot) || 0) : 0);
-        }
-
         const tr = document.createElement('tr');
-        tr.style.cssText = `background:${colorDeFila(estadoInicial())};transition:background .2s;`;
+        tr.style.transition = 'background .15s, border-color .15s';
         tr.innerHTML = `
-            <td class="text-center">
+            <td style="padding:.55rem .75rem;vertical-align:middle;text-align:center;width:36px;">
                 <input type="checkbox" name="detalles[]" value="${d.id}"
                     class="form-check-input detalle-check" ${checked}>
             </td>
-            <td style="display:flex;align-items:center;gap:6px;">
-                <span class="dot-estado" style="display:inline-block;width:9px;height:9px;border-radius:50%;flex-shrink:0;background:${estadoInicial()==='costeada'?'#16a34a':estadoInicial()==='parcial'?'#ca8a04':'#e5e7eb'};"></span>
-                ${escHtml(d.producto)}
+            <td style="padding:.55rem .5rem;vertical-align:middle;">
+                <div style="display:flex;align-items:center;gap:7px;">
+                    <span class="dot-estado" style="display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;"></span>
+                    <span style="font-size:.86rem;">${escHtml(d.producto)}</span>
+                </div>
             </td>
-            <td class="text-end text-muted small">${d.cantidad}</td>
-            <td class="text-end text-muted small">S/ ${d.precio_unitario.toFixed(2)}</td>
-            <td class="text-end">
+            <td style="padding:.55rem .5rem;vertical-align:middle;text-align:right;font-size:.84rem;color:#6b7280;">${d.cantidad}</td>
+            <td style="padding:.55rem .5rem;vertical-align:middle;text-align:right;font-size:.84rem;color:#6b7280;">S/ ${d.precio_unitario.toFixed(2)}</td>
+            <td style="padding:.45rem .5rem;vertical-align:middle;text-align:right;width:105px;">
                 <input type="number" name="detalles_cantidad[${d.id}]"
                     value="${checked ? cantPivot : 1}"
                     step="0.01" min="0.01" max="${d.cantidad}"
                     class="form-control form-control-sm text-end cantidad-comprada"
-                    style="width:78px;display:inline-block;"
+                    style="width:82px;display:inline-block;"
                     ${!checked ? 'disabled' : ''}>
             </td>
-            <td>
+            <td style="padding:.45rem .75rem;vertical-align:middle;min-width:180px;">
                 <select name="detalles_linea[${d.id}]"
                         class="form-select form-select-sm select-linea"
                         data-initial="${lineaInicial}"
@@ -532,8 +527,19 @@ function renderFactura(data) {
         function actualizarColorFila() {
             const cantEsta = cb.checked ? (parseFloat(cantInput.value) || 0) : 0;
             const est = calcularEstadoLocal(cantEsta);
-            tr.style.background = colorDeFila(est);
-            dotEl.style.background = est === 'costeada' ? '#16a34a' : est === 'parcial' ? '#ca8a04' : '#e5e7eb';
+            if (est === 'costeada') {
+                tr.style.background  = '#f0fdf4';
+                tr.style.borderLeft  = '3px solid #16a34a';
+                dotEl.style.background = '#16a34a';
+            } else if (est === 'parcial') {
+                tr.style.background  = '#fefce8';
+                tr.style.borderLeft  = '3px solid #f59e0b';
+                dotEl.style.background = '#f59e0b';
+            } else {
+                tr.style.background  = '';
+                tr.style.borderLeft  = '3px solid transparent';
+                dotEl.style.background = '#d1d5db';
+            }
         }
 
         cb.addEventListener('change', () => {
@@ -545,6 +551,7 @@ function renderFactura(data) {
             actualizarSinSel();
         });
         cantInput.addEventListener('input', actualizarColorFila);
+        actualizarColorFila();
     });
     card.querySelector('.btn-quitar-factura').addEventListener('click', () => {
         card.querySelectorAll('.detalle-check').forEach(c => { c.checked = false; });
