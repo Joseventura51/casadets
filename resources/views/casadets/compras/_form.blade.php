@@ -524,6 +524,14 @@ function renderFactura(data) {
         const lineaSelect = tr.querySelector('.select-linea');
         const dotEl       = tr.querySelector('.dot-estado');
 
+        // Si ya está 100% cubierto por OTRAS compras y no estaba pre-marcado, bloquear checkbox
+        const yaCubiertoPorOtros = cubiertaOtros >= d.cantidad;
+        if (yaCubiertoPorOtros && !checked) {
+            cb.disabled = true;
+            cb.title = 'Ya cubierto al 100% por otra compra';
+            tr.style.opacity = '0.7';
+        }
+
         function actualizarColorFila() {
             const cantEsta = cb.checked ? (parseFloat(cantInput.value) || 0) : 0;
             const est = calcularEstadoLocal(cantEsta);
