@@ -114,6 +114,7 @@ class CompraController extends Controller
                 'categoria'        => 'Compra — ' . $compra->empresa,
                 'referencia_tipo'  => 'compra',
                 'referencia_id'    => $compra->id,
+                'metodo_pago'      => $compra->metodo_pago,
                 'documento_tipo'   => $compra->documento_tipo,
                 'documento_numero' => $compra->documento_numero,
                 'monto'            => $total,
@@ -213,6 +214,7 @@ class CompraController extends Controller
                 $movExistente->update([
                     'monto'            => $total,
                     'fecha'            => $data['fecha'],
+                    'metodo_pago'      => $compra->metodo_pago,
                     'documento_tipo'   => $compra->documento_tipo,
                     'documento_numero' => $compra->documento_numero,
                     'categoria'        => 'Compra — ' . $compra->empresa,
@@ -229,6 +231,7 @@ class CompraController extends Controller
                     'categoria'        => 'Compra — ' . $compra->empresa,
                     'referencia_tipo'  => 'compra',
                     'referencia_id'    => $compra->id,
+                    'metodo_pago'      => $compra->metodo_pago,
                     'documento_tipo'   => $compra->documento_tipo,
                     'documento_numero' => $compra->documento_numero,
                     'monto'            => $total,

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Caja;
 use App\Models\CajaSesion;
-use App\Models\Compra;
 use App\Models\DetallePagoFactura;
 use App\Models\Movimiento;
 use App\Models\Pago;
@@ -142,13 +141,12 @@ class CajaController extends Controller
         $ventasPorMetodo = $this->calcularMetodosDePago($desde, $hasta, $ventasCobradas, $cajaSeleccionada?->id, $movActivos);
 
         // ── Efectivo actual en caja ─────────────────────────────────────────
-        $comprasQuery = Compra::where('metodo_pago', 'efectivo')
-            ->whereDate('fecha', '>=', $desde)
-            ->whereDate('fecha', '<=', $hasta);
-        if ($cajaSeleccionada) {
-            $comprasQuery->where('caja_id', $cajaSeleccionada->id);
-        }
-        $comprasEnEfectivo = round($comprasQuery->sum('monto_total'), 2);
+        // Compras en efectivo: se obtienen de los movimientos ya cargados
+        // (subtipo='compra', metodo_pago='efectivo') para ser consistentes
+        // con el filtro de caja/fecha que ya aplica $movActivos.
+        $comprasEnEfectivo = round($movActivos->filter(
+            fn ($m) => $m->subtipo === 'compra' && $m->metodo_pago === 'efectivo'
+        )->sum('monto'), 2);
 
         $ingresosManualEfectivo = round($movActivos->filter(
             fn ($m) => $m->tipo === 'ingreso' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo'
