@@ -113,7 +113,7 @@ class ReporteController extends Controller
 
         // ── Ventas: summary ─────────────────────────────
         $vSum = $this->qVentas($r, $desde, $hasta)
-            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total),0) as total')
+            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total + COALESCE(ajuste,0)),0) as total')
             ->first();
 
         $totalVentas = (float) ($vSum->total    ?? 0);
@@ -123,7 +123,7 @@ class ReporteController extends Controller
 
         // ── Por método de pago ───────────────────────────
         $porMetodo = $this->qVentas($r, $desde, $hasta)
-            ->selectRaw("COALESCE(metodo_pago,'No especificado') as metodo, COUNT(*) as count, SUM(total) as total")
+            ->selectRaw("COALESCE(metodo_pago,'No especificado') as metodo, COUNT(*) as count, SUM(total + COALESCE(ajuste,0)) as total")
             ->groupBy('metodo_pago')
             ->orderByDesc('total')
             ->get()
@@ -132,7 +132,7 @@ class ReporteController extends Controller
         // ── Top clientes ────────────────────────────────
         $topClientes = $this->qVentas($r, $desde, $hasta)
             ->leftJoin('clientes as cl', 'ventas.cliente_id', '=', 'cl.id')
-            ->selectRaw("COALESCE(cl.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(ventas.total) as total")
+            ->selectRaw("COALESCE(cl.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(ventas.total + COALESCE(ventas.ajuste,0)) as total")
             ->groupBy('ventas.cliente_id', 'cl.nombre')
             ->orderByDesc('total')
             ->limit(8)
@@ -150,14 +150,14 @@ class ReporteController extends Controller
 
         // ── Comprobantes ─────────────────────────────────
         $comprobantes = $this->qVentas($r, $desde, $hasta)
-            ->selectRaw("COALESCE(documento_tipo,'Sin tipo') as tipo, COUNT(*) as count, SUM(total) as total")
+            ->selectRaw("COALESCE(documento_tipo,'Sin tipo') as tipo, COUNT(*) as count, SUM(total + COALESCE(ajuste,0)) as total")
             ->groupBy('documento_tipo')
             ->get()
             ->map(fn($c) => ['tipo' => $c->tipo, 'count' => (int)$c->count, 'total' => (float)$c->total]);
 
         // ── Ventas por día (sólo tabla ventas, sin JOIN a detalles para no multiplicar) ─
         $ventasPorDia = $this->qVentas($r, $desde, $hasta)
-            ->selectRaw("DATE(ventas.fecha) as fecha, COUNT(*) as count, SUM(ventas.total) as total_ventas")
+            ->selectRaw("DATE(ventas.fecha) as fecha, COUNT(*) as count, SUM(ventas.total + COALESCE(ventas.ajuste,0)) as total_ventas")
             ->groupByRaw('DATE(ventas.fecha)')
             ->orderBy('fecha')
             ->get()
@@ -380,11 +380,15 @@ class ReporteController extends Controller
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
             ->whereIn('v.id', $ventaIds)
             ->selectRaw("v.id, v.documento_tipo, v.documento_numero, v.fecha, v.total,
+                         COALESCE(v.ajuste, 0) as ajuste,
                          COALESCE(c.nombre,'Sin cliente') as cliente")
             ->orderByDesc('v.fecha')
             ->get();
 
         $resultado = $ventas->map(function ($v) use ($detalles) {
+            $ajuste        = (float) $v->ajuste;
+            $totalACobrar  = (float) $v->total + $ajuste;
+
             $lineas = ($detalles[$v->id] ?? collect())->map(fn($d) => [
                 'producto'    => $d->nombre_producto,
                 'codigo'      => $d->codigo ?? '',
@@ -395,14 +399,17 @@ class ReporteController extends Controller
                 'ganancia'    => round((float) $d->ganancia, 2),
             ])->values();
 
+            // La ganancia real = ganancias por línea + ajuste (el recorte reduce ingresos, no costos)
+            $gananciaReal = round($lineas->sum('ganancia') + $ajuste, 2);
+
             $numero = trim(ucfirst($v->documento_tipo ?? 'Venta') . ' ' . ($v->documento_numero ?? '#' . $v->id));
             return [
                 'id'       => $v->id,
                 'numero'   => $numero,
                 'fecha'    => Carbon::parse($v->fecha)->format('d/m/Y'),
                 'cliente'  => $v->cliente,
-                'total'    => (float) $v->total,
-                'ganancia' => round($lineas->sum('ganancia'), 2),
+                'total'    => round($totalACobrar, 2),
+                'ganancia' => $gananciaReal,
                 'lineas'   => $lineas,
             ];
         });
@@ -432,7 +439,8 @@ class ReporteController extends Controller
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw("v.fecha, v.documento_tipo, v.documento_numero,
                          COALESCE(c.nombre,'') as cliente, COALESCE(vend.nombre,'') as vendedor,
-                         COALESCE(v.metodo_pago,'') as metodo_pago, v.total, v.estado")
+                         COALESCE(v.metodo_pago,'') as metodo_pago,
+                         v.total + COALESCE(v.ajuste, 0) as total, v.estado")
             ->orderBy('v.fecha')
             ->get();
 
@@ -601,7 +609,7 @@ class ReporteController extends Controller
             ->whereNull('v.deleted_at')
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
-            ->selectRaw("COALESCE(c.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(v.total) as total")
+            ->selectRaw("COALESCE(c.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(v.total + COALESCE(v.ajuste,0)) as total")
             ->groupBy('v.cliente_id', 'c.nombre')
             ->orderByDesc('total')
             ->limit(5)
