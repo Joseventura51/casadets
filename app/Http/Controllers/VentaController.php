@@ -456,6 +456,11 @@ class VentaController extends Controller
     {
         abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
         $this->authorizeVenta($venta);
+
+        if ($venta->estado === 'anulado') {
+            return redirect()->route('ventas.index')
+                ->with('error', "No se puede registrar el pago: el vale {$venta->documento_tipo} {$venta->documento_numero} está anulado.");
+        }
         $venta->load([
             'vendedor:id,nombre',
             'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal',
@@ -487,6 +492,12 @@ class VentaController extends Controller
     {
         abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
         $this->authorizeVenta($venta);
+
+        if ($venta->estado === 'anulado') {
+            return redirect()->route('ventas.index')
+                ->with('error', "No se puede registrar el pago: el vale {$venta->documento_tipo} {$venta->documento_numero} está anulado.");
+        }
+
         $data = $request->validate([
             'pagos'               => 'required|array|min:1',
             'pagos.*.metodo'      => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
