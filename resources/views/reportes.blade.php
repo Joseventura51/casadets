@@ -205,14 +205,14 @@
             <div class="card kpi-card kpi-margen p-3 h-100">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label">Margen de ganancia</div>
-                        <div class="kpi-value text-warning" id="kpiMargen">0%</div>
-                        <div class="kpi-sub">Invertido: <span id="kpiInvertido">S/ 0.00</span></div>
+                        <div class="kpi-label">35% de la Utilidad</div>
+                        <div class="kpi-value text-warning" id="kpiMargen">S/ 0.00</div>
+                        <div class="kpi-sub">Utilidad total: <span id="kpiInvertido">S/ 0.00</span></div>
                     </div>
                     <span class="kpi-icon">📈</span>
                 </div>
                 <div class="mt-2 pt-2 border-top" style="font-size:.72rem;color:#6c757d;">
-                    Recuperado: <strong id="kpiRecuperado">S/ 0.00</strong>
+                    Margen: <strong id="kpiRecuperado">0%</strong>
                 </div>
             </div>
         </div>
@@ -641,9 +641,9 @@ function renderDatos(data) {
     document.getElementById('kpiCosto').textContent         = fmt(u.total_costo);
     document.getElementById('kpiVentasUtilidad').textContent= fmt(u.total_ventas);
 
-    document.getElementById('kpiMargen').textContent        = u.margen + '%';
-    document.getElementById('kpiInvertido').textContent     = fmt(u.invertido);
-    document.getElementById('kpiRecuperado').textContent    = fmt(u.recuperado);
+    document.getElementById('kpiMargen').textContent        = fmt(Math.round(u.utilidad * 0.35 * 100) / 100);
+    document.getElementById('kpiInvertido').textContent     = fmt(u.utilidad);
+    document.getElementById('kpiRecuperado').textContent    = u.margen + '%';
 
     // Tab Compras KPIs
     document.getElementById('cmpTotal').textContent = fmt(c.total);
