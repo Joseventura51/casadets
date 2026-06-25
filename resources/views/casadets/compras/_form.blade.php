@@ -353,10 +353,13 @@ function actualizarSinSel() {
     sinSel.style.display = container.querySelectorAll('input.detalle-check:checked').length ? 'none' : '';
 }
 
+const compraIdActual = {{ $compra->id ?? 'null' }};
+
 async function cargarFactura(ventaId) {
     if (!ventaId || facturasCargadas.has(parseInt(ventaId))) return;
     try {
-        const res = await fetch(`/casadets/ventas/${ventaId}/detalles.json`);
+        const url = `/casadets/ventas/${ventaId}/detalles.json` + (compraIdActual ? `?excluir=${compraIdActual}` : '');
+        const res = await fetch(url);
         if (!res.ok) throw new Error('Error al cargar');
         renderFactura(await res.json());
         facturasCargadas.add(parseInt(ventaId));
@@ -405,8 +408,17 @@ function renderFactura(data) {
         const lineaInicial = (lineaSeleccionadaYa[String(d.id)] !== null &&
                               lineaSeleccionadaYa[String(d.id)] !== undefined)
                            ? String(lineaSeleccionadaYa[String(d.id)]) : '';
+
+        const estadoCosteo = d.estado_costeo ?? 'sin_costear';
+        const colorFila = (esMarcada) => {
+            if (esMarcada)                       return '#d1fae5';
+            if (estadoCosteo === 'costeada')     return '#d1fae5';
+            if (estadoCosteo === 'parcial')      return '#fef9c3';
+            return '';
+        };
+
         const tr = document.createElement('tr');
-        if (checked) tr.style.cssText = 'background:#d1fae5;transition:background .2s;';
+        tr.style.cssText = `background:${colorFila(!!checked)};transition:background .2s;`;
         tr.innerHTML = `
             <td class="text-center">
                 <input type="checkbox" name="detalles[]" value="${d.id}"
@@ -441,7 +453,7 @@ function renderFactura(data) {
             lineaSelect.disabled = !cb.checked;
             if (cb.checked)  cantInput.value = cantidadesIniciales[d.id] ?? d.cantidad;
             if (!cb.checked) cantInput.value = d.cantidad;
-            tr.style.background = cb.checked ? '#d1fae5' : '';
+            tr.style.background = colorFila(cb.checked);
             actualizarSinSel();
         });
     });

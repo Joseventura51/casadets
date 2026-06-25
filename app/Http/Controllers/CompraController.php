@@ -281,8 +281,10 @@ class CompraController extends Controller
         return redirect('/casadets/compras')->with('success', 'Compra eliminada.');
     }
 
-    public function detallesVenta(Venta $venta)
+    public function detallesVenta(Request $request, Venta $venta)
     {
+        $excluirCompraId = (int) $request->input('excluir', 0);
+
         $venta->load(['detalles:id,venta_id,producto_id,producto,cantidad,precio_unitario,subtotal', 'vendedor:id,nombre']);
         return response()->json([
             'venta' => [
@@ -291,14 +293,26 @@ class CompraController extends Controller
                 'documento' => trim(ucfirst((string) $venta->documento_tipo) . ' ' . (string) $venta->documento_numero),
                 'vendedor'  => $venta->vendedor->nombre ?? '—',
             ],
-            'detalles' => $venta->detalles->map(fn($d) => [
-                'id'              => $d->id,
-                'producto_id'     => $d->producto_id,
-                'producto'        => $d->producto,
-                'cantidad'        => (float) $d->cantidad,
-                'precio_unitario' => (float) $d->precio_unitario,
-                'subtotal'        => (float) $d->subtotal,
-            ]),
+            'detalles' => $venta->detalles->map(function ($d) use ($excluirCompraId) {
+                $cubierta = (float) DB::table('compra_venta_detalle')
+                    ->where('venta_detalle_id', $d->id)
+                    ->when($excluirCompraId > 0, fn($q) => $q->where('compra_id', '!=', $excluirCompraId))
+                    ->sum('cantidad');
+
+                if ($cubierta <= 0)                        $estado = 'sin_costear';
+                elseif ($cubierta >= (float) $d->cantidad) $estado = 'costeada';
+                else                                       $estado = 'parcial';
+
+                return [
+                    'id'              => $d->id,
+                    'producto_id'     => $d->producto_id,
+                    'producto'        => $d->producto,
+                    'cantidad'        => (float) $d->cantidad,
+                    'precio_unitario' => (float) $d->precio_unitario,
+                    'subtotal'        => (float) $d->subtotal,
+                    'estado_costeo'   => $estado,
+                ];
+            }),
         ]);
     }
 
