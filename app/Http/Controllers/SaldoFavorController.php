@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cliente;
+use App\Models\Movimiento;
 use App\Models\SaldoFavor;
 use App\Models\Venta;
 use App\Services\CajaService;
@@ -262,13 +263,47 @@ class SaldoFavorController extends Controller
             'motivo' => 'nullable|string|max:255',
         ]);
 
-        $saldo->update([
-            'estado'           => 'anulado',
-            'monto_disponible' => 0,
-            'anulado_at'       => now(),
-            'anulado_por_id'   => auth()->id(),
-            'motivo_anulacion' => $data['motivo'] ?? null,
-        ]);
+        DB::transaction(function () use ($saldo, $data) {
+            $montoAnulado = (float) $saldo->monto_disponible;
+
+            $saldo->update([
+                'estado'           => 'anulado',
+                'monto_disponible' => 0,
+                'anulado_at'       => now(),
+                'anulado_por_id'   => auth()->id(),
+                'motivo_anulacion' => $data['motivo'] ?? null,
+            ]);
+
+            // Registrar en el ledger para trazabilidad (subtipo 'anulacion' → no afecta balance)
+            if ($montoAnulado > 0) {
+                $cajaId  = session('caja_id');
+                $empresa = $cajaId
+                    ? (\App\Models\Caja::find($cajaId)?->empresa ?? session('empresa', 'casadets'))
+                    : session('empresa', 'casadets');
+
+                $obs = 'Anulación de saldo a favor' . ($saldo->descripcion ? ' — ' . $saldo->descripcion : '');
+                if ($data['motivo'] ?? null) {
+                    $obs .= ' — Motivo: ' . $data['motivo'];
+                }
+
+                Movimiento::create([
+                    'tipo'            => 'contable',
+                    'subtipo'         => 'anulacion',
+                    'origen'          => 'auto',
+                    'estado'          => 'activo',
+                    'empresa'         => $empresa,
+                    'caja_id'         => $cajaId,
+                    'categoria'       => 'saldo_favor',
+                    'referencia_tipo' => 'saldo_favor',
+                    'referencia_id'   => $saldo->id,
+                    'cliente_id'      => $saldo->cliente_id,
+                    'user_id'         => auth()->id(),
+                    'monto'           => $montoAnulado,
+                    'fecha'           => today(),
+                    'observaciones'   => $obs,
+                ]);
+            }
+        });
 
         if ($request->expectsJson()) {
             return response()->json([
