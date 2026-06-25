@@ -475,22 +475,35 @@ function renderFactura(data) {
                               lineaSeleccionadaYa[String(d.id)] !== undefined)
                            ? String(lineaSeleccionadaYa[String(d.id)]) : '';
 
-        const estadoCosteo = d.estado_costeo ?? 'sin_costear';
-        const colorFila = (esMarcada) => {
-            if (esMarcada)                       return '#d1fae5';
-            if (estadoCosteo === 'costeada')     return '#d1fae5';
-            if (estadoCosteo === 'parcial')      return '#fef9c3';
+        const cubiertaOtros = d.cantidad_cubierta ?? 0;
+
+        // Calcula estado combinando cobertura de OTRAS compras + lo que se ingresa en este form
+        function calcularEstadoLocal(cantEstaCompra) {
+            const total = cubiertaOtros + cantEstaCompra;
+            if (total <= 0)              return 'sin_costear';
+            if (total >= d.cantidad)     return 'costeada';
+            return 'parcial';
+        }
+        function colorDeFila(estado) {
+            if (estado === 'costeada') return '#d1fae5';
+            if (estado === 'parcial')  return '#fef9c3';
             return '';
-        };
+        }
+        function estadoInicial() {
+            return calcularEstadoLocal(!!checked ? (parseFloat(cantPivot) || 0) : 0);
+        }
 
         const tr = document.createElement('tr');
-        tr.style.cssText = `background:${colorFila(!!checked)};transition:background .2s;`;
+        tr.style.cssText = `background:${colorDeFila(estadoInicial())};transition:background .2s;`;
         tr.innerHTML = `
             <td class="text-center">
                 <input type="checkbox" name="detalles[]" value="${d.id}"
                     class="form-check-input detalle-check" ${checked}>
             </td>
-            <td>${escHtml(d.producto)}</td>
+            <td style="display:flex;align-items:center;gap:6px;">
+                <span class="dot-estado" style="display:inline-block;width:9px;height:9px;border-radius:50%;flex-shrink:0;background:${estadoInicial()==='costeada'?'#16a34a':estadoInicial()==='parcial'?'#ca8a04':'#e5e7eb'};"></span>
+                ${escHtml(d.producto)}
+            </td>
             <td class="text-end text-muted small">${d.cantidad}</td>
             <td class="text-end text-muted small">S/ ${d.precio_unitario.toFixed(2)}</td>
             <td class="text-end">
@@ -514,14 +527,24 @@ function renderFactura(data) {
         const cb          = tr.querySelector('.detalle-check');
         const cantInput   = tr.querySelector('.cantidad-comprada');
         const lineaSelect = tr.querySelector('.select-linea');
+        const dotEl       = tr.querySelector('.dot-estado');
+
+        function actualizarColorFila() {
+            const cantEsta = cb.checked ? (parseFloat(cantInput.value) || 0) : 0;
+            const est = calcularEstadoLocal(cantEsta);
+            tr.style.background = colorDeFila(est);
+            dotEl.style.background = est === 'costeada' ? '#16a34a' : est === 'parcial' ? '#ca8a04' : '#e5e7eb';
+        }
+
         cb.addEventListener('change', () => {
             cantInput.disabled   = !cb.checked;
             lineaSelect.disabled = !cb.checked;
             if (cb.checked)  cantInput.value = cantidadesIniciales[d.id] ?? d.cantidad;
             if (!cb.checked) cantInput.value = d.cantidad;
-            tr.style.background = colorFila(cb.checked);
+            actualizarColorFila();
             actualizarSinSel();
         });
+        cantInput.addEventListener('input', actualizarColorFila);
     });
     card.querySelector('.btn-quitar-factura').addEventListener('click', () => {
         card.querySelectorAll('.detalle-check').forEach(c => { c.checked = false; });

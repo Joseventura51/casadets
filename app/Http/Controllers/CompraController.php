@@ -304,13 +304,14 @@ class CompraController extends Controller
                 else                                       $estado = 'parcial';
 
                 return [
-                    'id'              => $d->id,
-                    'producto_id'     => $d->producto_id,
-                    'producto'        => $d->producto,
-                    'cantidad'        => (float) $d->cantidad,
-                    'precio_unitario' => (float) $d->precio_unitario,
-                    'subtotal'        => (float) $d->subtotal,
-                    'estado_costeo'   => $estado,
+                    'id'               => $d->id,
+                    'producto_id'      => $d->producto_id,
+                    'producto'         => $d->producto,
+                    'cantidad'         => (float) $d->cantidad,
+                    'precio_unitario'  => (float) $d->precio_unitario,
+                    'subtotal'         => (float) $d->subtotal,
+                    'estado_costeo'    => $estado,
+                    'cantidad_cubierta'=> (float) $cubierta,
                 ];
             }),
         ]);
