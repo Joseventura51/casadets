@@ -121,8 +121,9 @@ class CompraController extends Controller
                 'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
             ]);
 
-            $syncData = $this->buildSyncData($request, $lineasCreadas);
-            $this->conciliacion->sincronizar($compra, $syncData, $compra->id);
+            $syncData  = $this->buildSyncData($request, $lineasCreadas);
+            $overrides = array_map('intval', $request->input('detalles_override', []));
+            $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
         });
 
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
@@ -236,8 +237,9 @@ class CompraController extends Controller
                 ]);
             }
 
-            $syncData = $this->buildSyncData($request, $lineasCreadas);
-            $this->conciliacion->sincronizar($compra, $syncData, $compra->id);
+            $syncData  = $this->buildSyncData($request, $lineasCreadas);
+            $overrides = array_map('intval', $request->input('detalles_override', []));
+            $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
         });
 
         return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');

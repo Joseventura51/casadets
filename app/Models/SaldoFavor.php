@@ -19,10 +19,14 @@ class SaldoFavor extends Model
         'estado',
         'descripcion',
         'fecha',
+        'anulado_at',
+        'anulado_por_id',
+        'motivo_anulacion',
     ];
 
     protected $casts = [
-        'fecha'            => 'date',
+        'fecha'      => 'date',
+        'anulado_at' => 'datetime',
         'monto_original'   => 'decimal:2',
         'monto_disponible' => 'decimal:2',
     ];
@@ -44,6 +48,14 @@ class SaldoFavor extends Model
     public function ventaOrigen(): BelongsTo
     {
         return $this->belongsTo(Venta::class, 'venta_origen_id');
+    }
+
+    /**
+     * Usuario que anuló este saldo.
+     */
+    public function anulador(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'anulado_por_id');
     }
 
     /**

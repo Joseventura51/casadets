@@ -36,9 +36,9 @@ class SaldoFavorController extends Controller
         $saldosPorCliente = $saldosActivos->groupBy('cliente_id');
         $clienteIds = $saldosActivos->pluck('cliente_id')->unique()->toArray();
 
-        $saldosUsados = SaldoFavor::with(['ventaOrigen'])
+        $saldosUsados = SaldoFavor::with(['ventaOrigen', 'anulador'])
             ->whereIn('cliente_id', $clienteIds)
-            ->where('estado', 'usado')
+            ->whereIn('estado', ['usado', 'anulado'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->groupBy('cliente_id');
@@ -247,6 +247,34 @@ class SaldoFavorController extends Controller
             'saldo_pendiente'  => $v->saldo_pendiente,
             'estado'           => $v->estado,
         ]));
+    }
+
+    public function anular(Request $request, SaldoFavor $saldo)
+    {
+        if ($saldo->estado === 'anulado') {
+            return response()->json(['success' => false, 'message' => 'Este saldo ya está anulado.'], 422);
+        }
+
+        $data = $request->validate([
+            'motivo' => 'nullable|string|max:255',
+        ]);
+
+        $saldo->update([
+            'estado'           => 'anulado',
+            'monto_disponible' => 0,
+            'anulado_at'       => now(),
+            'anulado_por_id'   => auth()->id(),
+            'motivo_anulacion' => $data['motivo'] ?? null,
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Saldo a favor anulado correctamente.',
+            ]);
+        }
+
+        return redirect('/casadets/saldos-favor')->with('success', 'Saldo a favor anulado. Queda registrado en el historial.');
     }
 
     public function aplicar(Request $request, SaldoFavor $saldo)

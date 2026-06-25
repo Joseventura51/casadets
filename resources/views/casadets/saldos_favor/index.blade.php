@@ -406,14 +406,20 @@
                         @endif
                     </td>
                     <td class="text-end pe-3">
+                        <div class="d-flex gap-1 justify-content-end flex-wrap">
                         @if($cliente->ventas_pendientes_count > 0)
                         <button type="button" class="btn btn-sm btn-outline-info"
                                 onclick="abrirModalSaldoEspecifico({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, {{ $s->id }})">
                             <i class="bi bi-lightning-fill me-1"></i>Usar este
                         </button>
                         @else
-                        <span class="text-muted small">Sin ventas pendientes</span>
+                        <span class="text-muted small me-1">Sin ventas pendientes</span>
                         @endif
+                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                onclick="confirmarAnularSaldo({{ $s->id }}, '{{ addslashes($s->descripcion ?? '') }}', {{ number_format($s->monto_disponible, 2, '.', '') }})">
+                            <i class="bi bi-x-circle me-1"></i>Anular
+                        </button>
+                        </div>
                     </td>
                 </tr>
                 @endforeach
@@ -422,25 +428,39 @@
     </div>
     @endif
 
-    {{-- Historial usado (colapsable) --}}
+    {{-- Historial usado/anulado (colapsable) --}}
     @if($saldosHistorial->count())
     <div class="card-footer bg-white p-0">
         <button class="btn btn-link btn-sm text-muted w-100 text-start py-2 px-3"
             data-bs-toggle="collapse" data-bs-target="#hist-{{ $cliente->id }}">
             <i class="bi bi-clock-history me-1"></i>
-            Ver historial usado ({{ $saldosHistorial->count() }} registro{{ $saldosHistorial->count() > 1 ? 's' : '' }})
+            Ver historial ({{ $saldosHistorial->count() }} registro{{ $saldosHistorial->count() > 1 ? 's' : '' }})
         </button>
         <div class="collapse" id="hist-{{ $cliente->id }}">
             <div class="table-responsive">
                 <table class="table table-sm mb-0 align-middle">
                     <tbody>
                         @foreach($saldosHistorial as $s)
-                        <tr class="text-muted">
-                            <td class="ps-3 small">{{ $s->descripcion ?? '—' }}</td>
+                        <tr class="text-muted @if($s->estado==='anulado') table-danger bg-danger bg-opacity-10 @endif">
+                            <td class="ps-3 small">
+                                {{ $s->descripcion ?? '—' }}
+                                @if($s->estado === 'anulado' && $s->motivo_anulacion)
+                                    <br><span class="text-danger fst-italic" style="font-size:.78rem;">Motivo: {{ $s->motivo_anulacion }}</span>
+                                @endif
+                            </td>
                             <td class="small">{{ $s->fecha->format('d/m/Y') }}</td>
                             <td class="text-end small">S/ {{ number_format($s->monto_original, 2) }}</td>
                             <td class="text-end small text-muted">S/ 0.00</td>
-                            <td class="text-center"><span class="badge badge-usado">Usado</span></td>
+                            <td class="text-center">
+                                @if($s->estado === 'anulado')
+                                    <span class="badge bg-danger">Anulado</span>
+                                    @if($s->anulado_at)
+                                        <div class="text-muted" style="font-size:.7rem;">{{ $s->anulado_at->format('d/m/Y') }}</div>
+                                    @endif
+                                @else
+                                    <span class="badge badge-usado">Usado</span>
+                                @endif
+                            </td>
                             <td class="pe-3"></td>
                         </tr>
                         @endforeach
