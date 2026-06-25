@@ -338,33 +338,65 @@ function filtrarItems() {
     return items;
 }
 
+function ventaResumenBadges(v) {
+    const pendientes = v.productos.filter(p => p.estado_costeo === 'sin_costear').length;
+    const parciales  = v.productos.filter(p => p.estado_costeo === 'parcial').length;
+    const cubiertas  = v.productos.filter(p => p.estado_costeo === 'costeada').length;
+    const total      = v.productos.length;
+    let html = '';
+    if (pendientes > 0)
+        html += `<span style="font-size:.7rem;background:#fee2e2;color:#b91c1c;border-radius:4px;padding:1px 6px;white-space:nowrap;">${pendientes} sin cubrir</span>`;
+    if (parciales > 0)
+        html += `<span style="font-size:.7rem;background:#fef9c3;color:#92400e;border-radius:4px;padding:1px 6px;white-space:nowrap;">${parciales} parcial${parciales > 1 ? 'es' : ''}</span>`;
+    if (cubiertas > 0 && pendientes === 0 && parciales === 0)
+        html += `<span style="font-size:.7rem;background:#dcfce7;color:#15803d;border-radius:4px;padding:1px 6px;white-space:nowrap;">todo cubierto</span>`;
+    return html;
+}
+
+function onClickCargar(ventaId) {
+    buscador.value = '';
+    dropdown.style.display = 'none';
+    cargarFactura(ventaId);
+}
+
 function mostrarDropdown() {
     const items = filtrarItems();
     dropdown.innerHTML = '';
     if (items.length === 0) {
         dropdown.innerHTML = '<div style="padding:.5rem .9rem;color:#6c757d;font-size:.85rem;">Sin resultados</div>';
     } else {
+        let lastVentaId = null;
         items.forEach(({ v, producto, estadoCosteo }) => {
+            // ── Cabecera de venta (aparece una vez por venta) ──
+            if (v.id !== lastVentaId) {
+                lastVentaId = v.id;
+                const badges = ventaResumenBadges(v);
+                const header = document.createElement('div');
+                header.style.cssText = 'padding:.35rem .75rem .35rem .9rem;font-size:.83rem;background:#f8f9fa;border-bottom:1px solid #dee2e6;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;';
+                header.innerHTML =
+                    `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">` +
+                        `<span class="badge bg-secondary me-1" style="font-size:.67rem;">${escHtml(v.tipo)}</span>` +
+                        `<strong>${escHtml(v.numero)}</strong>` +
+                        ` <span class="text-muted" style="font-size:.76rem;">· ${v.fecha_display} · ${escHtml(v.vendedor)}</span>` +
+                    `</div>` +
+                    `<div style="display:flex;gap:4px;flex-shrink:0;">${badges}</div>`;
+                header.addEventListener('mouseover', () => header.style.background = '#e9ecef');
+                header.addEventListener('mouseout',  () => header.style.background = '#f8f9fa');
+                header.addEventListener('mousedown', e => { e.preventDefault(); onClickCargar(v.id); });
+                dropdown.appendChild(header);
+            }
+
+            // ── Fila de producto (indentada) ──
             const item = document.createElement('div');
-            item.style.cssText = 'padding:.4rem .9rem;cursor:pointer;font-size:.84rem;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;gap:8px;min-width:0;';
+            item.style.cssText = 'padding:.28rem .9rem .28rem 1.6rem;cursor:pointer;font-size:.81rem;border-bottom:1px solid #f4f4f5;display:flex;align-items:center;gap:6px;';
             item.innerHTML =
-                `<div style="flex:0 0 auto;white-space:nowrap;">` +
-                    `<span class="badge bg-secondary me-1" style="font-size:.68rem;">${escHtml(v.tipo)}</span>` +
-                    `<strong>${escHtml(v.numero)}</strong>` +
-                    ` <span class="text-muted" style="font-size:.78rem;">· ${v.fecha_display} · ${escHtml(v.vendedor)}</span>` +
-                `</div>` +
-                `<div style="flex:1;min-width:0;text-align:right;font-size:.8rem;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;justify-content:flex-end;gap:5px;">` +
-                    colorDot(estadoCosteo) +
+                colorDot(estadoCosteo) +
+                `<span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">` +
                     (producto ? escHtml(producto) : '<span class="text-muted">—</span>') +
-                `</div>`;
+                `</span>`;
             item.addEventListener('mouseover', () => item.style.background = '#f0f4ff');
             item.addEventListener('mouseout',  () => item.style.background = '');
-            item.addEventListener('mousedown', e => {
-                e.preventDefault();
-                buscador.value = '';
-                dropdown.style.display = 'none';
-                cargarFactura(v.id);
-            });
+            item.addEventListener('mousedown', e => { e.preventDefault(); onClickCargar(v.id); });
             dropdown.appendChild(item);
         });
     }
