@@ -12,11 +12,14 @@ use App\Models\VentaDetalle;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Services\CajaService;
+use App\Services\ConciliacionService;
 use App\Services\VendedorScope;
 use Illuminate\Support\Facades\DB;
 
 class CompraController extends Controller
 {
+    public function __construct(private readonly ConciliacionService $conciliacion) {}
+
     public function index(Request $request)
     {
         $desde = $request->input('desde', today()->toDateString());
@@ -118,7 +121,8 @@ class CompraController extends Controller
                 'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
             ]);
 
-            $compra->detalles()->sync($this->validarYBuildDetallesSync($request, $lineasCreadas, $compra->id));
+            $syncData = $this->buildSyncData($request, $lineasCreadas);
+            $this->conciliacion->sincronizar($compra, $syncData, $compra->id);
         });
 
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
@@ -126,7 +130,7 @@ class CompraController extends Controller
 
     public function show(Compra $compra)
     {
-        $compra->load(['lineas.producto', 'detalles.venta.vendedor']);
+        $compra->load(['lineas.producto', 'detalles.venta.vendedor', 'auditorias.usuario']);
         return view('casadets.compras.show', compact('compra'));
     }
 
@@ -232,7 +236,8 @@ class CompraController extends Controller
                 ]);
             }
 
-            $compra->detalles()->sync($this->validarYBuildDetallesSync($request, $lineasCreadas, $compra->id));
+            $syncData = $this->buildSyncData($request, $lineasCreadas);
+            $this->conciliacion->sincronizar($compra, $syncData, $compra->id);
         });
 
         return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');
@@ -292,61 +297,27 @@ class CompraController extends Controller
     /* ── Helpers ───────────────────────────────────────────────────── */
 
     /**
-     * FASE 1 + 3: Valida cantidades contra compra_linea y venta_detalle,
-     * y congela costo_unitario / costo_total al momento de la asignación.
-     *
-     * @param  int|null  $compraIdExcluir  ID de la compra actual (para excluir sus propias asignaciones previas al recalcular saldos).
+     * FASE 3: Construye el array de sync para la pivot compra_venta_detalle.
+     * Resuelve compra_linea_id desde el índice del formulario y congela
+     * costo_unitario / costo_total. La validación de saldos se delega
+     * a ConciliacionService::sincronizar().
      */
-    private function validarYBuildDetallesSync(
-        Request $request,
-        array   $lineasCreadas    = [],
-        ?int    $compraIdExcluir  = null
-    ): array {
+    private function buildSyncData(Request $request, array $lineasCreadas = []): array
+    {
         $ids           = $request->input('detalles', []);
         $cantidades    = $request->input('detalles_cantidad', []);
         $detallesLinea = $request->input('detalles_linea', []);
-
-        if (empty($ids)) {
-            return [];
-        }
-
-        $errors = [];
-        $sync   = [];
-
-        // Acumulador para validar el total asignado por compra_linea en esta operación
-        $acumLinea = []; // compra_linea_id => suma de cantidades asignadas en este sync
+        $sync          = [];
 
         foreach ($ids as $rawId) {
             $id       = (int) $rawId;
             $cantidad = (float) ($cantidades[$rawId] ?? 1);
 
-            // ── Resolver compra_linea ────────────────────────────
             $lineaIdx = $detallesLinea[$rawId] ?? null;
             $lineaId  = ($lineaIdx !== null && $lineaIdx !== '' && isset($lineasCreadas[(int) $lineaIdx]))
                 ? $lineasCreadas[(int) $lineaIdx]
                 : null;
 
-            // ── VALIDACIÓN 1: saldo disponible en venta_detalle ──
-            $ventaDetalle = VentaDetalle::find($id);
-            if ($ventaDetalle) {
-                $yaAsignadoVD = (float) DB::table('compra_venta_detalle')
-                    ->where('venta_detalle_id', $id)
-                    ->when($compraIdExcluir, fn($q) => $q->where('compra_id', '!=', $compraIdExcluir))
-                    ->sum('cantidad');
-
-                $saldoVD = (float) $ventaDetalle->cantidad - $yaAsignadoVD;
-
-                if ($cantidad > $saldoVD + 0.001) {
-                    $errors[] = "Producto \"{$ventaDetalle->producto}\": solo {$saldoVD} unidades pendientes de costear (intentas asignar {$cantidad}).";
-                }
-            }
-
-            // ── Acumular para validación de compra_linea ─────────
-            if ($lineaId) {
-                $acumLinea[$lineaId] = ($acumLinea[$lineaId] ?? 0) + $cantidad;
-            }
-
-            // ── FASE 3: Congelar costo unitario y total ───────────
             $costoUnitario = null;
             $costoTotal    = null;
             if ($lineaId) {
@@ -363,29 +334,6 @@ class CompraController extends Controller
                 'costo_unitario'  => $costoUnitario,
                 'costo_total'     => $costoTotal,
             ];
-        }
-
-        // ── VALIDACIÓN 2: saldo disponible en cada compra_linea ──
-        foreach ($acumLinea as $lineaId => $totalAsignado) {
-            $linea = CompraLinea::find($lineaId);
-            if (!$linea) {
-                continue;
-            }
-            // Las lineas recién creadas tienen ID nuevo → no hay asignaciones previas para ellas.
-            // Para el caso update, la compra anterior ya borró sus lineas y creó nuevas.
-            $yaAsignadoLinea = (float) DB::table('compra_venta_detalle')
-                ->where('compra_linea_id', $lineaId)
-                ->sum('cantidad');
-
-            $saldoLinea = (float) $linea->cantidad - $yaAsignadoLinea;
-
-            if ($totalAsignado > $saldoLinea + 0.001) {
-                $errors[] = "Línea de compra \"{$linea->producto}\": solo {$saldoLinea} unidades disponibles (intentas asignar {$totalAsignado}).";
-            }
-        }
-
-        if (!empty($errors)) {
-            throw ValidationException::withMessages(['detalles' => $errors]);
         }
 
         return $sync;

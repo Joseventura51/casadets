@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use App\Models\ConciliacionAuditoria;
 
 class Compra extends Model
 {
@@ -44,6 +45,11 @@ class Compra extends Model
     {
         return $this->hasMany(StockMovimiento::class, 'referencia_id')
                     ->where('referencia_tipo', 'compra');
+    }
+
+    public function auditorias(): HasMany
+    {
+        return $this->hasMany(ConciliacionAuditoria::class)->orderBy('created_at', 'desc');
     }
 
     /**

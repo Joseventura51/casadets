@@ -72,7 +72,7 @@
     @endif
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm mb-3">
     <div class="card-header bg-white fw-semibold">
         <i class="bi bi-link-45deg me-1 text-warning"></i> Productos vinculados de ventas
     </div>
@@ -121,6 +121,87 @@
         <div class="card-body text-center text-muted py-4">
             <i class="bi bi-info-circle me-1"></i> Esta compra no tiene productos vinculados a ninguna venta.
         </div>
+    @endif
+</div>
+
+{{-- AUDITORÍA DE ASIGNACIONES --}}
+<div class="card border-0 shadow-sm mt-2">
+    <div class="card-header bg-white d-flex align-items-center justify-content-between">
+        <span class="fw-semibold">
+            <i class="bi bi-shield-lock me-1 text-secondary"></i> Auditoría de asignaciones
+        </span>
+        <span class="badge bg-secondary rounded-pill">{{ $compra->auditorias->count() }} eventos</span>
+    </div>
+    @if($compra->auditorias->count())
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle" style="font-size:.82rem;">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:130px;">Fecha / Hora</th>
+                    <th style="width:90px;">Acción</th>
+                    <th>Producto</th>
+                    <th class="text-end" style="width:110px;">Cantidad</th>
+                    <th class="text-end" style="width:120px;">Costo unit.</th>
+                    <th class="text-end" style="width:120px;">Costo total</th>
+                    <th style="width:130px;">Usuario</th>
+                    <th style="width:110px;">IP</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($compra->auditorias as $aud)
+                <tr>
+                    <td class="text-muted">{{ $aud->created_at->format('d/m/Y H:i:s') }}</td>
+                    <td>
+                        <span class="badge bg-{{ $aud->accionBadge() }}">
+                            {{ $aud->accionLabel() }}
+                        </span>
+                    </td>
+                    <td>{{ $aud->producto_nombre ?? '—' }}</td>
+                    <td class="text-end">
+                        @if($aud->accion === 'actualizar')
+                            <span class="text-muted text-decoration-line-through me-1">
+                                {{ number_format($aud->cantidad_anterior, 2) }}
+                            </span>
+                            {{ number_format($aud->cantidad_nueva, 2) }}
+                        @elseif($aud->accion === 'crear')
+                            {{ number_format($aud->cantidad_nueva, 2) }}
+                        @else
+                            <span class="text-danger">{{ number_format($aud->cantidad_anterior, 2) }}</span>
+                        @endif
+                    </td>
+                    <td class="text-end">
+                        @if($aud->accion === 'actualizar' && $aud->costo_unitario_anterior != $aud->costo_unitario_nuevo)
+                            <span class="text-muted text-decoration-line-through me-1">
+                                S/ {{ number_format($aud->costo_unitario_anterior ?? 0, 4) }}
+                            </span>
+                            S/ {{ number_format($aud->costo_unitario_nuevo ?? 0, 4) }}
+                        @else
+                            @php $cu = $aud->costo_unitario_nuevo ?? $aud->costo_unitario_anterior; @endphp
+                            {{ $cu !== null ? 'S/ ' . number_format($cu, 4) : '—' }}
+                        @endif
+                    </td>
+                    <td class="text-end">
+                        @if($aud->accion === 'actualizar' && $aud->costo_total_anterior != $aud->costo_total_nuevo)
+                            <span class="text-muted text-decoration-line-through me-1">
+                                S/ {{ number_format($aud->costo_total_anterior ?? 0, 2) }}
+                            </span>
+                            S/ {{ number_format($aud->costo_total_nuevo ?? 0, 2) }}
+                        @else
+                            @php $ct = $aud->costo_total_nuevo ?? $aud->costo_total_anterior; @endphp
+                            {{ $ct !== null ? 'S/ ' . number_format($ct, 2) : '—' }}
+                        @endif
+                    </td>
+                    <td class="text-muted">{{ $aud->usuario?->nombre ?? $aud->usuario?->name ?? '—' }}</td>
+                    <td class="text-muted" style="font-size:.75rem;">{{ $aud->ip ?? '—' }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+    @else
+    <div class="card-body text-center text-muted py-3">
+        <i class="bi bi-clock-history me-1"></i> Sin eventos de auditoría registrados aún.
+    </div>
     @endif
 </div>
 @endsection
