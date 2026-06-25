@@ -74,7 +74,10 @@ class CompraController extends Controller
 
             $compra = Compra::create(array_merge(
                 collect($data)->except('lineas')->toArray(),
-                ['monto_total' => $total]
+                [
+                    'monto_total' => $total,
+                    'caja_id'     => session('caja_id'),
+                ]
             ));
 
             $lineasCreadas = [];
