@@ -122,6 +122,11 @@
 
         <div class="mb-3">
             <label class="form-label small mb-1">Buscar por documento, vendedor o producto</label>
+            <div class="d-flex gap-3 mb-1 align-items-center" style="font-size:.78rem;color:#6c757d;">
+                <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#16a34a;margin-right:3px;"></span>Cubierto al 100%</span>
+                <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ca8a04;margin-right:3px;"></span>Parcialmente cubierto</span>
+                <span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e5e7eb;margin-right:3px;"></span>Sin cobertura</span>
+            </div>
             <div class="position-relative">
                 <span class="position-absolute top-50 translate-middle-y ms-2 text-muted" style="left:4px;pointer-events:none;">
                     <i class="bi bi-search"></i>
@@ -263,6 +268,15 @@ const facturasIniciales      = @json(
 );
 
 @php
+// Pre-calcular cantidades ya cubiertas por otras compras (un solo query para todo el lote)
+$todosDetalleIds = $facturas->flatMap(fn($f) => $f->detalles->pluck('id'))->filter()->unique()->values();
+$cubiertasPorDetalle = \DB::table('compra_venta_detalle')
+    ->whereIn('venta_detalle_id', $todosDetalleIds)
+    ->when($compra->exists, fn($q) => $q->where('compra_id', '!=', $compra->id))
+    ->groupBy('venta_detalle_id')
+    ->selectRaw('venta_detalle_id, SUM(cantidad) as total_cubierta')
+    ->pluck('total_cubierta', 'venta_detalle_id');
+
 $ventasJson = $facturas->map(fn($f) => [
     'id'            => $f->id,
     'tipo'          => ucfirst($f->documento_tipo ?? ''),
@@ -271,7 +285,16 @@ $ventasJson = $facturas->map(fn($f) => [
     'fecha_display' => $f->fecha->format('d/m/Y'),
     'vendedor'      => $f->vendedor->nombre ?? 'Sin vendedor',
     'total'         => number_format($f->total_cobrado, 2),
-    'productos'     => $f->detalles->pluck('producto')->filter()->values()->toArray(),
+    // productos: objetos { nombre, estado_costeo } para indicadores de color en el dropdown
+    'productos'     => $f->detalles->filter(fn($d) => $d->producto)->map(fn($d) => [
+        'nombre'        => $d->producto,
+        'estado_costeo' => (function() use ($d, $cubiertasPorDetalle) {
+            $cubierta = (float) ($cubiertasPorDetalle[$d->id] ?? 0);
+            if ($cubierta <= 0)                        return 'sin_costear';
+            if ($cubierta >= (float) $d->cantidad)     return 'costeada';
+            return 'parcial';
+        })(),
+    ])->values()->toArray(),
 ]);
 @endphp
 const todasLasVentas = @json($ventasJson);
@@ -281,6 +304,12 @@ const dropdown     = document.getElementById('ventaDropdown');
 const fechaDesde   = document.getElementById('ventaFechaDesde');
 const fechaHasta   = document.getElementById('ventaFechaHasta');
 const btnLimpiar   = document.getElementById('btnLimpiarFechas');
+
+function colorDot(estadoCosteo) {
+    if (estadoCosteo === 'costeada') return '<span title="Cubierto al 100%" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#16a34a;flex-shrink:0;"></span>';
+    if (estadoCosteo === 'parcial')  return '<span title="Parcialmente cubierto" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ca8a04;flex-shrink:0;"></span>';
+    return '<span style="display:inline-block;width:9px;height:9px;flex-shrink:0;"></span>';
+}
 
 function filtrarItems() {
     const texto = buscador.value.toLowerCase().trim();
@@ -294,12 +323,16 @@ function filtrarItems() {
         const ventaStr = (v.tipo + ' ' + v.numero + ' ' + v.vendedor).toLowerCase();
         const ventaMatch = !texto || ventaStr.includes(texto);
         if (v.productos.length === 0) {
-            if (ventaMatch) items.push({ v, producto: null });
+            if (ventaMatch) items.push({ v, producto: null, estadoCosteo: 'sin_costear' });
             return;
         }
         v.productos.forEach(prod => {
-            const prodMatch = !texto || (prod || '').toLowerCase().includes(texto);
-            if (ventaMatch || prodMatch) items.push({ v, producto: prod || '(sin nombre)' });
+            // prod es ahora { nombre, estado_costeo }
+            const prodNombre = prod.nombre || '(sin nombre)';
+            const prodMatch  = !texto || prodNombre.toLowerCase().includes(texto);
+            if (ventaMatch || prodMatch) {
+                items.push({ v, producto: prodNombre, estadoCosteo: prod.estado_costeo ?? 'sin_costear' });
+            }
         });
     });
     return items;
@@ -311,7 +344,7 @@ function mostrarDropdown() {
     if (items.length === 0) {
         dropdown.innerHTML = '<div style="padding:.5rem .9rem;color:#6c757d;font-size:.85rem;">Sin resultados</div>';
     } else {
-        items.forEach(({ v, producto }) => {
+        items.forEach(({ v, producto, estadoCosteo }) => {
             const item = document.createElement('div');
             item.style.cssText = 'padding:.4rem .9rem;cursor:pointer;font-size:.84rem;border-bottom:1px solid #f1f3f5;display:flex;align-items:center;gap:8px;min-width:0;';
             item.innerHTML =
@@ -320,7 +353,8 @@ function mostrarDropdown() {
                     `<strong>${escHtml(v.numero)}</strong>` +
                     ` <span class="text-muted" style="font-size:.78rem;">· ${v.fecha_display} · ${escHtml(v.vendedor)}</span>` +
                 `</div>` +
-                `<div style="flex:1;min-width:0;text-align:right;font-size:.8rem;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">` +
+                `<div style="flex:1;min-width:0;text-align:right;font-size:.8rem;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;justify-content:flex-end;gap:5px;">` +
+                    colorDot(estadoCosteo) +
                     (producto ? escHtml(producto) : '<span class="text-muted">—</span>') +
                 `</div>`;
             item.addEventListener('mouseover', () => item.style.background = '#f0f4ff');
