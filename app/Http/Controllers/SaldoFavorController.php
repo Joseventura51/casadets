@@ -9,6 +9,7 @@ use App\Services\CajaService;
 use App\Services\CobranzaService;
 use App\Services\VendedorScope;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SaldoFavorController extends Controller
 {
@@ -189,20 +190,22 @@ class SaldoFavorController extends Controller
 
         $monto = abs((float) $venta->total);
 
-        SaldoFavor::create([
-            'cliente_id'       => $venta->cliente_id,
-            'pago_id'          => null,
-            'venta_origen_id'  => $venta->id,
-            'monto_original'   => $monto,
-            'monto_disponible' => $monto,
-            'estado'           => 'disponible',
-            'descripcion'      => 'NC ' . ($venta->documento_numero ?: '#' . $venta->id) . ' - Convertida a saldo a favor',
-            'fecha'            => $venta->fecha->format('Y-m-d'),
-        ]);
+        DB::transaction(function () use ($venta, $monto) {
+            SaldoFavor::create([
+                'cliente_id'       => $venta->cliente_id,
+                'pago_id'          => null,
+                'venta_origen_id'  => $venta->id,
+                'monto_original'   => $monto,
+                'monto_disponible' => $monto,
+                'estado'           => 'disponible',
+                'descripcion'      => 'NC ' . ($venta->documento_numero ?: '#' . $venta->id) . ' - Convertida a saldo a favor',
+                'fecha'            => $venta->fecha->format('Y-m-d'),
+            ]);
 
-        $venta->update([
-            'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' - ' : '') . 'Convertida a saldo a favor'),
-        ]);
+            $venta->update([
+                'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' - ' : '') . 'Convertida a saldo a favor'),
+            ]);
+        });
 
         $message = 'Nota de credito ' . ($venta->documento_numero ?? '#' . $venta->id)
             . ' convertida a saldo a favor por S/ ' . number_format($monto, 2) . '.';

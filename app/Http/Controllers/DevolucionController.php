@@ -334,25 +334,23 @@ class DevolucionController extends Controller
                     });
             }
 
-            // 4. Movimiento de salida en el ledger por la anulación
-            if ($cajaId) {
-                Movimiento::create([
-                    'tipo'            => 'salida',
-                    'subtipo'         => 'anulacion',
-                    'origen'          => 'auto',
-                    'estado'          => 'activo',
-                    'empresa'         => $empresa,
-                    'caja_id'         => $cajaId,
-                    'categoria'       => 'devolucion',
-                    'referencia_tipo' => 'devolucion',
-                    'referencia_id'   => $devolucion->id,
-                    'cliente_id'      => $venta->cliente_id,
-                    'user_id'         => auth()->id(),
-                    'monto'           => (float) $venta->total_a_cobrar,
-                    'fecha'           => today(),
-                    'observaciones'   => 'Anulación de vale ' . $docRef,
-                ]);
-            }
+            // 4. Movimiento de salida en el ledger por la anulación (caja_id nullable — se registra aunque no haya caja abierta)
+            Movimiento::create([
+                'tipo'            => 'salida',
+                'subtipo'         => 'anulacion',
+                'origen'          => 'auto',
+                'estado'          => 'activo',
+                'empresa'         => $empresa,
+                'caja_id'         => $cajaId,
+                'categoria'       => 'devolucion',
+                'referencia_tipo' => 'devolucion',
+                'referencia_id'   => $devolucion->id,
+                'cliente_id'      => $venta->cliente_id,
+                'user_id'         => auth()->id(),
+                'monto'           => (float) $venta->total_a_cobrar,
+                'fecha'           => today(),
+                'observaciones'   => 'Anulación de vale ' . $docRef . ($cajaId ? '' : ' [sin caja abierta]'),
+            ]);
 
             // 5. Si había pagos, crear saldo a favor
             $pagado = (float) $venta->pagado;

@@ -202,6 +202,53 @@
     </div>
 </div>
 
+{{-- ══════════════════════════════════════════════════════════
+     Modal 4: Anular saldo a favor
+     ══════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modalAnularSaldo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger bg-opacity-10">
+                <h5 class="modal-title text-danger">
+                    <i class="bi bi-x-circle me-2"></i>Anular saldo a favor
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger small py-2 mb-3">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                    Esta acción es <strong>irreversible</strong>. El saldo quedará anulado y no podrá usarse.
+                    Si el saldo fue parcialmente utilizado, el remanente también se perderá.
+                </div>
+                <div class="mb-3 p-3 bg-light rounded" id="anularSaldoInfo">
+                    <div class="small text-muted mb-1">Descripción:</div>
+                    <div class="fw-semibold" id="anularSaldoDesc">—</div>
+                    <div class="small text-muted mt-2">Monto disponible:</div>
+                    <div class="fw-bold text-danger" id="anularSaldoMonto">S/ 0.00</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Motivo de anulación <span class="text-muted fw-normal">(opcional)</span></label>
+                    <input type="text" id="anularSaldoMotivo" class="form-control"
+                           placeholder="Ej: Error de registro, duplicado…" maxlength="255">
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="anularSaldoConfirm">
+                    <label class="form-check-label small" for="anularSaldoConfirm">
+                        Confirmo que deseo anular este saldo a favor
+                    </label>
+                </div>
+                <div id="anularSaldoError" class="alert alert-danger d-none mt-3 py-2 small"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarAnularSaldo" disabled>
+                    <i class="bi bi-x-circle me-1"></i>Anular saldo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- Encabezado ─────────────────────────────────────────────── --}}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
@@ -872,6 +919,67 @@ document.addEventListener('DOMContentLoaded', function () {
     new bootstrap.Modal(document.getElementById('modalNuevoSaldo')).show();
 });
 @endif
+
+/* ── Modal 4: Anular saldo a favor ───────────────────────── */
+let _anularSaldoId   = null;
+let _anularModalInst = null;
+
+function confirmarAnularSaldo(saldoId, descripcion, monto) {
+    _anularSaldoId = saldoId;
+
+    document.getElementById('anularSaldoDesc').textContent  = descripcion || '—';
+    document.getElementById('anularSaldoMonto').textContent = 'S/ ' + parseFloat(monto).toFixed(2);
+    document.getElementById('anularSaldoMotivo').value      = '';
+    document.getElementById('anularSaldoConfirm').checked   = false;
+    document.getElementById('btnConfirmarAnularSaldo').disabled = true;
+    document.getElementById('anularSaldoError').classList.add('d-none');
+
+    if (!_anularModalInst) {
+        _anularModalInst = new bootstrap.Modal(document.getElementById('modalAnularSaldo'));
+    }
+    _anularModalInst.show();
+}
+
+document.getElementById('anularSaldoConfirm').addEventListener('change', function () {
+    document.getElementById('btnConfirmarAnularSaldo').disabled = !this.checked;
+});
+
+document.getElementById('btnConfirmarAnularSaldo').addEventListener('click', async function () {
+    if (!_anularSaldoId) return;
+
+    const motivo  = document.getElementById('anularSaldoMotivo').value.trim();
+    const errDiv  = document.getElementById('anularSaldoError');
+    const btn     = this;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Anulando…';
+    errDiv.classList.add('d-none');
+
+    try {
+        const form = new FormData();
+        form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
+        if (motivo) form.append('motivo', motivo);
+
+        const res  = await fetch(`/casadets/saldos-favor/${_anularSaldoId}/anular`, {
+            method:  'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body:    form,
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) throw new Error(data.message || 'No se pudo anular el saldo.');
+
+        _anularModalInst.hide();
+        window.location.reload();
+
+    } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.classList.remove('d-none');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Anular saldo';
+        document.getElementById('anularSaldoConfirm').checked = false;
+    }
+});
 
 /* Modal 3: Convertir notas de credito */
 const CLIENTES_NC = {!! $clientesJsonAc !!};
