@@ -406,6 +406,7 @@ function renderFactura(data) {
                               lineaSeleccionadaYa[String(d.id)] !== undefined)
                            ? String(lineaSeleccionadaYa[String(d.id)]) : '';
         const tr = document.createElement('tr');
+        if (checked) tr.style.cssText = 'background:#d1fae5;transition:background .2s;';
         tr.innerHTML = `
             <td class="text-center">
                 <input type="checkbox" name="detalles[]" value="${d.id}"
@@ -440,6 +441,7 @@ function renderFactura(data) {
             lineaSelect.disabled = !cb.checked;
             if (cb.checked)  cantInput.value = cantidadesIniciales[d.id] ?? d.cantidad;
             if (!cb.checked) cantInput.value = d.cantidad;
+            tr.style.background = cb.checked ? '#d1fae5' : '';
             actualizarSinSel();
         });
     });
