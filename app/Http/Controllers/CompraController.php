@@ -352,6 +352,7 @@ class CompraController extends Controller
         return Venta::with(['vendedor:id,nombre', 'detalles:id,venta_id,producto,cantidad,precio_unitario,subtotal'])
             ->select('id', 'vendedor_id', 'fecha', 'documento_tipo', 'documento_numero', 'total')
             ->whereIn('documento_tipo', ['factura', 'boleta', 'proforma'])
+            ->where('estado', '!=', 'anulado')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc')
             ->limit(300)
