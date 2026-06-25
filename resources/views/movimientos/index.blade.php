@@ -144,13 +144,23 @@
             <div class="card-body py-2">
                 <div class="small text-muted">Salidas activas (pág.)</div>
                 <div class="fw-bold text-danger">S/ {{ number_format($totales['salidas'], 2) }}</div>
+                @if($totales['reversas'] > 0)
+                    <div class="text-muted" style="font-size:.68rem;">
+                        + S/ {{ number_format($totales['reversas'], 2) }} reversas (no afectan)
+                    </div>
+                @endif
             </div>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card mov-stat-card {{ $totales['balance'] >= 0 ? 'border-primary' : 'border-warning' }} border-opacity-25">
             <div class="card-body py-2">
-                <div class="small text-muted">Balance (pág.)</div>
+                <div class="small text-muted">
+                    Balance (pág.)
+                    <span class="text-muted" style="font-size:.65rem;" title="Excluye anulaciones y saldo favor usado">
+                        <i class="bi bi-info-circle ms-1"></i>
+                    </span>
+                </div>
                 <div class="fw-bold {{ $totales['balance'] >= 0 ? 'text-primary' : 'text-warning' }}">
                     S/ {{ number_format($totales['balance'], 2) }}
                 </div>
@@ -295,6 +305,10 @@
                             <br><span class="badge bg-light text-secondary" style="font-size:.62rem;">pago venta</span>
                         @elseif($m->subtipo === 'saldo_favor_usado')
                             <br><span class="badge bg-light text-info" style="font-size:.62rem;">saldo favor</span>
+                            <br><span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.6rem;" title="No afecta el balance"><i class="bi bi-arrow-left-right me-1"></i>reversa</span>
+                        @elseif($m->subtipo === 'anulacion')
+                            <br><span class="badge bg-light text-danger" style="font-size:.62rem;">anulacion</span>
+                            <br><span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:.6rem;" title="No afecta el balance"><i class="bi bi-arrow-left-right me-1"></i>reversa</span>
                         @elseif($m->subtipo === 'compra')
                             <br><span class="badge bg-light text-warning" style="font-size:.62rem;">compra</span>
                         @elseif($m->subtipo === 'manual')

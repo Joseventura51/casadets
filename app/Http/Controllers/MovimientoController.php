@@ -61,16 +61,25 @@ class MovimientoController extends Controller
             }
         });
 
-        // Totales de la página — solo movimientos activos afectan balance
-        $col = $movimientos->getCollection();
+        // Totales de la página — solo movimientos activos afectan balance.
+        // Los subtipos 'anulacion' y 'saldo_favor_usado' son reversas internas
+        // (no representan flujo de caja real) y se excluyen del balance.
+        $col    = $movimientos->getCollection();
         $activos = $col->where('estado', 'activo');
+
+        $SUBTIPOS_NO_BALANCE = ['anulacion', 'saldo_favor_usado'];
+        $activosBalance = $activos->filter(
+            fn ($m) => !in_array($m->subtipo, $SUBTIPOS_NO_BALANCE, true)
+        );
+
         $totales = [
-            'ingresos' => round($activos->where('tipo', 'ingreso')->sum('monto'), 2),
-            'salidas'  => round($activos->where('tipo', 'salida')->sum('monto'), 2),
+            'ingresos' => round($activosBalance->where('tipo', 'ingreso')->sum('monto'), 2),
+            'salidas'  => round($activosBalance->where('tipo', 'salida')->sum('monto'), 2),
             'balance'  => round(
-                $activos->where('tipo', 'ingreso')->sum('monto') - $activos->where('tipo', 'salida')->sum('monto'),
+                $activosBalance->where('tipo', 'ingreso')->sum('monto') - $activosBalance->where('tipo', 'salida')->sum('monto'),
                 2
             ),
+            'reversas' => round($activos->whereIn('subtipo', $SUBTIPOS_NO_BALANCE)->sum('monto'), 2),
         ];
 
         $categorias = Movimiento::query()
