@@ -395,6 +395,7 @@ class ReporteController extends Controller
             ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
             ->whereIn('vd.venta_id', $ventaIds)
             ->selectRaw("vd.venta_id,
+                         vd.producto_id,
                          COALESCE(vd.producto,'Manual')      as nombre_producto,
                          vd.codigo,
                          vd.cantidad,
@@ -411,6 +412,7 @@ class ReporteController extends Controller
             ->whereIn('v.id', $ventaIds)
             ->selectRaw("v.id, v.documento_tipo, v.documento_numero, v.fecha, v.total,
                          COALESCE(v.ajuste, 0) as ajuste,
+                         v.estado,
                          COALESCE(c.nombre,'Sin cliente') as cliente")
             ->orderByDesc('v.fecha')
             ->get();
@@ -418,8 +420,14 @@ class ReporteController extends Controller
         $resultado = $ventas->map(function ($v) use ($detalles) {
             $ajuste        = (float) $v->ajuste;
             $totalACobrar  = (float) $v->total + $ajuste;
+            $ventaLineas   = $detalles[$v->id] ?? collect();
 
-            $lineas = ($detalles[$v->id] ?? collect())->map(fn($d) => [
+            // Detectar si algún producto del catálogo (con producto_id) no tiene costo asignado
+            $sinCostear = $ventaLineas->contains(
+                fn($d) => $d->producto_id !== null && (float) $d->precio_costo == 0
+            );
+
+            $lineas = $ventaLineas->map(fn($d) => [
                 'producto'    => $d->nombre_producto,
                 'codigo'      => $d->codigo ?? '',
                 'cantidad'    => (float) $d->cantidad,
@@ -434,13 +442,15 @@ class ReporteController extends Controller
 
             $numero = trim(ucfirst($v->documento_tipo ?? 'Venta') . ' ' . ($v->documento_numero ?? '#' . $v->id));
             return [
-                'id'       => $v->id,
-                'numero'   => $numero,
-                'fecha'    => Carbon::parse($v->fecha)->format('d/m/Y'),
-                'cliente'  => $v->cliente,
-                'total'    => round($totalACobrar, 2),
-                'ganancia' => $gananciaReal,
-                'lineas'   => $lineas,
+                'id'          => $v->id,
+                'numero'      => $numero,
+                'fecha'       => Carbon::parse($v->fecha)->format('d/m/Y'),
+                'cliente'     => $v->cliente,
+                'total'       => round($totalACobrar, 2),
+                'ganancia'    => $gananciaReal,
+                'estado'      => $v->estado ?? 'pagado',
+                'sin_costear' => $sinCostear,
+                'lineas'      => $lineas,
             ];
         });
 

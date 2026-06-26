@@ -1136,27 +1136,51 @@ function filtrarModalUtilidad(q) {
         return;
     }
 
+    // Solo las ventas pagadas y con todos los productos costeados cuentan para totales
+    const listaValida = lista.filter(v => v.estado === 'pagado' && !v.sin_costear);
+
     tbody.innerHTML = lista.map((v, i) => {
-        const colGan = v.ganancia >= 0 ? 'text-success' : 'text-danger';
-        const lineasHtml = v.lineas.map(l => `
+        const esPendiente  = v.estado !== 'pagado';
+        const esSinCostear = v.sin_costear;
+        const noContabiliza = esPendiente || esSinCostear;
+
+        // Badges de advertencia
+        let avisos = '';
+        if (esPendiente)
+            avisos += `<span class="badge ms-1 text-dark" style="background:#fde68a;font-size:.6rem;vertical-align:middle;">
+                ⚠ Pendiente de cancelar · utilidad no considerada</span>`;
+        if (esSinCostear)
+            avisos += `<span class="badge ms-1 text-white" style="background:#f97316;font-size:.6rem;vertical-align:middle;">
+                ⚠ Productos sin costear · no considerada</span>`;
+
+        const colGan  = noContabiliza ? 'text-muted' : (v.ganancia >= 0 ? 'text-success' : 'text-danger');
+        const rowStyle = noContabiliza ? 'opacity:.65;' : '';
+
+        const lineasHtml = v.lineas.map(l => {
+            const sinCosto = l.costo === 0;
+            return `
             <tr class="table-light" style="font-size:.78rem;">
-                <td colspan="2" class="ps-4 text-muted">${l.codigo ? '<span class=\'text-muted\'>['+l.codigo+']</span> ' : ''}${l.producto}</td>
+                <td colspan="2" class="ps-4 text-muted">
+                    ${l.codigo ? '<span class=\'text-muted\'>['+l.codigo+']</span> ' : ''}${l.producto}
+                    ${sinCosto && v.sin_costear ? '<span class=\'badge bg-warning text-dark ms-1\' style=\'font-size:.55rem;\'>sin costo</span>' : ''}
+                </td>
                 <td class="text-muted">×${fmtN(l.cantidad)}</td>
                 <td class="text-end text-muted">${fmt(l.precio_venta)}</td>
                 <td class="text-end ${l.ganancia >= 0 ? 'text-success' : 'text-danger'} fw-semibold">
-                    ${fmt(l.ganancia)}
+                    ${noContabiliza ? '<span class="text-muted">—</span>' : fmt(l.ganancia)}
                     ${l.costo > 0 ? '<br><span class=\'text-muted\' style=\'font-size:.7rem;\'>Costo: '+fmt(l.costo)+'</span>' : ''}
                 </td>
                 <td></td>
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
 
         return `
-        <tr class="fw-semibold" style="cursor:pointer;" onclick="toggleLineasUtilidad(${i})">
-            <td>${v.numero}</td>
+        <tr class="fw-semibold" style="cursor:pointer;${rowStyle}" onclick="toggleLineasUtilidad(${i})">
+            <td>${v.numero}${avisos}</td>
             <td>${v.fecha}</td>
             <td>${v.cliente}</td>
-            <td class="text-end">${fmt(v.total)}</td>
-            <td class="text-end ${colGan}">${fmt(v.ganancia)}</td>
+            <td class="text-end ${noContabiliza ? 'text-muted' : ''}">${fmt(v.total)}</td>
+            <td class="text-end ${colGan}">${noContabiliza ? '—' : fmt(v.ganancia)}</td>
             <td class="text-center text-muted">
                 <i class="bi bi-chevron-right" id="iconUtil${i}"></i>
             </td>
@@ -1177,18 +1201,23 @@ function filtrarModalUtilidad(q) {
         </tr>`;
     }).join('');
 
-    const totalG = lista.reduce((s, v) => s + v.ganancia, 0);
-    const totalV = lista.reduce((s, v) => s + v.total, 0);
+    const totalG   = listaValida.reduce((s, v) => s + v.ganancia, 0);
+    const totalV   = listaValida.reduce((s, v) => s + v.total,    0);
+    const excluidas = lista.length - listaValida.length;
+
     tfoot.innerHTML = `
         <tr>
-            <td colspan="3" class="text-end text-muted">Totales (${lista.length} ventas)</td>
+            <td colspan="3" class="text-end text-muted">
+                Totales (${listaValida.length} ventas consideradas
+                ${excluidas > 0 ? `<span class="text-warning">· ${excluidas} excluida${excluidas>1?'s':''}</span>` : ''})
+            </td>
             <td class="text-end">${fmt(totalV)}</td>
             <td class="text-end ${totalG >= 0 ? 'text-success' : 'text-danger'}">${fmt(totalG)}</td>
             <td></td>
         </tr>`;
 
-    document.getElementById('modalUtilidadResumen').textContent =
-        `${lista.length} ventas · Utilidad total: S/ ${fmtN(totalG)}`;
+    const resumen = `${listaValida.length} de ${lista.length} ventas consideradas · Utilidad total: S/ ${fmtN(totalG)}`;
+    document.getElementById('modalUtilidadResumen').textContent = resumen;
 }
 
 function toggleLineasUtilidad(i) {
