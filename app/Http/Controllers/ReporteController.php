@@ -353,8 +353,25 @@ class ReporteController extends Controller
         $periodo        = $r->input('periodo', 'diario');
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        // IDs de ventas válidas
-        $ventaIds = $this->qVentas($r, $desde, $hasta)->pluck('id');
+        // IDs de ventas válidas: solo 'pagado' (sin pendientes ni parciales)
+        $ventaIds = $this->qVentas($r, $desde, $hasta)
+            ->where('ventas.estado', 'pagado')
+            ->pluck('id');
+
+        // Excluir ventas que tienen alguna línea sin costear completamente
+        if ($ventaIds->isNotEmpty()) {
+            $sinCostearIds = DB::table('venta_detalles as vd')
+                ->whereIn('vd.venta_id', $ventaIds)
+                ->leftJoin(
+                    DB::raw('(SELECT venta_detalle_id, SUM(cantidad) as cant_costeada FROM compra_venta_detalle GROUP BY venta_detalle_id) as cvd_sum'),
+                    'vd.id', '=', 'cvd_sum.venta_detalle_id'
+                )
+                ->whereRaw('COALESCE(cvd_sum.cant_costeada, 0) < vd.cantidad')
+                ->pluck('vd.venta_id')
+                ->unique();
+
+            $ventaIds = $ventaIds->diff($sinCostearIds)->values();
+        }
 
         if ($ventaIds->isEmpty()) {
             return response()->json(['detalle' => []]);
