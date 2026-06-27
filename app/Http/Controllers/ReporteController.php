@@ -66,6 +66,31 @@ class ReporteController extends Controller
         return $q;
     }
 
+    /**
+     * IDs de ventas aptas para calcular utilidad:
+     * estado = 'pagado' Y todas sus líneas tienen costo completo en compra_venta_detalle.
+     */
+    private function ventaIdsParaUtilidad(Request $r, $desde, $hasta): \Illuminate\Support\Collection
+    {
+        $ids = $this->qVentas($r, $desde, $hasta)
+            ->where('ventas.estado', 'pagado')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) return collect();
+
+        $sinCostearIds = DB::table('venta_detalles as vd')
+            ->whereIn('vd.venta_id', $ids)
+            ->leftJoin(
+                DB::raw('(SELECT venta_detalle_id, SUM(cantidad) as cant_costeada FROM compra_venta_detalle GROUP BY venta_detalle_id) as cvd_sum'),
+                'vd.id', '=', 'cvd_sum.venta_detalle_id'
+            )
+            ->whereRaw('COALESCE(cvd_sum.cant_costeada, 0) < vd.cantidad')
+            ->pluck('vd.venta_id')
+            ->unique();
+
+        return $ids->diff($sinCostearIds)->values();
+    }
+
     /** Condiciones de ventas válidas para joins desde venta_detalles */
     private function qDetalles(Request $r, $desde, $hasta)
     {
@@ -163,12 +188,19 @@ class ReporteController extends Controller
             ->get()
             ->keyBy('fecha');
 
-        // ── Costo por día (desde venta_detalles, con los mismos filtros) ─────────
-        $costoPorDia = $this->qDetalles($r, $desde, $hasta)
-            ->selectRaw("DATE(v.fecha) as fecha, SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total_costo")
-            ->groupByRaw('DATE(v.fecha)')
-            ->get()
-            ->keyBy('fecha');
+        // ── IDs válidas para utilidad (pagado + 100% costeado) ──────────────
+        $validIds = $this->ventaIdsParaUtilidad($r, $desde, $hasta);
+
+        // ── Costo por día (solo ventas válidas) ─────────────────────────────
+        $costoPorDia = $validIds->isEmpty() ? collect() :
+            DB::table('venta_detalles as vd')
+                ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
+                ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
+                ->whereIn('vd.venta_id', $validIds)
+                ->selectRaw("DATE(v.fecha) as fecha, SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total_costo")
+                ->groupByRaw('DATE(v.fecha)')
+                ->get()
+                ->keyBy('fecha');
 
         // ── Merge por fecha ──────────────────────────────────────────────────────
         $porDia = $ventasPorDia->map(function ($v) use ($costoPorDia) {
@@ -182,13 +214,22 @@ class ReporteController extends Controller
             ];
         })->values();
 
-        // ── Costo y utilidad totales ─────────────────────
-        $totalCosto = (float) $this->qDetalles($r, $desde, $hasta)
-            ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total')
-            ->value('total');
+        // ── Costo y utilidad totales (solo ventas válidas) ───────────────────
+        $totalVentasValidas = $validIds->isEmpty() ? 0.0 :
+            (float) DB::table('ventas')
+                ->whereIn('id', $validIds)
+                ->selectRaw('COALESCE(SUM(total + COALESCE(ajuste,0)),0) as total')
+                ->value('total');
 
-        $utilidad = round($totalVentas - $totalCosto, 2);
-        $margen   = $totalVentas > 0 ? round($utilidad / $totalVentas * 100, 1) : 0;
+        $totalCosto = $validIds->isEmpty() ? 0.0 :
+            (float) DB::table('venta_detalles as vd')
+                ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
+                ->whereIn('vd.venta_id', $validIds)
+                ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total')
+                ->value('total');
+
+        $utilidad = round($totalVentasValidas - $totalCosto, 2);
+        $margen   = $totalVentasValidas > 0 ? round($utilidad / $totalVentasValidas * 100, 1) : 0;
 
         // ── Compras ──────────────────────────────────────
         $cmpSum = DB::table('compras')
@@ -237,33 +278,23 @@ class ReporteController extends Controller
             ->selectRaw('COALESCE(SUM((v.total + COALESCE(v.ajuste, 0)) * COALESCE(vend.comision_porcentaje, 0) / 100), 0) as total')
             ->value('total');
 
-        // ── FASE 4: Utilidad Real (costo congelado en compra_venta_detalle) ──
-        $cajas = \App\Services\VendedorScope::cajaIds();
-        $ids   = \App\Services\VendedorScope::ids();
-
-        $utilRealData = DB::table('compra_venta_detalle as cvd')
-            ->join('venta_detalles as vd', 'cvd.venta_detalle_id', '=', 'vd.id')
-            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
-            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
-            ->where('v.estado', '!=', 'anulado')
-            ->whereNull('v.deleted_at')
-            ->where('v.es_referencia_fiscal', false)
-            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
-            ->whereNotNull('cvd.costo_total')
-            ->when($cajas !== null, fn($q) => $q->whereIn('v.caja_id', $cajas))
-            ->when($cajas === null && $ids !== null, fn($q) => $q->whereIn('v.vendedor_id', $ids))
-            ->when($cajas === null && $ids === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
-            ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
-            ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
-            ->selectRaw('SUM(cvd.cantidad * vd.precio_unitario) as ingreso_real, SUM(cvd.costo_total) as costo_real')
-            ->first();
+        // ── FASE 4: Utilidad Real (costo congelado, solo ventas válidas) ──
+        $utilRealData = $validIds->isEmpty() ? null :
+            DB::table('compra_venta_detalle as cvd')
+                ->join('venta_detalles as vd', 'cvd.venta_detalle_id', '=', 'vd.id')
+                ->whereIn('vd.venta_id', $validIds)
+                ->whereNotNull('cvd.costo_total')
+                ->selectRaw('SUM(cvd.cantidad * vd.precio_unitario) as ingreso_real, SUM(cvd.costo_total) as costo_real')
+                ->first();
 
         $ingresoReal  = (float) ($utilRealData->ingreso_real ?? 0);
         $costoReal    = (float) ($utilRealData->costo_real   ?? 0);
         $utilidadReal = round($ingresoReal - $costoReal, 2);
         $margenReal   = $ingresoReal > 0 ? round($utilidadReal / $ingresoReal * 100, 1) : 0;
 
-        // ── FASE 2: Cobertura de costeo por línea de venta ───────────────
+        // ── FASE 2: Cobertura de costeo (sobre todas las ventas del período, informativo) ──
+        $cajas = \App\Services\VendedorScope::cajaIds();
+        $ids   = \App\Services\VendedorScope::ids();
         $cobertura = DB::table('venta_detalles as vd')
             ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
@@ -353,25 +384,8 @@ class ReporteController extends Controller
         $periodo        = $r->input('periodo', 'diario');
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        // IDs de ventas válidas: solo 'pagado' (sin pendientes ni parciales)
-        $ventaIds = $this->qVentas($r, $desde, $hasta)
-            ->where('ventas.estado', 'pagado')
-            ->pluck('id');
-
-        // Excluir ventas que tienen alguna línea sin costear completamente
-        if ($ventaIds->isNotEmpty()) {
-            $sinCostearIds = DB::table('venta_detalles as vd')
-                ->whereIn('vd.venta_id', $ventaIds)
-                ->leftJoin(
-                    DB::raw('(SELECT venta_detalle_id, SUM(cantidad) as cant_costeada FROM compra_venta_detalle GROUP BY venta_detalle_id) as cvd_sum'),
-                    'vd.id', '=', 'cvd_sum.venta_detalle_id'
-                )
-                ->whereRaw('COALESCE(cvd_sum.cant_costeada, 0) < vd.cantidad')
-                ->pluck('vd.venta_id')
-                ->unique();
-
-            $ventaIds = $ventaIds->diff($sinCostearIds)->values();
-        }
+        // Solo ventas pagadas y con todos sus costos completos
+        $ventaIds = $this->ventaIdsParaUtilidad($r, $desde, $hasta);
 
         if ($ventaIds->isEmpty()) {
             return response()->json(['detalle' => []]);
