@@ -225,16 +225,30 @@ class ReporteSemanalController extends Controller
     {
         $reporte = ReporteSemanal::with('cerradoPor:id,name')->findOrFail($id);
 
-        $ventas = DB::table('ventas as v')
+        $ventasBase = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
             ->leftJoin('vendedores as vend', 'v.vendedor_id', '=', 'vend.id')
-            ->where('v.reporte_semanal_id', $id)
+            ->whereBetween('v.fecha', [$reporte->periodo_inicio->toDateString(), $reporte->periodo_fin->toDateString()])
+            ->whereNull('v.deleted_at')
+            ->where('v.es_referencia_fiscal', false)
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
             ->selectRaw("v.id, v.fecha, v.documento_tipo, v.documento_numero,
                          COALESCE(c.nombre,'') as cliente, COALESCE(vend.nombre,'') as vendedor,
                          COALESCE(v.metodo_pago,'') as metodo_pago,
-                         v.total + COALESCE(v.ajuste, 0) as total, v.estado")
+                         v.total + COALESCE(v.ajuste, 0) as total, v.estado,
+                         v.reporte_semanal_id")
             ->orderBy('v.fecha')
             ->get();
+
+        // Archivadas en este reporte
+        $ventas = $ventasBase->where('reporte_semanal_id', $id)->values();
+
+        // Pendientes al momento del cierre: estaban en el rango pero NO se archivaron en este reporte
+        // Pueden estar aún abiertas (null) o haber sido archivadas en una semana posterior.
+        $ventasPendientes = $ventasBase->where('reporte_semanal_id', '!=', $id)->values()
+            ->map(fn($v) => (object) array_merge((array) $v, [
+                'archivada_en_otra_semana' => $v->reporte_semanal_id !== null,
+            ]));
 
         $compras = DB::table('compras')
             ->where('reporte_semanal_id', $id)
@@ -260,6 +274,7 @@ class ReporteSemanalController extends Controller
                 'cerrado_en' => $reporte->created_at->format('d/m/Y H:i'),
             ],
             'ventas' => $ventas,
+            'ventas_pendientes' => $ventasPendientes,
             'compras' => $compras,
         ]);
     }
