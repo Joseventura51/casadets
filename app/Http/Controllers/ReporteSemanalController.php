@@ -177,6 +177,12 @@ class ReporteSemanalController extends Controller
 
     public function cerrar(Request $r): JsonResponse
     {
+        abort_if(
+            !$r->user()?->esCajero() && !$r->user()?->esAdmin(),
+            403,
+            'Solo el cajero o un administrador pueden cerrar la semana.'
+        );
+
         $r->validate(['fin' => 'required|date']);
 
         $inicio = $this->resolverInicio();
@@ -257,8 +263,31 @@ class ReporteSemanalController extends Controller
 
         $spreadsheet = new Spreadsheet();
 
-        // ── Hoja 1: Resumen ───────────────────────────────
-        $sr = $spreadsheet->getActiveSheet()->setTitle('Resumen');
+        // ── Hoja 1: Vista general (igual que la tabla en pantalla) ────────────
+        $sg = $spreadsheet->getActiveSheet()->setTitle('Vista general');
+        $sg->fromArray(
+            ['Período','Ventas','Compras','Utilidad','Comisión','Pendientes','Cerrado por','Cerrado el'],
+            null, 'A1'
+        );
+        $this->headerStyle($sg, 'A1:H1', '1E3A5F');
+        $sg->fromArray([[
+            $reporte->periodo_inicio->format('d/m/Y') . ' — ' . $reporte->periodo_fin->format('d/m/Y'),
+            round((float)$reporte->total_ventas,     2),
+            round((float)$reporte->total_compras,    2),
+            round((float)$reporte->utilidad,         2),
+            round((float)$reporte->comision_utilidad,2),
+            $reporte->ventas_pendientes,
+            $reporte->cerradoPor?->name ?? '—',
+            $reporte->created_at->format('d/m/Y H:i'),
+        ]], null, 'A2');
+        foreach (['B','C','D','E'] as $col) {
+            $sg->getStyle("{$col}2")->getNumberFormat()->setFormatCode('#,##0.00');
+        }
+        $sg->getStyle('F2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        foreach (range('A','H') as $col) { $sg->getColumnDimension($col)->setAutoSize(true); }
+
+        // ── Hoja 2: Resumen de métricas ───────────────────
+        $sr = $spreadsheet->createSheet()->setTitle('Resumen');
         $titulo = 'Semana ' . $reporte->periodo_inicio->format('d/m/Y') . ' — ' . $reporte->periodo_fin->format('d/m/Y');
         $sr->setCellValue('A1', $titulo);
         $sr->getStyle('A1')->getFont()->setBold(true)->setSize(13);

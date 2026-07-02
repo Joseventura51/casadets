@@ -496,6 +496,7 @@
 
         {{-- TAB REPORTES SEMANALES --}}
         <div class="tab-pane fade p-3" id="tabSemanales">
+            @if(auth()->user()->esCajero() || auth()->user()->esAdmin())
             <div class="card border-0 bg-light mb-3">
                 <div class="card-body">
                     <h6 class="small fw-bold text-uppercase text-muted mb-3">
@@ -555,6 +556,12 @@
                     </div>
                 </div>
             </div>
+            @else
+            <div class="alert alert-secondary d-flex align-items-center gap-2 mb-3 py-2">
+                <i class="bi bi-lock text-muted fs-5"></i>
+                <span class="small">El cierre de semana solo puede realizarlo el <strong>Cajero</strong>.</span>
+            </div>
+            @endif
 
             <h6 class="small fw-bold text-uppercase text-muted mb-3">
                 <i class="bi bi-archive me-1"></i>Semanas cerradas
