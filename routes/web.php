@@ -48,6 +48,8 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::get('/reportes',                  [ReporteController::class, 'index']);
         Route::get('/reportes/datos',            [ReporteController::class, 'datos']);
         Route::get('/reportes/utilidad-detalle', [ReporteController::class, 'utilidadDetalle']);
+        Route::get('/reportes/ventas-detalle',   [ReporteController::class, 'ventasDetalle']);
+        Route::get('/reportes/compras-detalle',  [ReporteController::class, 'comprasDetalle']);
         Route::get('/reportes/export-excel',     [ReporteController::class, 'exportExcel']);
         Route::get('/reportes/export-pdf',       [ReporteController::class, 'exportPdf']);
     });

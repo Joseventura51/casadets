@@ -156,10 +156,10 @@
     {{-- KPI Cards --}}
     <div class="row g-3 mb-4" id="kpiRow">
         <div class="col-6 col-md-3">
-            <div class="card kpi-card kpi-ventas p-3 h-100">
+            <div class="card kpi-card kpi-ventas p-3 h-100" onclick="abrirModalVentas()" title="Click para ver detalle" style="cursor:pointer;">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label">Total Ventas</div>
+                        <div class="kpi-label">Total Ventas <small class="text-muted">(click para detalle)</small></div>
                         <div class="kpi-value text-primary" id="kpiTotalVentas">S/ 0.00</div>
                         <div class="kpi-sub"><span id="kpiCantVentas">0</span> ventas</div>
                     </div>
@@ -172,10 +172,10 @@
             </div>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card kpi-card kpi-compras p-3 h-100">
+            <div class="card kpi-card kpi-compras p-3 h-100" onclick="abrirModalCompras()" title="Click para ver detalle" style="cursor:pointer;">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label">Total Compras</div>
+                        <div class="kpi-label">Total Compras <small class="text-muted">(click para detalle)</small></div>
                         <div class="kpi-value text-success" id="kpiTotalCompras">S/ 0.00</div>
                         <div class="kpi-sub"><span id="kpiCantCompras">0</span> compras</div>
                     </div>
@@ -536,6 +536,92 @@
     </div>
 </div>
 
+{{-- ── MODAL VENTAS ──────────────────────────────────────── --}}
+<div class="modal fade" id="modalVentas" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;">
+                <h5 class="modal-title"><i class="bi bi-cart3 me-2"></i>Detalle de Ventas</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="modalVentasLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="text-muted mt-2">Cargando detalle...</p>
+                </div>
+                <div id="modalVentasContent" style="display:none;">
+                    <div class="p-3 pb-0">
+                        <input type="text" class="form-control form-control-sm" id="buscarVentas"
+                               placeholder="Buscar por cliente, número de venta...">
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm rpt-table mb-0" id="tablaVentasModal">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>N° Venta</th>
+                                    <th>Fecha</th>
+                                    <th>Cliente</th>
+                                    <th>Método pago</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyVentasModal"></tbody>
+                            <tfoot class="table-light fw-bold" id="tfootVentasModal"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <small class="text-muted" id="modalVentasResumen">—</small>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- ── MODAL COMPRAS ─────────────────────────────────────── --}}
+<div class="modal fade" id="modalCompras" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;">
+                <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>Detalle de Compras</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="modalComprasLoading" class="text-center py-5">
+                    <div class="spinner-border text-success"></div>
+                    <p class="text-muted mt-2">Cargando detalle...</p>
+                </div>
+                <div id="modalComprasContent" style="display:none;">
+                    <div class="p-3 pb-0">
+                        <input type="text" class="form-control form-control-sm" id="buscarCompras"
+                               placeholder="Buscar por proveedor, número...">
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm rpt-table mb-0" id="tablaComprasModal">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>N°</th>
+                                    <th>Fecha</th>
+                                    <th>Proveedor</th>
+                                    <th>Método pago</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyComprasModal"></tbody>
+                            <tfoot class="table-light fw-bold" id="tfootComprasModal"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <small class="text-muted" id="modalComprasResumen">—</small>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 /* ── Estado global ──────────────────────────────────── */
@@ -544,6 +630,8 @@ let datosActuales  = null;
 let chartVentas    = null;
 let chartMetodos   = null;
 let modalUtilidad  = null;
+let modalVentas    = null;
+let modalCompras   = null;
 
 const fmt = n => 'S/ ' + parseFloat(n || 0).toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
 const fmtN = n => parseFloat(n || 0).toLocaleString('es-PE', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -551,6 +639,8 @@ const fmtN = n => parseFloat(n || 0).toLocaleString('es-PE', {minimumFractionDig
 /* ── Inicialización ─────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
     modalUtilidad = new bootstrap.Modal(document.getElementById('modalUtilidad'));
+    modalVentas   = new bootstrap.Modal(document.getElementById('modalVentas'));
+    modalCompras  = new bootstrap.Modal(document.getElementById('modalCompras'));
 
     document.querySelectorAll('.tab-periodo').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -985,6 +1075,136 @@ function toggleLineasUtilidad(i) {
     const open = row.style.display === 'table-row';
     row.style.display  = open ? 'none' : 'table-row';
     icon.className     = open ? 'bi bi-chevron-right' : 'bi bi-chevron-down text-primary';
+}
+
+/* ── Modal Ventas ────────────────────────────────────── */
+let detalleVentasModal = [];
+
+function abrirModalVentas() {
+    modalVentas.show();
+    document.getElementById('modalVentasLoading').style.display = 'block';
+    document.getElementById('modalVentasContent').style.display = 'none';
+
+    fetch('/reportes/ventas-detalle?' + _params(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        detalleVentasModal = data.detalle;
+        filtrarModalVentas('');
+        document.getElementById('modalVentasLoading').style.display = 'none';
+        document.getElementById('modalVentasContent').style.display = 'block';
+        document.getElementById('buscarVentas').value = '';
+        document.getElementById('buscarVentas').oninput = function() {
+            filtrarModalVentas(this.value.toLowerCase());
+        };
+    })
+    .catch(() => {
+        document.getElementById('modalVentasLoading').innerHTML =
+            '<p class="text-danger text-center">Error al cargar.</p>';
+    });
+}
+
+function filtrarModalVentas(q) {
+    const lista = q
+        ? detalleVentasModal.filter(v =>
+            v.numero.toLowerCase().includes(q) ||
+            v.cliente.toLowerCase().includes(q))
+        : detalleVentasModal;
+
+    const tbody = document.getElementById('tbodyVentasModal');
+    const tfoot = document.getElementById('tfootVentasModal');
+
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin resultados</td></tr>';
+        tfoot.innerHTML = '';
+        document.getElementById('modalVentasResumen').textContent = '0 ventas';
+        return;
+    }
+
+    tbody.innerHTML = lista.map(v => `
+        <tr>
+            <td>${v.numero}</td>
+            <td>${v.fecha}</td>
+            <td>${v.cliente}</td>
+            <td><span class="badge bg-light text-dark border">${v.metodo_pago}</span></td>
+            <td class="text-end fw-semibold">${fmt(v.total)}</td>
+        </tr>`).join('');
+
+    const totalV = lista.reduce((s, v) => s + v.total, 0);
+    tfoot.innerHTML = `
+        <tr>
+            <td colspan="4" class="text-end text-muted">Totales (${lista.length} ventas)</td>
+            <td class="text-end">${fmt(totalV)}</td>
+        </tr>`;
+
+    document.getElementById('modalVentasResumen').textContent =
+        `${lista.length} ventas · Total: S/ ${fmtN(totalV)}`;
+}
+
+/* ── Modal Compras ───────────────────────────────────── */
+let detalleComprasModal = [];
+
+function abrirModalCompras() {
+    modalCompras.show();
+    document.getElementById('modalComprasLoading').style.display = 'block';
+    document.getElementById('modalComprasContent').style.display = 'none';
+
+    fetch('/reportes/compras-detalle?' + _params(), {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        detalleComprasModal = data.detalle;
+        filtrarModalCompras('');
+        document.getElementById('modalComprasLoading').style.display = 'none';
+        document.getElementById('modalComprasContent').style.display = 'block';
+        document.getElementById('buscarCompras').value = '';
+        document.getElementById('buscarCompras').oninput = function() {
+            filtrarModalCompras(this.value.toLowerCase());
+        };
+    })
+    .catch(() => {
+        document.getElementById('modalComprasLoading').innerHTML =
+            '<p class="text-danger text-center">Error al cargar.</p>';
+    });
+}
+
+function filtrarModalCompras(q) {
+    const lista = q
+        ? detalleComprasModal.filter(c =>
+            c.numero.toLowerCase().includes(q) ||
+            c.proveedor.toLowerCase().includes(q))
+        : detalleComprasModal;
+
+    const tbody = document.getElementById('tbodyComprasModal');
+    const tfoot = document.getElementById('tfootComprasModal');
+
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Sin resultados</td></tr>';
+        tfoot.innerHTML = '';
+        document.getElementById('modalComprasResumen').textContent = '0 compras';
+        return;
+    }
+
+    tbody.innerHTML = lista.map(c => `
+        <tr>
+            <td>${c.numero}</td>
+            <td>${c.fecha}</td>
+            <td>${c.proveedor}</td>
+            <td><span class="badge bg-light text-dark border">${c.metodo_pago}</span></td>
+            <td class="text-end fw-semibold">${fmt(c.total)}</td>
+        </tr>`).join('');
+
+    const totalC = lista.reduce((s, c) => s + c.total, 0);
+    tfoot.innerHTML = `
+        <tr>
+            <td colspan="4" class="text-end text-muted">Totales (${lista.length} compras)</td>
+            <td class="text-end">${fmt(totalC)}</td>
+        </tr>`;
+
+    document.getElementById('modalComprasResumen').textContent =
+        `${lista.length} compras · Total: S/ ${fmtN(totalC)}`;
 }
 
 /* ── Exportar Excel / PDF ───────────────────────────── */

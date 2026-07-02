@@ -448,6 +448,70 @@ class ReporteController extends Controller
         return response()->json(['detalle' => $resultado]);
     }
 
+    public function ventasDetalle(Request $r): JsonResponse
+    {
+        $periodo        = $r->input('periodo', 'diario');
+        [$desde, $hasta] = $this->resolverRango($r, $periodo);
+
+        $ventas = $this->qVentas($r, $desde, $hasta)
+            ->leftJoin('clientes as cl', 'ventas.cliente_id', '=', 'cl.id')
+            ->selectRaw("ventas.id, ventas.documento_tipo, ventas.documento_numero, ventas.fecha, ventas.estado,
+                         COALESCE(ventas.metodo_pago,'No especificado') as metodo_pago,
+                         COALESCE(cl.nombre,'Sin cliente') as cliente,
+                         (ventas.total + COALESCE(ventas.ajuste,0)) as total")
+            ->orderByDesc('ventas.fecha')
+            ->get()
+            ->map(function ($v) {
+                $numero = trim(ucfirst($v->documento_tipo ?? 'Venta') . ' ' . ($v->documento_numero ?? '#' . $v->id));
+                return [
+                    'id'          => $v->id,
+                    'numero'      => $numero,
+                    'fecha'       => Carbon::parse($v->fecha)->format('d/m/Y'),
+                    'cliente'     => $v->cliente,
+                    'metodo_pago' => ucfirst($v->metodo_pago),
+                    'estado'      => ucfirst($v->estado),
+                    'total'       => round((float) $v->total, 2),
+                ];
+            });
+
+        return response()->json([
+            'detalle' => $ventas,
+            'total'   => round((float) $ventas->sum('total'), 2),
+            'cantidad'=> $ventas->count(),
+        ]);
+    }
+
+    public function comprasDetalle(Request $r): JsonResponse
+    {
+        $periodo        = $r->input('periodo', 'diario');
+        [$desde, $hasta] = $this->resolverRango($r, $periodo);
+
+        $cajaIds = \App\Services\VendedorScope::cajaIds();
+
+        $compras = DB::table('compras')
+            ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+            ->whereNull('deleted_at')
+            ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
+            ->selectRaw("id, fecha, empresa, documento_tipo, documento_numero,
+                         COALESCE(metodo_pago,'No especificado') as metodo_pago, monto_total")
+            ->orderByDesc('fecha')
+            ->get()
+            ->map(fn($c) => [
+                'id'          => $c->id,
+                'numero'      => trim(($c->documento_tipo ? ucfirst($c->documento_tipo) : 'Compra') . ' ' . ($c->documento_numero ?? '#' . $c->id)),
+                'fecha'       => Carbon::parse($c->fecha)->format('d/m/Y'),
+                'proveedor'   => $c->empresa,
+                'metodo_pago' => ucfirst($c->metodo_pago),
+                'total'       => round((float) $c->monto_total, 2),
+            ]);
+
+        return response()->json([
+            'detalle'  => $compras,
+            'total'    => round((float) $compras->sum('total'), 2),
+            'cantidad' => $compras->count(),
+        ]);
+    }
+
     public function exportExcel(Request $r): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
         $periodo        = $r->input('periodo', 'diario');
