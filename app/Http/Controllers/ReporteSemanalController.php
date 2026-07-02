@@ -286,7 +286,66 @@ class ReporteSemanalController extends Controller
         $sg->getStyle('F2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         foreach (range('A','H') as $col) { $sg->getColumnDimension($col)->setAutoSize(true); }
 
-        // ── Hoja 2: Resumen de métricas ───────────────────
+        // ── Hoja 2: Histórico de todas las semanas cerradas ───────────────────
+        $historico = ReporteSemanal::with('cerradoPor:id,name')
+            ->orderBy('periodo_inicio')
+            ->get();
+
+        $sh = $spreadsheet->createSheet()->setTitle('Histórico');
+        $sh->fromArray(
+            ['#','Período','Ventas','Compras','Utilidad','Comisión','Pendientes','Cerrado por','Cerrado el'],
+            null, 'A1'
+        );
+        $this->headerStyle($sh, 'A1:I1', '1E3A5F');
+
+        $hRow = 2;
+        foreach ($historico as $i => $rep) {
+            $esCurrent = ($rep->id === $id);
+            $sh->fromArray([[
+                $i + 1,
+                $rep->periodo_inicio->format('d/m/Y') . ' — ' . $rep->periodo_fin->format('d/m/Y'),
+                round((float)$rep->total_ventas,      2),
+                round((float)$rep->total_compras,     2),
+                round((float)$rep->utilidad,          2),
+                round((float)$rep->comision_utilidad, 2),
+                $rep->ventas_pendientes,
+                $rep->cerradoPor?->name ?? '—',
+                $rep->created_at->format('d/m/Y H:i'),
+            ]], null, "A{$hRow}");
+
+            // Destacar la semana actual con fondo amarillo claro
+            if ($esCurrent) {
+                $sh->getStyle("A{$hRow}:I{$hRow}")
+                    ->getFill()->setFillType(Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB('FFF9C4');
+            }
+            $hRow++;
+        }
+
+        // Totales al final
+        if ($historico->count() > 0) {
+            $sh->setCellValue("A{$hRow}", 'TOTAL');
+            $sh->getStyle("A{$hRow}")->getFont()->setBold(true);
+            foreach (['C','D','E','F'] as $col) {
+                $col1 = $col . '2';
+                $colN = $col . ($hRow - 1);
+                $sh->setCellValue("{$col}{$hRow}", "=SUM({$col1}:{$colN})");
+                $sh->getStyle("{$col}{$hRow}")->getFont()->setBold(true);
+            }
+            $sh->getStyle("A{$hRow}:I{$hRow}")->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => '1E3A5F']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBEAFE']],
+                'borders' => ['top' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '1E3A5F']]],
+            ]);
+        }
+
+        foreach (['C','D','E','F'] as $col) {
+            $sh->getStyle("{$col}2:{$col}{$hRow}")->getNumberFormat()->setFormatCode('#,##0.00');
+        }
+        $sh->getStyle("G2:G{$hRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        foreach (range('A','I') as $col) { $sh->getColumnDimension($col)->setAutoSize(true); }
+
+        // ── Hoja 3: Resumen de métricas ───────────────────
         $sr = $spreadsheet->createSheet()->setTitle('Resumen');
         $titulo = 'Semana ' . $reporte->periodo_inicio->format('d/m/Y') . ' — ' . $reporte->periodo_fin->format('d/m/Y');
         $sr->setCellValue('A1', $titulo);
