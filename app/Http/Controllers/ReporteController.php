@@ -44,6 +44,7 @@ class ReporteController extends Controller
             ->whereBetween('ventas.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('ventas.estado', '!=', 'anulado')
             ->whereNull('ventas.deleted_at')
+            ->whereNull('ventas.reporte_semanal_id')
             ->where('ventas.es_referencia_fiscal', false)
             ->where(fn($q) => $q->whereNull('ventas.documento_tipo')
                 ->orWhere('ventas.documento_tipo', '!=', 'nota_credito'));
@@ -76,19 +77,7 @@ class ReporteController extends Controller
             ->where('ventas.estado', 'pagado')
             ->pluck('id');
 
-        if ($ids->isEmpty()) return collect();
-
-        $sinCostearIds = DB::table('venta_detalles as vd')
-            ->whereIn('vd.venta_id', $ids)
-            ->leftJoin(
-                DB::raw('(SELECT venta_detalle_id, SUM(cantidad) as cant_costeada FROM compra_venta_detalle GROUP BY venta_detalle_id) as cvd_sum'),
-                'vd.id', '=', 'cvd_sum.venta_detalle_id'
-            )
-            ->whereRaw('COALESCE(cvd_sum.cant_costeada, 0) < vd.cantidad')
-            ->pluck('vd.venta_id')
-            ->unique();
-
-        return $ids->diff($sinCostearIds)->values();
+        return \App\Services\VentaCosteo::idsCompletamenteCosteados($ids);
     }
 
     /** Condiciones de ventas válidas para joins desde venta_detalles */
@@ -100,6 +89,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->whereNull('v.reporte_semanal_id')
             ->where('v.es_referencia_fiscal', false)
             ->where(fn($q) => $q->whereNull('v.documento_tipo')
                 ->orWhere('v.documento_tipo', '!=', 'nota_credito'));
@@ -235,6 +225,7 @@ class ReporteController extends Controller
         $cmpSum = DB::table('compras')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('deleted_at')
+            ->whereNull('reporte_semanal_id')
             ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(monto_total),0) as total')
             ->first();
 
@@ -245,6 +236,7 @@ class ReporteController extends Controller
         $porProveedor = DB::table('compras')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('deleted_at')
+            ->whereNull('reporte_semanal_id')
             ->selectRaw("COALESCE(empresa,'Sin proveedor') as proveedor, COUNT(*) as count, SUM(monto_total) as total")
             ->groupBy('empresa')
             ->orderByDesc('total')
@@ -255,6 +247,7 @@ class ReporteController extends Controller
             ->join('compras as c', 'cl.compra_id', '=', 'c.id')
             ->whereBetween('c.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('c.deleted_at')
+            ->whereNull('c.reporte_semanal_id')
             ->selectRaw("COALESCE(cl.producto,'Manual') as nombre, SUM(cl.cantidad) as cantidad, SUM(cl.monto_total) as total")
             ->groupBy('cl.producto')
             ->orderByDesc('total')
@@ -270,6 +263,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->whereNull('v.reporte_semanal_id')
             ->where('v.es_referencia_fiscal', false)
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
             ->when($cajaIdsComision !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIdsComision))
@@ -292,6 +286,9 @@ class ReporteController extends Controller
         $utilidadReal = round($ingresoReal - $costoReal, 2);
         $margenReal   = $ingresoReal > 0 ? round($utilidadReal / $ingresoReal * 100, 1) : 0;
 
+        // Comisión sobre utilidad: domingo 50%, resto de días 35% (por venta)
+        $comisionUtilidad = \App\Services\ComisionUtilidad::calcular($validIds);
+
         // ── FASE 2: Cobertura de costeo (sobre todas las ventas del período, informativo) ──
         $cajas = \App\Services\VendedorScope::cajaIds();
         $ids   = \App\Services\VendedorScope::ids();
@@ -300,6 +297,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->whereNull('v.reporte_semanal_id')
             ->where('v.es_referencia_fiscal', false)
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
             ->when($cajas !== null, fn($q) => $q->whereIn('v.caja_id', $cajas))
@@ -356,6 +354,7 @@ class ReporteController extends Controller
                 'invertido'      => round($totalCompras, 2),
                 'recuperado'     => round($totalVentas, 2),
                 'comision_total' => round($comisionTotal, 2),
+                'comision_utilidad' => round($comisionUtilidad, 2),
                 // FASE 4: Utilidad Real
                 'utilidad_real'  => $utilidadReal,
                 'margen_real'    => $margenReal,
@@ -526,13 +525,14 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->whereNull('v.reporte_semanal_id')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
             ->when($cajaIds === null && $vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
             ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
-            ->selectRaw("v.fecha, v.documento_tipo, v.documento_numero,
+            ->selectRaw("v.id, v.fecha, v.documento_tipo, v.documento_numero,
                          COALESCE(c.nombre,'') as cliente, COALESCE(vend.nombre,'') as vendedor,
                          COALESCE(v.metodo_pago,'') as metodo_pago,
                          v.total + COALESCE(v.ajuste, 0) as total, v.estado")
@@ -542,6 +542,7 @@ class ReporteController extends Controller
         $compras = DB::table('compras')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('deleted_at')
+            ->whereNull('reporte_semanal_id')
             ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
             ->selectRaw("fecha, empresa, documento_tipo, documento_numero, metodo_pago, monto_total")
             ->orderBy('fecha')
@@ -555,6 +556,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->whereNull('v.reporte_semanal_id')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
@@ -564,6 +566,11 @@ class ReporteController extends Controller
             ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
             ->value('total');
         $totalC = $compras->sum('monto_total');
+
+        $validIdsExcel = \App\Services\VentaCosteo::idsCompletamenteCosteados(
+            $ventas->where('estado', 'pagado')->pluck('id')
+        );
+        $comisionUtilidadExcel = \App\Services\ComisionUtilidad::calcular($validIdsExcel);
 
         $spreadsheet = new Spreadsheet();
 
@@ -636,6 +643,8 @@ class ReporteController extends Controller
             ['Costo Productos', round($costoT, 2)],
             ['Utilidad',        round($totalV - $costoT, 2)],
             ['Margen %',        $totalV > 0 ? round(($totalV - $costoT) / $totalV * 100, 1) : 0],
+            ['',''],
+            ['Comisión sobre Utilidad (35%/50% dom.)', round($comisionUtilidadExcel, 2)],
         ], null, 'A2');
         $sr->getColumnDimension('A')->setWidth(22);
         $sr->getColumnDimension('B')->setAutoSize(true);
@@ -660,6 +669,7 @@ class ReporteController extends Controller
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('estado', '!=', 'anulado')
             ->whereNull('deleted_at')
+            ->whereNull('reporte_semanal_id')
             ->where(fn($q) => $q->whereNull('documento_tipo')->orWhere('documento_tipo', '!=', 'nota_credito'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('vendedor_id', $vendorIds))
@@ -675,6 +685,7 @@ class ReporteController extends Controller
         $comprasSummary = DB::table('compras')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('deleted_at')
+            ->whereNull('reporte_semanal_id')
             ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
             ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(monto_total),0) as total')
             ->first();
@@ -688,6 +699,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->where('v.estado', '!=', 'anulado')
             ->whereNull('v.deleted_at')
+            ->whereNull('v.reporte_semanal_id')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
@@ -696,6 +708,18 @@ class ReporteController extends Controller
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
             ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
             ->value('total');
+
+        $validIdsPdf = \App\Services\VentaCosteo::idsCompletamenteCosteados(
+            DB::table('ventas')
+                ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+                ->where('estado', 'pagado')
+                ->whereNull('deleted_at')
+                ->whereNull('reporte_semanal_id')
+                ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
+                ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('vendedor_id', $vendorIds))
+                ->pluck('id')
+        );
+        $comisionUtilidadPdf = \App\Services\ComisionUtilidad::calcular($validIdsPdf);
 
         $topClientes = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
@@ -733,6 +757,7 @@ class ReporteController extends Controller
         $data['margen']   = $totalVentas > 0 ? round($data['utilidad'] / $totalVentas * 100, 1) : 0;
         $data['igvVentas']  = round($totalVentas * 18 / 118, 2);
         $data['igvCompras'] = round($totalCompras * 18 / 118, 2);
+        $data['comisionUtilidad'] = round($comisionUtilidadPdf, 2);
 
         $pdf = app('dompdf.wrapper');
         $pdf->loadView('reportes-pdf', $data);

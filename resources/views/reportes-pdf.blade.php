@@ -99,6 +99,12 @@ tbody tr:nth-child(even) { background:#f8fafc; }
             <div class="u-val {{ $utilidad >= 0 ? 'purple' : 'red' }}">S/ {{ number_format($utilidad, 2) }}</div>
         </div>
     </div>
+    <div class="u-grid" style="margin-top:8px;">
+        <div class="u-cell">
+            <div class="u-label">Comisión sobre Utilidad (35% / 50% dom.)</div>
+            <div class="u-val amber">S/ {{ number_format($comisionUtilidad ?? 0, 2) }}</div>
+        </div>
+    </div>
 </div>
 
 {{-- Top Clientes --}}

@@ -205,7 +205,7 @@
             <div class="card kpi-card kpi-margen p-3 h-100">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label">35% de la Utilidad</div>
+                        <div class="kpi-label">Comisión Utilidad (35%/50% dom.)</div>
                         <div class="kpi-value text-warning" id="kpiMargen">S/ 0.00</div>
                         <div class="kpi-sub">Utilidad total: <span id="kpiInvertido">S/ 0.00</span></div>
                     </div>
@@ -258,6 +258,11 @@
         <li class="nav-item">
             <a class="nav-link" data-bs-toggle="tab" href="#tabUtilidad">
                 <i class="bi bi-graph-up-arrow me-1"></i>Utilidad
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#tabSemanales" onclick="cargarSemanales()">
+                <i class="bi bi-calendar-check me-1"></i>Reportes Semanales
             </a>
         </li>
     </ul>
@@ -486,6 +491,92 @@
                         onclick="abrirModalUtilidad()">
                     <i class="bi bi-table me-1"></i>Ver detalle por venta
                 </button>
+            </div>
+        </div>
+
+        {{-- TAB REPORTES SEMANALES --}}
+        <div class="tab-pane fade p-3" id="tabSemanales">
+            <div class="card border-0 bg-light mb-3">
+                <div class="card-body">
+                    <h6 class="small fw-bold text-uppercase text-muted mb-3">
+                        <i class="bi bi-lock me-1"></i>Cerrar semana
+                    </h6>
+                    <p class="small text-muted mb-3" id="semInicioInfo">Cargando información del período abierto...</p>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-auto">
+                            <label class="form-label small mb-1">Fecha de cierre (fin de período)</label>
+                            <input type="date" class="form-control form-control-sm" id="semFechaFin">
+                        </div>
+                        <div class="col-auto">
+                            <button class="btn btn-sm btn-outline-primary" onclick="previsualizarCierre()">
+                                <i class="bi bi-eye me-1"></i>Previsualizar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="semPreviewBox" class="mt-3" style="display:none;">
+                        <div class="row g-2 mb-2">
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white rounded p-2 text-center border">
+                                    <div class="small text-muted">Ventas a archivar</div>
+                                    <div class="fw-bold" id="semPvVentas">S/ 0.00</div>
+                                    <div class="small text-muted" id="semPvCantVentas">0 ventas</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white rounded p-2 text-center border">
+                                    <div class="small text-muted">Compras a archivar</div>
+                                    <div class="fw-bold" id="semPvCompras">S/ 0.00</div>
+                                    <div class="small text-muted" id="semPvCantCompras">0 compras</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white rounded p-2 text-center border">
+                                    <div class="small text-muted">Utilidad</div>
+                                    <div class="fw-bold text-purple" style="color:#7c3aed;" id="semPvUtilidad">S/ 0.00</div>
+                                    <div class="small text-muted" id="semPvMargen">0%</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="bg-white rounded p-2 text-center border">
+                                    <div class="small text-muted">Comisión Utilidad</div>
+                                    <div class="fw-bold text-warning" id="semPvComision">S/ 0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning small py-2 mb-3" id="semPvPendientesAlert" style="display:none;">
+                            <i class="bi bi-exclamation-triangle me-1"></i>
+                            <span id="semPvPendientesTexto"></span> venta(s) no anuladas, no pagadas o sin costeo completo
+                            <strong>no se archivarán</strong> y quedarán visibles para la siguiente semana.
+                        </div>
+                        <button class="btn btn-sm btn-danger" onclick="confirmarCierre()">
+                            <i class="bi bi-lock-fill me-1"></i>Confirmar y cerrar semana
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <h6 class="small fw-bold text-uppercase text-muted mb-3">
+                <i class="bi bi-archive me-1"></i>Semanas cerradas
+            </h6>
+            <div class="table-responsive">
+                <table class="table table-sm rpt-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Período</th>
+                            <th class="text-end">Ventas</th>
+                            <th class="text-end">Compras</th>
+                            <th class="text-end">Utilidad</th>
+                            <th class="text-end">Comisión</th>
+                            <th class="text-center">Pendientes</th>
+                            <th>Cerrado por</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodySemanales">
+                        <tr><td colspan="8" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -731,7 +822,7 @@ function renderDatos(data) {
     document.getElementById('kpiCosto').textContent         = fmt(u.total_costo);
     document.getElementById('kpiVentasUtilidad').textContent= fmt(u.total_ventas);
 
-    document.getElementById('kpiMargen').textContent        = fmt(Math.round(u.utilidad * 0.35 * 100) / 100);
+    document.getElementById('kpiMargen').textContent        = fmt(u.comision_utilidad ?? 0);
     document.getElementById('kpiInvertido').textContent     = fmt(u.utilidad);
     document.getElementById('kpiRecuperado').textContent    = u.margen + '%';
 
@@ -1225,6 +1316,156 @@ function exportarExcel() {
 
 function exportarPdf() {
     window.open('/reportes/export-pdf?' + _params(), '_blank');
+}
+
+/* ── Reportes Semanales ─────────────────────────────── */
+let semInicioSugerido = null;
+
+function cargarSemanales() {
+    fetch('/reportes/semanales', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(d => {
+            semInicioSugerido = d.inicio_sugerido;
+            const info = document.getElementById('semInicioInfo');
+            if (semInicioSugerido) {
+                info.textContent = `El próximo cierre incluirá desde ${formatearFecha(semInicioSugerido)} hasta la fecha que elijas.`;
+                const fin = document.getElementById('semFechaFin');
+                if (!fin.value) fin.value = new Date().toISOString().slice(0, 10);
+            } else {
+                info.textContent = 'No hay ventas ni compras abiertas para archivar.';
+            }
+            renderTablaSemanales(d.reportes);
+        })
+        .catch(() => {
+            document.getElementById('semInicioInfo').textContent = 'Error al cargar información.';
+        });
+}
+
+function formatearFecha(iso) {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+}
+
+function renderTablaSemanales(lista) {
+    const tbody = document.getElementById('tbodySemanales');
+    if (!lista.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>';
+        return;
+    }
+    tbody.innerHTML = lista.map(r => `
+        <tr>
+            <td>${r.periodo_inicio} — ${r.periodo_fin}</td>
+            <td class="text-end">${fmt(r.total_ventas)}</td>
+            <td class="text-end">${fmt(r.total_compras)}</td>
+            <td class="text-end">${fmt(r.utilidad)}</td>
+            <td class="text-end">${fmt(r.comision_utilidad)}</td>
+            <td class="text-center">${r.ventas_pendientes > 0 ? `<span class="badge bg-warning text-dark">${r.ventas_pendientes}</span>` : '<span class="badge bg-success">0</span>'}</td>
+            <td>${r.cerrado_por || '—'}</td>
+            <td><button class="btn btn-sm btn-outline-secondary" onclick="verDetalleSemanal(${r.id})"><i class="bi bi-eye"></i></button></td>
+        </tr>
+    `).join('');
+}
+
+function previsualizarCierre() {
+    const fin = document.getElementById('semFechaFin').value;
+    if (!fin) { alert('Selecciona una fecha de cierre.'); return; }
+
+    fetch('/reportes/semanales/preview?fin=' + fin, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json().then(d => ({ status: r.status, body: d })))
+        .then(({ status, body }) => {
+            if (status !== 200) { alert(body.error || 'Error al previsualizar.'); return; }
+            const t = body.totales;
+            document.getElementById('semPvVentas').textContent      = fmt(t.total_ventas);
+            document.getElementById('semPvCantVentas').textContent  = t.cantidad_ventas + ' ventas';
+            document.getElementById('semPvCompras').textContent     = fmt(t.total_compras);
+            document.getElementById('semPvCantCompras').textContent = t.cantidad_compras + ' compras';
+            document.getElementById('semPvUtilidad').textContent    = fmt(t.utilidad);
+            document.getElementById('semPvMargen').textContent      = t.margen + '%';
+            document.getElementById('semPvComision').textContent    = fmt(t.comision_utilidad);
+
+            const alertBox = document.getElementById('semPvPendientesAlert');
+            if (t.ventas_pendientes > 0) {
+                document.getElementById('semPvPendientesTexto').textContent = t.ventas_pendientes;
+                alertBox.style.display = '';
+            } else {
+                alertBox.style.display = 'none';
+            }
+            document.getElementById('semPreviewBox').style.display = '';
+        })
+        .catch(() => alert('Error al previsualizar el cierre.'));
+}
+
+function confirmarCierre() {
+    const fin = document.getElementById('semFechaFin').value;
+    if (!fin) return;
+    if (!confirm('¿Confirmas cerrar la semana hasta el ' + formatearFecha(fin) + '? Esta acción archivará las ventas y compras del período y no se puede deshacer.')) return;
+
+    fetch('/reportes/semanales/cerrar', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ fin }),
+    })
+        .then(r => r.json().then(d => ({ status: r.status, body: d })))
+        .then(({ status, body }) => {
+            if (status !== 200) { alert(body.error || 'Error al cerrar la semana.'); return; }
+            document.getElementById('semPreviewBox').style.display = 'none';
+            cargarSemanales();
+            cargarDatos();
+            alert('Semana cerrada correctamente.');
+        })
+        .catch(() => alert('Error al cerrar la semana.'));
+}
+
+function verDetalleSemanal(id) {
+    fetch('/reportes/semanales/' + id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(r => r.json())
+        .then(d => {
+            const ventasFilas = d.ventas.map(v => `
+                <tr>
+                    <td>${v.fecha}</td>
+                    <td>${ucfirst(v.documento_tipo || '')} ${v.documento_numero || ''}</td>
+                    <td>${v.cliente}</td>
+                    <td>${v.vendedor}</td>
+                    <td><span class="badge ${v.estado === 'anulado' ? 'bg-danger' : 'bg-success'}">${v.estado}</span></td>
+                    <td class="text-end">${fmt(v.total)}</td>
+                </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted">Sin ventas</td></tr>';
+
+            const comprasFilas = d.compras.map(c => `
+                <tr>
+                    <td>${c.fecha}</td>
+                    <td>${c.empresa || ''}</td>
+                    <td>${ucfirst(c.documento_tipo || '')} ${c.documento_numero || ''}</td>
+                    <td class="text-end">${fmt(c.monto_total)}</td>
+                </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted">Sin compras</td></tr>';
+
+            const win = window.open('', '_blank');
+            win.document.write(`
+                <html><head><title>Semana ${d.reporte.periodo_inicio} - ${d.reporte.periodo_fin}</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                </head><body class="p-4">
+                <h4>Semana cerrada: ${d.reporte.periodo_inicio} — ${d.reporte.periodo_fin}</h4>
+                <p class="text-muted">Cerrado por ${d.reporte.cerrado_por || '—'} el ${d.reporte.cerrado_en}</p>
+                <div class="row mb-4">
+                    <div class="col-3"><strong>Ventas:</strong> ${fmt(d.reporte.total_ventas)} (${d.reporte.cantidad_ventas})</div>
+                    <div class="col-3"><strong>Compras:</strong> ${fmt(d.reporte.total_compras)} (${d.reporte.cantidad_compras})</div>
+                    <div class="col-3"><strong>Utilidad:</strong> ${fmt(d.reporte.utilidad)} (${d.reporte.margen}%)</div>
+                    <div class="col-3"><strong>Comisión:</strong> ${fmt(d.reporte.comision_utilidad)}</div>
+                </div>
+                <h6>Ventas archivadas</h6>
+                <table class="table table-sm"><thead><tr><th>Fecha</th><th>Doc.</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="text-end">Total</th></tr></thead>
+                <tbody>${ventasFilas}</tbody></table>
+                <h6 class="mt-4">Compras archivadas</h6>
+                <table class="table table-sm"><thead><tr><th>Fecha</th><th>Proveedor</th><th>Doc.</th><th class="text-end">Total</th></tr></thead>
+                <tbody>${comprasFilas}</tbody></table>
+                </body></html>
+            `);
+            win.document.close();
+        })
+        .catch(() => alert('Error al cargar el detalle.'));
 }
 
 /* ── Helpers ────────────────────────────────────────── */

@@ -52,6 +52,11 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::get('/reportes/compras-detalle',  [ReporteController::class, 'comprasDetalle']);
         Route::get('/reportes/export-excel',     [ReporteController::class, 'exportExcel']);
         Route::get('/reportes/export-pdf',       [ReporteController::class, 'exportPdf']);
+
+        Route::get('/reportes/semanales',         [\App\Http\Controllers\ReporteSemanalController::class, 'index']);
+        Route::get('/reportes/semanales/preview', [\App\Http\Controllers\ReporteSemanalController::class, 'preview']);
+        Route::post('/reportes/semanales/cerrar', [\App\Http\Controllers\ReporteSemanalController::class, 'cerrar']);
+        Route::get('/reportes/semanales/{id}',    [\App\Http\Controllers\ReporteSemanalController::class, 'detalle']);
     });
 
     // Movimientos
