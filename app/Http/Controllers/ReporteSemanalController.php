@@ -9,6 +9,11 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 
 class ReporteSemanalController extends Controller
 {
@@ -219,6 +224,147 @@ class ReporteSemanalController extends Controller
         });
 
         return response()->json(['ok' => true, 'id' => $reporte->id]);
+    }
+
+    public function exportExcel(int $id): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $reporte = ReporteSemanal::with('cerradoPor:id,name')->findOrFail($id);
+
+        // Todas las ventas del período (archivadas + pendientes)
+        $ventasBase = DB::table('ventas as v')
+            ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
+            ->leftJoin('vendedores as vend', 'v.vendedor_id', '=', 'vend.id')
+            ->whereBetween('v.fecha', [$reporte->periodo_inicio->toDateString(), $reporte->periodo_fin->toDateString()])
+            ->whereNull('v.deleted_at')
+            ->where('v.es_referencia_fiscal', false)
+            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
+            ->selectRaw("v.id, v.fecha, v.documento_tipo, v.documento_numero,
+                         COALESCE(c.nombre,'') as cliente, COALESCE(vend.nombre,'') as vendedor,
+                         COALESCE(v.metodo_pago,'') as metodo_pago,
+                         v.total + COALESCE(v.ajuste, 0) as total, v.estado,
+                         v.reporte_semanal_id")
+            ->orderBy('v.fecha')
+            ->get();
+
+        $ventasArchivadas  = $ventasBase->where('reporte_semanal_id', $id);
+        $ventasPendientes  = $ventasBase->where('reporte_semanal_id', '!=', $id);
+
+        $compras = DB::table('compras')
+            ->where('reporte_semanal_id', $id)
+            ->selectRaw('fecha, empresa, documento_tipo, documento_numero, metodo_pago, monto_total')
+            ->orderBy('fecha')
+            ->get();
+
+        $spreadsheet = new Spreadsheet();
+
+        // ── Hoja 1: Resumen ───────────────────────────────
+        $sr = $spreadsheet->getActiveSheet()->setTitle('Resumen');
+        $titulo = 'Semana ' . $reporte->periodo_inicio->format('d/m/Y') . ' — ' . $reporte->periodo_fin->format('d/m/Y');
+        $sr->setCellValue('A1', $titulo);
+        $sr->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+        $sr->setCellValue('A2', 'Cerrado por: ' . ($reporte->cerradoPor?->name ?? '—') . '   el ' . $reporte->created_at->format('d/m/Y H:i'));
+        $sr->getStyle('A2')->getFont()->setSize(10)->getColor()->setRGB('6c757d');
+
+        $sr->fromArray(['Métrica', 'Valor'], null, 'A4');
+        $this->headerStyle($sr, 'A4:B4', '2563EB');
+
+        $sr->fromArray([
+            ['Total ventas archivadas',   round((float)$reporte->total_ventas, 2)],
+            ['Cantidad ventas',           $reporte->cantidad_ventas],
+            ['Total compras archivadas',  round((float)$reporte->total_compras, 2)],
+            ['Cantidad compras',          $reporte->cantidad_compras],
+            ['Costo de productos',        round((float)$reporte->total_costo, 2)],
+            ['Utilidad',                  round((float)$reporte->utilidad, 2)],
+            ['Margen %',                  round((float)$reporte->margen, 1)],
+            ['Comisión por utilidad',     round((float)$reporte->comision_utilidad, 2)],
+            ['Ventas no archivadas',      $reporte->ventas_pendientes],
+        ], null, 'A5');
+
+        foreach (['B5','B7','B8','B9','B10','B11','B12'] as $cell) {
+            $sr->getStyle($cell)->getNumberFormat()->setFormatCode('#,##0.00');
+        }
+        $sr->getColumnDimension('A')->setWidth(28);
+        $sr->getColumnDimension('B')->setAutoSize(true);
+
+        // ── Hoja 2: Ventas archivadas ─────────────────────
+        $sv = $spreadsheet->createSheet()->setTitle('Ventas archivadas');
+        $sv->fromArray(['Fecha','Documento','Nro.','Cliente','Vendedor','Método pago','Total','Estado'], null, 'A1');
+        $this->headerStyle($sv, 'A1:H1', '059669');
+        $row = 2;
+        foreach ($ventasArchivadas as $v) {
+            $sv->fromArray([
+                Carbon::parse($v->fecha)->format('d/m/Y'),
+                ucfirst($v->documento_tipo ?? ''),
+                $v->documento_numero ?? '',
+                $v->cliente,
+                $v->vendedor,
+                ucfirst($v->metodo_pago),
+                (float) $v->total,
+                ucfirst($v->estado ?? ''),
+            ], null, "A{$row}");
+            $row++;
+        }
+        $sv->getStyle("G2:G{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+        foreach (range('A','H') as $col) { $sv->getColumnDimension($col)->setAutoSize(true); }
+
+        // ── Hoja 3: Ventas no archivadas ──────────────────
+        $sp = $spreadsheet->createSheet()->setTitle('Ventas no archivadas');
+        $sp->fromArray(['Fecha','Documento','Nro.','Cliente','Vendedor','Método pago','Total','Estado al cerrar','Situación actual'], null, 'A1');
+        $this->headerStyle($sp, 'A1:I1', 'D97706');
+        $row = 2;
+        foreach ($ventasPendientes as $v) {
+            $situacion = $v->reporte_semanal_id !== null ? 'Archivada en semana posterior' : 'Aún abierta';
+            $sp->fromArray([
+                Carbon::parse($v->fecha)->format('d/m/Y'),
+                ucfirst($v->documento_tipo ?? ''),
+                $v->documento_numero ?? '',
+                $v->cliente,
+                $v->vendedor,
+                ucfirst($v->metodo_pago),
+                (float) $v->total,
+                ucfirst($v->estado ?? ''),
+                $situacion,
+            ], null, "A{$row}");
+            $row++;
+        }
+        $sp->getStyle("G2:G{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+        foreach (range('A','I') as $col) { $sp->getColumnDimension($col)->setAutoSize(true); }
+
+        // ── Hoja 4: Compras ───────────────────────────────
+        $sc = $spreadsheet->createSheet()->setTitle('Compras');
+        $sc->fromArray(['Fecha','Proveedor','Tipo doc.','Nro. doc.','Método pago','Total'], null, 'A1');
+        $this->headerStyle($sc, 'A1:F1', '7C3AED');
+        $row = 2;
+        foreach ($compras as $c) {
+            $sc->fromArray([
+                Carbon::parse($c->fecha)->format('d/m/Y'),
+                $c->empresa ?? '',
+                ucfirst($c->documento_tipo ?? ''),
+                $c->documento_numero ?? '',
+                ucfirst($c->metodo_pago ?? ''),
+                (float) $c->monto_total,
+            ], null, "A{$row}");
+            $row++;
+        }
+        $sc->getStyle("F2:F{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+        foreach (range('A','F') as $col) { $sc->getColumnDimension($col)->setAutoSize(true); }
+
+        $spreadsheet->setActiveSheetIndex(0);
+        $filename = 'semana-' . $reporte->periodo_inicio->format('Y-m-d') . '_' . $reporte->periodo_fin->format('Y-m-d') . '.xlsx';
+        $path     = storage_path('app/' . $filename);
+        (new Xlsx($spreadsheet))->save($path);
+
+        return response()->download($path, $filename)->deleteFileAfterSend(true);
+    }
+
+    private function headerStyle(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet, string $range, string $color): void
+    {
+        $sheet->getStyle($range)->applyFromArray([
+            'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $color]],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            'borders'   => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => $color]]],
+        ]);
     }
 
     public function detalle(int $id): JsonResponse

@@ -1361,7 +1361,7 @@ function renderTablaSemanales(lista) {
             <td class="text-end">${fmt(r.comision_utilidad)}</td>
             <td class="text-center">${r.ventas_pendientes > 0 ? `<span class="badge bg-warning text-dark">${r.ventas_pendientes}</span>` : '<span class="badge bg-success">0</span>'}</td>
             <td>${r.cerrado_por || '—'}</td>
-            <td><button class="btn btn-sm btn-outline-secondary" onclick="verDetalleSemanal(${r.id})"><i class="bi bi-eye"></i></button></td>
+            <td><a class="btn btn-sm btn-outline-success" href="/reportes/semanales/${r.id}/excel" title="Descargar Excel"><i class="bi bi-file-earmark-excel"></i></a></td>
         </tr>
     `).join('');
 }
@@ -1420,130 +1420,6 @@ function confirmarCierre() {
         .catch(() => alert('Error al cerrar la semana.'));
 }
 
-function verDetalleSemanal(id) {
-    fetch('/reportes/semanales/' + id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(r => r.json())
-        .then(d => {
-            const estadoBadge = (estado) => {
-                const map = {
-                    pagado:   'bg-success',
-                    anulado:  'bg-danger',
-                    pendiente:'bg-warning text-dark',
-                    parcial:  'bg-info text-dark',
-                };
-                return `<span class="badge ${map[estado] || 'bg-secondary'}">${ucfirst(estado || '')}</span>`;
-            };
-
-            const ventasFilas = d.ventas.map(v => `
-                <tr>
-                    <td>${v.fecha}</td>
-                    <td>${ucfirst(v.documento_tipo || '')} ${v.documento_numero || ''}</td>
-                    <td>${v.cliente || '—'}</td>
-                    <td>${v.vendedor || '—'}</td>
-                    <td>${estadoBadge(v.estado)}</td>
-                    <td class="text-end">${fmt(v.total)}</td>
-                </tr>`).join('') || '<tr><td colspan="6" class="text-center text-muted py-2">Sin ventas archivadas</td></tr>';
-
-            const pendientesFilas = (d.ventas_pendientes || []).map(v => `
-                <tr class="${v.archivada_en_otra_semana ? 'table-light' : 'table-warning'}">
-                    <td>${v.fecha}</td>
-                    <td>${ucfirst(v.documento_tipo || '')} ${v.documento_numero || ''}</td>
-                    <td>${v.cliente || '—'}</td>
-                    <td>${v.vendedor || '—'}</td>
-                    <td>${estadoBadge(v.estado)}</td>
-                    <td class="text-end">${fmt(v.total)}</td>
-                    <td class="text-center">
-                        ${v.archivada_en_otra_semana
-                            ? '<span class="badge bg-secondary">Archivada después</span>'
-                            : '<span class="badge bg-warning text-dark">Aún abierta</span>'}
-                    </td>
-                </tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted py-2">Ninguna venta pendiente</td></tr>';
-
-            const comprasFilas = d.compras.map(c => `
-                <tr>
-                    <td>${c.fecha}</td>
-                    <td>${c.empresa || '—'}</td>
-                    <td>${ucfirst(c.documento_tipo || '')} ${c.documento_numero || ''}</td>
-                    <td class="text-end">${fmt(c.monto_total)}</td>
-                </tr>`).join('') || '<tr><td colspan="4" class="text-center text-muted py-2">Sin compras</td></tr>';
-
-            const pendientesSeccion = d.reporte.ventas_pendientes > 0
-                ? `<div class="alert alert-warning py-2 mb-3">
-                       <strong>⚠ ${d.reporte.ventas_pendientes} venta(s) no archivadas</strong> —
-                       al momento del cierre no estaban pagadas o no tenían costeo completo.
-                   </div>` : '';
-
-            const win = window.open('', '_blank');
-            win.document.write(`<!DOCTYPE html>
-                <html lang="es"><head>
-                <meta charset="UTF-8">
-                <title>Semana ${d.reporte.periodo_inicio} – ${d.reporte.periodo_fin}</title>
-                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-                <style>
-                    body { font-size: 13px; }
-                    h5 { border-bottom: 2px solid #dee2e6; padding-bottom: 6px; margin-bottom: 12px; }
-                    .kpi-box { background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:10px 14px; }
-                    .kpi-label { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:#6c757d; }
-                    .kpi-val { font-size:16px; font-weight:700; }
-                </style>
-                </head><body class="p-4">
-
-                <h4 class="mb-0">Semana cerrada: ${d.reporte.periodo_inicio} — ${d.reporte.periodo_fin}</h4>
-                <p class="text-muted small mb-4">Cerrado por <strong>${d.reporte.cerrado_por || '—'}</strong> el ${d.reporte.cerrado_en}</p>
-
-                <div class="row g-3 mb-4">
-                    <div class="col-3"><div class="kpi-box">
-                        <div class="kpi-label">Ventas archivadas</div>
-                        <div class="kpi-val text-primary">${fmt(d.reporte.total_ventas)}</div>
-                        <div class="small text-muted">${d.reporte.cantidad_ventas} ventas</div>
-                    </div></div>
-                    <div class="col-3"><div class="kpi-box">
-                        <div class="kpi-label">Compras archivadas</div>
-                        <div class="kpi-val text-success">${fmt(d.reporte.total_compras)}</div>
-                        <div class="small text-muted">${d.reporte.cantidad_compras} compras</div>
-                    </div></div>
-                    <div class="col-3"><div class="kpi-box">
-                        <div class="kpi-label">Utilidad</div>
-                        <div class="kpi-val" style="color:#7c3aed">${fmt(d.reporte.utilidad)}</div>
-                        <div class="small text-muted">Margen ${d.reporte.margen}%</div>
-                    </div></div>
-                    <div class="col-3"><div class="kpi-box">
-                        <div class="kpi-label">Comisión</div>
-                        <div class="kpi-val text-warning">${fmt(d.reporte.comision_utilidad)}</div>
-                        <div class="small text-muted">&nbsp;</div>
-                    </div></div>
-                </div>
-
-                <h5>Ventas archivadas</h5>
-                <table class="table table-sm table-hover mb-4">
-                    <thead class="table-light">
-                        <tr><th>Fecha</th><th>Doc.</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="text-end">Total</th></tr>
-                    </thead>
-                    <tbody>${ventasFilas}</tbody>
-                </table>
-
-                <h5>Ventas no archivadas en este cierre ${d.reporte.ventas_pendientes > 0 ? '<span class="badge bg-warning text-dark ms-2">' + d.reporte.ventas_pendientes + '</span>' : ''}</h5>
-                ${pendientesSeccion}
-                <table class="table table-sm mb-4">
-                    <thead class="table-light">
-                        <tr><th>Fecha</th><th>Doc.</th><th>Cliente</th><th>Vendedor</th><th>Estado al cerrar</th><th class="text-end">Total</th><th class="text-center">Situación actual</th></tr>
-                    </thead>
-                    <tbody>${pendientesFilas}</tbody>
-                </table>
-
-                <h5>Compras archivadas</h5>
-                <table class="table table-sm">
-                    <thead class="table-light">
-                        <tr><th>Fecha</th><th>Proveedor</th><th>Doc.</th><th class="text-end">Total</th></tr>
-                    </thead>
-                    <tbody>${comprasFilas}</tbody>
-                </table>
-
-                </body></html>`);
-            win.document.close();
-        })
-        .catch(() => alert('Error al cargar el detalle.'));
-}
 
 /* ── Helpers ────────────────────────────────────────── */
 function ucfirst(str) {
