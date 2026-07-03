@@ -6,6 +6,7 @@ use App\Models\Caja;
 use App\Models\Devolucion;
 use App\Models\Movimiento;
 use App\Models\Pago;
+use App\Models\SaldoFavor;
 use App\Models\Vendedor;
 use App\Services\VendedorScope;
 use Illuminate\Http\Request;
@@ -188,24 +189,92 @@ class MovimientoController extends Controller
                 }
             }
 
-            // 3. Crear movimiento contable de contrapartida para dejar el ledger balanceado
-            $tipoContra = $movimiento->tipo === 'ingreso' ? 'salida' : 'ingreso';
-            Movimiento::create([
-                'tipo'            => $tipoContra,
-                'subtipo'         => 'anulacion',
-                'origen'          => 'auto',
-                'estado'          => 'activo',
-                'empresa'         => $empresa,
-                'caja_id'         => $cajaId,
-                'categoria'       => 'anulacion',
-                'referencia_tipo' => 'movimiento',
-                'referencia_id'   => $movimiento->id,
-                'cliente_id'      => $movimiento->cliente_id,
-                'user_id'         => auth()->id(),
-                'monto'           => (float) $movimiento->monto,
-                'fecha'           => today(),
-                'observaciones'   => 'Contrapartida anulación Mov. #' . $movimiento->id . ' — ' . $motivo,
-            ]);
+            // 2.5 Si está vinculado a un saldo a favor (uso de saldo): restaurar el saldo
+            //     y revertir solo el monto del saldo en la venta — sin generar devolución
+            if ($movimiento->referencia_tipo === 'saldo_favor' && $movimiento->referencia_id) {
+                $saldo = SaldoFavor::find($movimiento->referencia_id);
+
+                if ($saldo) {
+                    $montoSaldo = round((float) $movimiento->monto, 2);
+
+                    // Restaurar monto disponible del saldo a favor
+                    $nuevoDisponible = round((float) $saldo->monto_disponible + $montoSaldo, 2);
+                    $montoOriginal   = (float) $saldo->monto_original;
+                    $nuevoEstado     = $nuevoDisponible >= $montoOriginal ? 'disponible' : 'parcialmente_usado';
+                    $saldo->update([
+                        'monto_disponible' => $nuevoDisponible,
+                        'estado'           => $nuevoEstado,
+                    ]);
+
+                    // Revertir el pago de saldo a favor que se creó al aplicar este saldo
+                    // (solo el monto del saldo, no el total del vale)
+                    $pagoSaldo = Pago::with('detalles.venta')
+                        ->where('metodo_pago', 'saldo_favor')
+                        ->where('observacion', 'like', "Uso de saldo a favor SF#{$saldo->id}%")
+                        ->where('monto_total', $montoSaldo)
+                        ->where('estado', '!=', 'anulado')
+                        ->orderBy('id', 'desc')
+                        ->first();
+
+                    if ($pagoSaldo) {
+                        foreach ($pagoSaldo->detalles as $dpf) {
+                            $venta = $dpf->venta;
+                            if (!$venta || in_array($venta->estado, ['anulado', 'anulado_nc'])) {
+                                continue;
+                            }
+
+                            // Solo se descuenta el monto del saldo — el resto del pago queda intacto
+                            $montoAplicado = (float) $dpf->monto_aplicado;
+                            $nuevoPagado   = max(0, round((float) $venta->pagado - $montoAplicado, 2));
+                            $venta->update(['pagado' => $nuevoPagado]);
+                            $venta->refresh();
+                            $venta->recalcularEstado();
+                        }
+                        $pagoSaldo->update(['estado' => 'anulado']);
+                    }
+                }
+            }
+
+            // 3. Crear movimiento contable de contrapartida para dejar el ledger balanceado.
+            //    Los movimientos saldo_favor_usado ya están excluidos del balance (SUBTIPOS_NO_BALANCE),
+            //    así que su contrapartida tampoco debe aparecer como ingreso/salida real.
+            if ($movimiento->subtipo === 'saldo_favor_usado') {
+                // Contrapartida interna: tipo contable, no altera el balance de caja
+                Movimiento::create([
+                    'tipo'            => 'contable',
+                    'subtipo'         => 'anulacion',
+                    'origen'          => 'auto',
+                    'estado'          => 'activo',
+                    'empresa'         => $empresa,
+                    'caja_id'         => $cajaId,
+                    'categoria'       => 'anulacion',
+                    'referencia_tipo' => 'movimiento',
+                    'referencia_id'   => $movimiento->id,
+                    'cliente_id'      => $movimiento->cliente_id,
+                    'user_id'         => auth()->id(),
+                    'monto'           => (float) $movimiento->monto,
+                    'fecha'           => today(),
+                    'observaciones'   => 'Reversa saldo a favor Mov. #' . $movimiento->id . ' — ' . $motivo,
+                ]);
+            } else {
+                $tipoContra = $movimiento->tipo === 'ingreso' ? 'salida' : 'ingreso';
+                Movimiento::create([
+                    'tipo'            => $tipoContra,
+                    'subtipo'         => 'anulacion',
+                    'origen'          => 'auto',
+                    'estado'          => 'activo',
+                    'empresa'         => $empresa,
+                    'caja_id'         => $cajaId,
+                    'categoria'       => 'anulacion',
+                    'referencia_tipo' => 'movimiento',
+                    'referencia_id'   => $movimiento->id,
+                    'cliente_id'      => $movimiento->cliente_id,
+                    'user_id'         => auth()->id(),
+                    'monto'           => (float) $movimiento->monto,
+                    'fecha'           => today(),
+                    'observaciones'   => 'Contrapartida anulación Mov. #' . $movimiento->id . ' — ' . $motivo,
+                ]);
+            }
         });
 
         return back()->with('success', 'Movimiento #' . $movimiento->id . ' anulado correctamente.');

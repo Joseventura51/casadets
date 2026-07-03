@@ -9,5 +9,6 @@
 - [ConciliacionService concurrency](conciliacion-service.md) — uses lockForUpdate() for PostgreSQL row-level locking; in SQLite serialized by transaction; validation runs POST-lock; audit table conciliacion_auditorias is append-only (no updated_at).
 - [NC aplicadas a ventas](nc-aplicaciones.md) — nc_aplicado column in ventas tracks total NC applied; nota_credito_aplicaciones table records each NC→venta link; anulado_nc = new sale estado when voided by NC; excluded like anulado from all reports.
 - [anulado_nc estado](anulado-nc-estado.md) — vales voided via NC get estado=anulado_nc; immutable (guard in recalcularEstado); excluded from all financial queries; static badge in ventas/index; no pago button.
+- [SaldoFavor anulación reversa](saldo-favor-anulacion.md) — annulling a saldo_favor_usado movimiento must restore SaldoFavor.monto_disponible and reverse only the saldo portion of venta.pagado; contrapartida must be tipo=contable not ingreso.
 - [Referencia fiscal exclusion](referencia-fiscal.md) — es_referencia_fiscal=true forces estado='pagado', saldo_pendiente=0, hides pago button, excluded from qVentas/qDetalles in ReporteController; Venta scope noFiscal() for ORM queries.
 - [Changelog location](.agents/changelog/CHANGELOG.md) — full session-by-session change log at .agents/changelog/CHANGELOG.md; update each session.

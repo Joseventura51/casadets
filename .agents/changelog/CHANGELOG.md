@@ -5,6 +5,29 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-07-03 — Restauración de saldo a favor al anular movimiento
+
+### Corrección: anulación de movimiento saldo_favor_usado
+
+**Problema:** Al anular un movimiento de tipo `saldo_favor_usado` (uso de saldo a favor para pagar un vale):
+1. El saldo a favor no se restauraba — permanecía como `usado` con `monto_disponible=0`.
+2. Se creaba una contrapartida `tipo='ingreso'` visible en la lista de movimientos (confuso para el usuario).
+3. El pago (Pago con `metodo_pago='saldo_favor'`) no se marcaba como anulado.
+4. El campo `pagado` de la venta no se reducía.
+
+**Archivos modificados:**
+- `app/Http/Controllers/MovimientoController.php`:
+  - Import: `use App\Models\SaldoFavor;`
+  - Paso 2.5 nuevo: cuando `referencia_tipo === 'saldo_favor'`, se restaura `monto_disponible` del SaldoFavor, se fija el `estado` a `disponible` o `parcialmente_usado` según el monto original, se busca el Pago asociado por `observacion LIKE "Uso de saldo a favor SF#N%"` + `monto_total`, se revierte el `pagado` de la venta (solo el monto del saldo, no el total del vale), y se marca el pago como `anulado`.
+  - Paso 3 modificado: si `subtipo === 'saldo_favor_usado'`, la contrapartida se crea con `tipo='contable'` en vez de `tipo='ingreso'`, manteniéndose excluida del balance por `SUBTIPOS_NO_BALANCE`.
+
+**Reglas preservadas:**
+- `SUBTIPOS_NO_BALANCE = ['anulacion', 'saldo_favor_usado']` — ya excluía ambos del balance de caja.
+- Solo el monto del saldo a favor se revierte en la venta. Si el vale tenía otros pagos en efectivo, esos se mantienen.
+- Las ventas `anulado` y `anulado_nc` se saltan al revertir el pagado.
+
+---
+
 ## 2026-07-03 — NC "Usar para anular vale"
 
 ### Nueva funcionalidad: Anular vale con nota de crédito
