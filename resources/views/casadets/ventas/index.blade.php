@@ -89,8 +89,10 @@
                 <a href="/casadets/ventas" class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;" title="Volver a hoy">
                     Hoy
                 </a>
-                <a href="/casadets/ventas?todas=1" class="btn btn-sm {{ $todas ? 'btn-secondary' : 'btn-outline-secondary' }}" style="font-size:.78rem;" title="Ver todas las fechas">
-                    Todas
+                <a href="/casadets/ventas?desde={{ now()->startOfMonth()->toDateString() }}&hasta={{ now()->endOfMonth()->toDateString() }}"
+                   class="btn btn-sm {{ $desde === now()->startOfMonth()->toDateString() && $hasta === now()->endOfMonth()->toDateString() ? 'btn-secondary' : 'btn-outline-secondary' }}"
+                   style="font-size:.78rem;" title="Ver todo el mes">
+                    Mes
                 </a>
             </div>
         </div>
