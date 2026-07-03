@@ -89,6 +89,11 @@
                 <a href="/casadets/ventas" class="btn btn-sm btn-outline-secondary" style="font-size:.78rem;" title="Volver a hoy">
                     Hoy
                 </a>
+                <a href="/casadets/ventas?desde={{ now()->startOfWeek()->toDateString() }}&hasta={{ now()->endOfWeek()->toDateString() }}"
+                   class="btn btn-sm {{ $desde === now()->startOfWeek()->toDateString() && $hasta === now()->endOfWeek()->toDateString() ? 'btn-secondary' : 'btn-outline-secondary' }}"
+                   style="font-size:.78rem;" title="Ver esta semana">
+                    Semana
+                </a>
                 <a href="/casadets/ventas?desde={{ now()->startOfMonth()->toDateString() }}&hasta={{ now()->endOfMonth()->toDateString() }}"
                    class="btn btn-sm {{ $desde === now()->startOfMonth()->toDateString() && $hasta === now()->endOfMonth()->toDateString() ? 'btn-secondary' : 'btn-outline-secondary' }}"
                    style="font-size:.78rem;" title="Ver todo el mes">
