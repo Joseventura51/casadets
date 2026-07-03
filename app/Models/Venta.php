@@ -17,6 +17,7 @@ class Venta extends Model
         'cliente_id',
         'total',
         'ajuste',
+        'nc_aplicado',
         'pagado',
         'metodo_pago',
         'documento_tipo',
@@ -31,6 +32,7 @@ class Venta extends Model
         'fecha'                => 'date',
         'total'                => 'decimal:2',
         'ajuste'               => 'decimal:2',
+        'nc_aplicado'          => 'decimal:2',
         'pagado'               => 'decimal:2',
         'es_referencia_fiscal' => 'boolean',
     ];
