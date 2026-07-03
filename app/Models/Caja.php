@@ -38,16 +38,28 @@ class Caja extends Model
         return $this->hasMany(\App\Models\User::class, 'usuario_caja', 'caja_id');
     }
 
-    public function sesionAbiertaHoy(): ?CajaSesion
+    public function sesionAbierta(): ?CajaSesion
     {
         return $this->sesiones()
-            ->whereDate('fecha', now()->toDateString())
             ->where('estado', 'abierta')
+            ->latest()
             ->first();
     }
 
+    public function estaAbierta(): bool
+    {
+        return $this->sesionAbierta() !== null;
+    }
+
+    /** @deprecated Usar sesionAbierta() */
+    public function sesionAbiertaHoy(): ?CajaSesion
+    {
+        return $this->sesionAbierta();
+    }
+
+    /** @deprecated Usar estaAbierta() */
     public function estaAbiertaHoy(): bool
     {
-        return $this->sesionAbiertaHoy() !== null;
+        return $this->estaAbierta();
     }
 }

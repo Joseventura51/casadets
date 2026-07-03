@@ -16,7 +16,6 @@ class CajaAbierta
         // Si hay caja seleccionada, validar que esté abierta
         if ($cajaId) {
             $abierta = CajaSesion::where('caja_id', $cajaId)
-                ->whereDate('fecha', now()->toDateString())
                 ->where('estado', 'abierta')
                 ->exists();
 
@@ -38,7 +37,6 @@ class CajaAbierta
         // Fallback: sin caja seleccionada, verificar empresa (compatibilidad histórica)
         $empresa = session('empresa', 'casadets');
         $abiertaEmpresa = CajaSesion::where('empresa', $empresa)
-            ->whereDate('fecha', now()->toDateString())
             ->where('estado', 'abierta')
             ->exists();
 

@@ -49,19 +49,33 @@ class CajaController extends Controller
             ?? $cajasDisponibles->first()?->empresa
             ?? $request->input('empresa', 'casadets');
 
-        // ── Sesión de caja del día actual ──────────────────────────────────
+        // ── Sesión activa (puede haber sido abierta en un día anterior) ────
+        // Si hay una sesión abierta, esa es la sesión activa sin importar cuándo se abrió.
+        // Si no hay ninguna abierta, se usa la última sesión del día consultado para mostrar
+        // el historial de cierre.
         $sesionHoy = null;
         if ($cajaSeleccionada) {
             $sesionHoy = CajaSesion::where('caja_id', $cajaSeleccionada->id)
-                ->whereDate('fecha', $hoy)
+                ->where('estado', 'abierta')
                 ->latest()
                 ->first();
+
+            if (!$sesionHoy) {
+                $sesionHoy = CajaSesion::where('caja_id', $cajaSeleccionada->id)
+                    ->whereDate('fecha', $hoy)
+                    ->latest()
+                    ->first();
+            }
         } else {
             // Fallback histórico por empresa
             $sesionHoy = CajaSesion::where('empresa', $empresa)
                 ->whereNull('caja_id')
-                ->whereDate('fecha', $hoy)
-                ->first();
+                ->where('estado', 'abierta')
+                ->first()
+                ?? CajaSesion::where('empresa', $empresa)
+                    ->whereNull('caja_id')
+                    ->whereDate('fecha', $hoy)
+                    ->first();
         }
 
         // ── Historial de sesiones del día (multi-apertura/cierre) ──────────
@@ -245,10 +259,10 @@ class CajaController extends Controller
         $hoy = Carbon::today()->toDateString();
         $sesion = CajaSesion::where('empresa', $request->empresa)
             ->whereNull('caja_id')
-            ->whereDate('fecha', $hoy)
-            ->first(); 
+            ->where('estado', 'abierta')
+            ->first();
 
-        if ($sesion && $sesion->estado === 'abierta') {
+        if ($sesion) {
             return back()->with('error', 'La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura.');
         }
 
@@ -300,15 +314,13 @@ class CajaController extends Controller
         }
 
         // Fallback sin caja
-        $hoy    = Carbon::today()->toDateString();
         $sesion = CajaSesion::where('empresa', $request->empresa)
             ->whereNull('caja_id')
-            ->whereDate('fecha', $hoy)
             ->where('estado', 'abierta')
             ->first();
 
         if (!$sesion) {
-            return back()->withErrors(['No hay apertura registrada para hoy.']);
+            return back()->withErrors(['No hay apertura registrada.']);
         }
 
         $sesion->update(['monto_cierre' => $request->monto_cierre, 'estado' => 'cerrada']);

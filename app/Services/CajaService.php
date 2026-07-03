@@ -82,7 +82,6 @@ class CajaService
         // Si hay caja_id en sesión, verificar directamente
         if ($cajaId) {
             return CajaSesion::where('caja_id', $cajaId)
-                ->whereDate('fecha', now()->toDateString())
                 ->where('estado', 'abierta')
                 ->exists();
         }
@@ -94,15 +93,13 @@ class CajaService
             session(['caja_id' => $cajaId]);
 
             return CajaSesion::where('caja_id', $cajaId)
-                ->whereDate('fecha', now()->toDateString())
                 ->where('estado', 'abierta')
                 ->exists();
         }
 
-        // Fallback: verificar si hay alguna caja abierta hoy (sin filtro por caja_id)
+        // Fallback: verificar si hay alguna caja abierta (sin filtro por caja_id)
         $empresa = session('empresa', 'casadets');
         return CajaSesion::where('empresa', $empresa)
-            ->whereDate('fecha', now()->toDateString())
             ->where('estado', 'abierta')
             ->exists();
     }
