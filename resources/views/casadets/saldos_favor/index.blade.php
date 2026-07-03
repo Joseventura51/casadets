@@ -1076,7 +1076,7 @@ function renderNotasCredito(ncs) {
                                     <option value="">Cargando vales pendientes...</option>
                                 </select>
                                 <div class="form-text small mt-1">
-                                    Solo vales pendientes.
+                                    Solo vales que cubren la deuda exacta.
                                 </div>
                             </div>
                             <div class="d-flex gap-1 align-self-start mt-4">
