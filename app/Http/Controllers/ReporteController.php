@@ -467,7 +467,7 @@ class ReporteController extends Controller
                     'numero'      => $numero,
                     'fecha'       => Carbon::parse($v->fecha)->format('d/m/Y'),
                     'cliente'     => $v->cliente,
-                    'metodo_pago' => ucfirst($v->metodo_pago),
+                    'metodo_pago' => self::formatMetodoPago($v->metodo_pago),
                     'estado'      => ucfirst($v->estado),
                     'total'       => round((float) $v->total, 2),
                 ];
@@ -774,5 +774,23 @@ class ReporteController extends Controller
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             'borders'   => ['bottom' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => strtoupper($color)]]],
         ]);
+    }
+
+    public static function formatMetodoPago(?string $raw): string
+    {
+        if (!$raw || $raw === 'No especificado') return 'No especificado';
+        $mapa = [
+            'saldo_favor'  => 'Saldo a favor',
+            'efectivo'     => 'Efectivo',
+            'transferencia'=> 'Transferencia',
+            'tarjeta'      => 'Tarjeta',
+            'yape'         => 'Yape',
+            'plin'         => 'Plin',
+            'credito'      => 'Crédito',
+        ];
+        return collect(explode(',', $raw))
+            ->map(fn($m) => $mapa[trim($m)] ?? ucfirst(trim(str_replace('_', ' ', $m))))
+            ->filter()
+            ->implode(', ');
     }
 }

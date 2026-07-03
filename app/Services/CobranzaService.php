@@ -487,7 +487,11 @@ class CobranzaService
             ]);
 
             $nuevoPagado = (float) bcadd((string) $venta->pagado, (string) $aplicar, 2);
-            $venta->update(['pagado' => $nuevoPagado]);
+            $metodoActual = $venta->metodo_pago ?? '';
+            $metodoNuevo  = $metodoActual && !str_contains($metodoActual, 'saldo_favor')
+                ? $metodoActual . ',saldo_favor'
+                : 'saldo_favor';
+            $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $metodoNuevo]);
             $venta->refresh();
             $venta->recalcularEstado();
 

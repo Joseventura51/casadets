@@ -233,7 +233,11 @@
                     <td>
                         <div class="d-flex flex-wrap gap-1">
                             @forelse($metodosArr as $m)
-                                <span class="badge bg-light text-dark border">{{ ucfirst(trim($m)) }}</span>
+                                @php
+                                    $mapa = ['saldo_favor'=>'Saldo a favor','efectivo'=>'Efectivo','transferencia'=>'Transferencia','tarjeta'=>'Tarjeta','yape'=>'Yape','plin'=>'Plin','credito'=>'Crédito'];
+                                    $label = $mapa[trim($m)] ?? ucfirst(trim(str_replace('_',' ',$m)));
+                                @endphp
+                                <span class="badge bg-light text-dark border">{{ $label }}</span>
                             @empty
                                 <span class="text-muted">—</span>
                             @endforelse
