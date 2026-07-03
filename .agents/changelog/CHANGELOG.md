@@ -5,7 +5,34 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
-## 2026-07-03 — Sesión actual
+## 2026-07-03 — NC "Usar para anular vale"
+
+### Nueva funcionalidad: Anular vale con nota de crédito
+
+**Descripción:** Nueva acción en el modal de notas de crédito que permite usar una NC para anular un vale pendiente. El vale pasa al estado `anulado_nc`.
+
+**Controller nuevo método:**
+- `SaldoFavorController::anularValeConNC()` — valida NC, valida vale, verifica mismo cliente, verifica que NC cubre el saldo, crea `NotaCreditoAplicacion`, actualiza estado del vale a `anulado_nc`.
+- `SaldoFavorController::validarNotaCreditoAnulable()` — validación privada: NC no usada, tiene cliente, monto correcto.
+- `SaldoFavorController::idsNotasCreditoConvertidas()` — actualizado para incluir NCs usadas en `nota_credito_aplicaciones`.
+
+**Modelo:**
+- `Venta::recalcularEstado()` — guard añadido: `anulado_nc` es inmutable como `anulado`.
+
+**Rutas:**
+- `POST /casadets/saldos-favor/nc/{venta}/anular-vale` → `anularValeConNC`
+
+**Vistas:**
+- `saldos_favor/index.blade.php` — botón "Anular vale" junto a "Convertir" en cada fila NC. Sub-fila expandible con select de vales pendientes del cliente, confirmación y manejo de errores.
+- `ventas/index.blade.php` — filtro `anulado_nc` = "Anulado x NC", fila estilo rojo (`fila-anulado`), badge estático "✕ Anulado x NC", sin botón de pago, JS mapa actualizado.
+
+**Reportes y cobranza:**
+- `ReporteController.php` — todas las 10 exclusiones `!= 'anulado'` cambiadas a `whereNotIn(['anulado','anulado_nc'])`.
+- `VentaController.php` — `pago()`, `updatePago()`, `updateEstado()` bloquean `anulado_nc` igual que `anulado`.
+
+---
+
+## 2026-07-03 — Sesión anterior
 
 ### Prioridad 1: Restricción de datos por vendedor (VendedorScope)
 

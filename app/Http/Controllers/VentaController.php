@@ -457,7 +457,7 @@ class VentaController extends Controller
         abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
         $this->authorizeVenta($venta);
 
-        if ($venta->estado === 'anulado') {
+        if (in_array($venta->estado, ['anulado', 'anulado_nc'])) {
             return redirect()->route('ventas.index')
                 ->with('error', "No se puede registrar el pago: el vale {$venta->documento_tipo} {$venta->documento_numero} está anulado.");
         }
@@ -493,7 +493,7 @@ class VentaController extends Controller
         abort_if($venta->es_referencia_fiscal, 403, 'Las referencias fiscales no tienen cobranza.');
         $this->authorizeVenta($venta);
 
-        if ($venta->estado === 'anulado') {
+        if (in_array($venta->estado, ['anulado', 'anulado_nc'])) {
             return redirect()->route('ventas.index')
                 ->with('error', "No se puede registrar el pago: el vale {$venta->documento_tipo} {$venta->documento_numero} está anulado.");
         }
@@ -718,7 +718,7 @@ class VentaController extends Controller
             'estado' => 'required|in:anulado',
         ]);
 
-        if ($venta->estado === 'anulado') {
+        if (in_array($venta->estado, ['anulado', 'anulado_nc'])) {
             return back()->with('info', 'La venta ya está anulada.');
         }
 

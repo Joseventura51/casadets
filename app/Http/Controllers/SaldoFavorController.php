@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Cliente;
 use App\Models\Movimiento;
+use App\Models\NotaCreditoAplicacion;
 use App\Models\SaldoFavor;
 use App\Models\Venta;
 use App\Services\CajaService;
@@ -353,12 +354,74 @@ class SaldoFavorController extends Controller
         }
     }
 
+    public function anularValeConNC(Request $request, Venta $nc)
+    {
+        $error = $this->validarNotaCreditoAnulable($nc);
+        if ($error) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
+
+        $data = $request->validate(['venta_id' => 'required|exists:ventas,id']);
+        $venta = Venta::findOrFail($data['venta_id']);
+
+        if ($venta->cliente_id !== $nc->cliente_id) {
+            return response()->json(['success' => false, 'message' => 'El vale no pertenece al mismo cliente que la nota de credito.'], 422);
+        }
+
+        if (!in_array($venta->estado, ['pendiente', 'parcial'])) {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden anular vales en estado pendiente o parcial.'], 422);
+        }
+
+        $ncMonto = abs((float) $nc->total);
+        $saldo   = round((float) $venta->saldo_pendiente, 2);
+
+        if ($ncMonto < $saldo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El monto de la NC (S/ ' . number_format($ncMonto, 2) . ') no cubre el saldo pendiente del vale (S/ ' . number_format($saldo, 2) . ').',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($nc, $venta, $saldo) {
+            NotaCreditoAplicacion::create([
+                'nota_credito_id'   => $nc->id,
+                'venta_id'          => $venta->id,
+                'monto'             => $saldo,
+                'registrado_por_id' => auth()->id(),
+            ]);
+
+            $venta->update([
+                'estado'        => 'anulado_nc',
+                'nc_aplicado'   => $saldo,
+                'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' — ' : '')
+                    . 'Anulado por NC ' . ($nc->documento_numero ?: '#' . $nc->id)),
+            ]);
+
+            $nc->update([
+                'observaciones' => trim(($nc->observaciones ? $nc->observaciones . ' — ' : '')
+                    . 'Usada para anular ' . ($venta->documento_tipo ? ucfirst($venta->documento_tipo) . ' ' . $venta->documento_numero : 'vale #' . $venta->id)),
+            ]);
+        });
+
+        $ventaLabel = $venta->documento_tipo
+            ? ucfirst($venta->documento_tipo) . ' ' . $venta->documento_numero
+            : 'Vale #' . $venta->id;
+
+        return response()->json([
+            'success' => true,
+            'message' => $ventaLabel . ' anulado mediante NC ' . ($nc->documento_numero ?? '#' . $nc->id) . '.',
+        ]);
+    }
+
     private function idsNotasCreditoConvertidas(): array
     {
-        return SaldoFavor::whereNotNull('venta_origen_id')
+        $convertidas = SaldoFavor::whereNotNull('venta_origen_id')
             ->pluck('venta_origen_id')
-            ->unique()
             ->toArray();
+
+        $anuladas = NotaCreditoAplicacion::pluck('nota_credito_id')->toArray();
+
+        return array_unique(array_merge($convertidas, $anuladas));
     }
 
     private function validarNotaCreditoConvertible(Venta $venta, bool $requiereCliente): ?string
@@ -373,6 +436,35 @@ class SaldoFavorController extends Controller
 
         if (SaldoFavor::where('venta_origen_id', $venta->id)->exists()) {
             return 'Esta nota de credito ya fue convertida a saldo a favor anteriormente.';
+        }
+
+        if (NotaCreditoAplicacion::where('nota_credito_id', $venta->id)->exists()) {
+            return 'Esta nota de credito ya fue utilizada para anular un vale.';
+        }
+
+        if (abs((float) $venta->total) <= 0 || (float) $venta->total >= 0) {
+            return 'El monto de la nota de credito debe ser mayor a cero y estar registrado en negativo.';
+        }
+
+        return null;
+    }
+
+    private function validarNotaCreditoAnulable(Venta $venta): ?string
+    {
+        if ($venta->documento_tipo !== 'nota_credito') {
+            return 'Este documento no es una nota de credito.';
+        }
+
+        if (!$venta->cliente_id) {
+            return 'La nota de credito no tiene cliente asignado. Asigna un cliente primero.';
+        }
+
+        if (SaldoFavor::where('venta_origen_id', $venta->id)->exists()) {
+            return 'Esta nota de credito ya fue convertida a saldo a favor.';
+        }
+
+        if (NotaCreditoAplicacion::where('nota_credito_id', $venta->id)->exists()) {
+            return 'Esta nota de credito ya fue utilizada para anular un vale anteriormente.';
         }
 
         if (abs((float) $venta->total) <= 0 || (float) $venta->total >= 0) {

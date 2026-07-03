@@ -147,6 +147,7 @@
                             <option value="parcial" {{ isset($estado) && $estado === 'parcial' ? 'selected' : '' }}>Parcial</option>
                             <option value="pagado" {{ isset($estado) && $estado === 'pagado' ? 'selected' : '' }}>Pagado</option>
                             <option value="anulado" {{ isset($estado) && $estado === 'anulado' ? 'selected' : '' }}>Anulado</option>
+                            <option value="anulado_nc" {{ isset($estado) && $estado === 'anulado_nc' ? 'selected' : '' }}>Anulado x NC</option>
                             <option value="canjeada" {{ isset($estado) && $estado === 'canjeada' ? 'selected' : '' }}>Ref. fiscal</option>
                         </select>
                     </td>
@@ -189,7 +190,7 @@
                 @php
                     $metodosArr  = array_filter(explode(',', $v->metodo_pago ?? ''));
                     $estado      = $v->estado ?? 'pendiente';
-                    $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
+                    $filaClase   = match($estado) { 'pagado'=>'fila-pagado','parcial'=>'fila-parcial','anulado'=>'fila-anulado','anulado_nc'=>'fila-anulado','canjeada'=>'fila-canjeada',default=>'' };
                     $clienteTxt  = ($v->cliente->nombre ?? '') . ' ' . ($v->cliente->documento ?? '');
                     $esRefFiscal = ($v->es_referencia_fiscal ?? false) || $estado === 'canjeada';
                     $authU       = auth()->user();
@@ -207,6 +208,11 @@
                             <span class="select-estado est-canjeada" style="display:inline-block;cursor:default;"
                                   title="Referencia fiscal — no genera deuda">
                                 📋 Ref. fiscal
+                            </span>
+                        @elseif($estado === 'anulado_nc')
+                            <span class="select-estado est-anulado" style="display:inline-block;cursor:default;"
+                                  title="Anulado mediante nota de crédito">
+                                ✕ Anulado x NC
                             </span>
                         @else
                             <select class="select-estado est-{{ $estado }}"
@@ -270,7 +276,7 @@
                             @if($authU->puedeHacer('ventas.editar'))
                             <a href="/casadets/ventas/{{ $v->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
                             @endif
-                            @if(!$esRefFiscal && $authU->puedeHacer('ventas.pago'))
+                            @if(!$esRefFiscal && $estado !== 'anulado_nc' && $authU->puedeHacer('ventas.pago'))
                             <a href="/casadets/ventas/{{ $v->id }}/pago" class="btn btn-sm btn-outline-success" title="Verificar pago">
                                 <i class="bi bi-cash-stack"></i>
                             </a>
@@ -344,7 +350,7 @@ function cambiarEstadoFila(sel) {
             const tr = sel.closest('tr');
             if (tr) {
                 tr.classList.remove('fila-pagado','fila-parcial','fila-anulado','fila-canjeada');
-                const mapa = {pagado:'fila-pagado',parcial:'fila-parcial',anulado:'fila-anulado',canjeada:'fila-canjeada'};
+                const mapa = {pagado:'fila-pagado',parcial:'fila-parcial',anulado:'fila-anulado',anulado_nc:'fila-anulado',canjeada:'fila-canjeada'};
                 if (mapa[nuevo]) tr.classList.add(mapa[nuevo]);
                 tr.dataset.estado = nuevo;
             }

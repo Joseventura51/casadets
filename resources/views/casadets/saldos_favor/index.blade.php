@@ -1047,12 +1047,48 @@ function renderNotasCredito(ncs) {
                     <td class="small text-muted">${ncEscape(nc.fecha)}</td>
                     <td class="text-end fw-semibold text-danger">S/ ${Number(nc.monto).toFixed(2)}</td>
                     <td class="text-end pe-3">
-                        <button type="button" class="btn btn-sm btn-warning text-dark btn-convertir-nc"
-                                data-id="${nc.id}" data-monto="${Number(nc.monto).toFixed(2)}"
-                                data-doc="${ncEscape(nc.numero)}" data-cliente="${ncEscape(nc.cliente || '')}"
-                                ${nc.requiere_cliente ? 'disabled' : ''}>
-                            <i class="bi bi-arrow-repeat me-1"></i>Convertir
-                        </button>
+                        <div class="d-flex gap-1 flex-wrap justify-content-end">
+                            <button type="button" class="btn btn-sm btn-warning text-dark btn-convertir-nc"
+                                    data-id="${nc.id}" data-monto="${Number(nc.monto).toFixed(2)}"
+                                    data-doc="${ncEscape(nc.numero)}" data-cliente="${ncEscape(nc.cliente || '')}"
+                                    ${nc.requiere_cliente ? 'disabled' : ''}>
+                                <i class="bi bi-arrow-repeat me-1"></i>Convertir
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-anular-vale-nc"
+                                    data-id="${nc.id}" data-monto="${Number(nc.monto).toFixed(2)}"
+                                    data-doc="${ncEscape(nc.numero)}"
+                                    data-cliente-id="${nc.cliente_id || ''}"
+                                    data-cliente="${ncEscape(nc.cliente || '')}"
+                                    ${nc.requiere_cliente ? 'disabled' : ''}>
+                                <i class="bi bi-x-circle me-1"></i>Anular vale
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="nc-anular-subrow d-none" data-anular-subrow="${nc.id}">
+                    <td colspan="5" class="bg-danger bg-opacity-10 border-top-0 pt-0 pb-2 px-3">
+                        <div class="d-flex gap-2 align-items-end flex-wrap pt-2">
+                            <div class="flex-grow-1">
+                                <label class="form-label fw-semibold small mb-1 text-danger">
+                                    <i class="bi bi-x-circle me-1"></i>Vale a anular con esta NC
+                                </label>
+                                <select class="form-select form-select-sm nc-vale-select" data-nc-id="${nc.id}" disabled>
+                                    <option value="">Cargando vales pendientes...</option>
+                                </select>
+                                <div class="form-text small mt-1">
+                                    Solo vales pendientes o parciales del mismo cliente. La NC debe cubrir el saldo pendiente.
+                                </div>
+                            </div>
+                            <div class="d-flex gap-1 align-self-start mt-4">
+                                <button type="button" class="btn btn-sm btn-danger btn-confirmar-anular-nc" data-nc-id="${nc.id}" disabled>
+                                    <i class="bi bi-check-circle me-1"></i>Confirmar
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary btn-cancelar-anular-nc" data-nc-id="${nc.id}">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="nc-anular-error alert alert-danger d-none mt-2 py-1 small" data-error-nc="${nc.id}"></div>
                     </td>
                 </tr>`).join('')}
             </tbody>
@@ -1138,6 +1174,96 @@ document.getElementById('modalConvertirNC').addEventListener('shown.bs.modal', f
                         alert(err.message);
                         this.disabled = false;
                         this.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i>Convertir';
+                    }
+                });
+            });
+
+            contenedor.querySelectorAll('.btn-anular-vale-nc').forEach(btn => {
+                btn.addEventListener('click', async function () {
+                    const id       = this.dataset.id;
+                    const clienteId = this.dataset.clienteId;
+                    const subrow   = contenedor.querySelector(`[data-anular-subrow="${id}"]`);
+                    const select   = subrow?.querySelector('.nc-vale-select');
+
+                    if (!subrow) return;
+
+                    if (!subrow.classList.contains('d-none')) {
+                        subrow.classList.add('d-none');
+                        return;
+                    }
+
+                    subrow.classList.remove('d-none');
+                    if (select) {
+                        select.innerHTML = '<option value="">Cargando vales pendientes...</option>';
+                        select.disabled = true;
+                    }
+
+                    try {
+                        const res = await fetch(`/casadets/saldos-favor/cliente/${clienteId}/ventas.json`, {
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        });
+                        const vales = await res.json();
+
+                        if (!vales.length) {
+                            select.innerHTML = '<option value="">— Sin vales pendientes para este cliente —</option>';
+                        } else {
+                            select.innerHTML = '<option value="">Seleccionar vale...</option>' +
+                                vales.map(v => `<option value="${v.id}">${ncEscape(v.label)}</option>`).join('');
+                            select.disabled = false;
+                        }
+                    } catch {
+                        select.innerHTML = '<option value="">Error al cargar vales</option>';
+                    }
+                });
+            });
+
+            contenedor.querySelectorAll('.nc-vale-select').forEach(sel => {
+                sel.addEventListener('change', function () {
+                    const ncId = this.dataset.ncId;
+                    const confirmBtn = contenedor.querySelector(`.btn-confirmar-anular-nc[data-nc-id="${ncId}"]`);
+                    if (confirmBtn) confirmBtn.disabled = !this.value;
+                });
+            });
+
+            contenedor.querySelectorAll('.btn-cancelar-anular-nc').forEach(btn => {
+                btn.addEventListener('click', function () {
+                    const ncId  = this.dataset.ncId;
+                    const subrow = contenedor.querySelector(`[data-anular-subrow="${ncId}"]`);
+                    if (subrow) subrow.classList.add('d-none');
+                });
+            });
+
+            contenedor.querySelectorAll('.btn-confirmar-anular-nc').forEach(btn => {
+                btn.addEventListener('click', async function () {
+                    const ncId       = this.dataset.ncId;
+                    const subrow     = contenedor.querySelector(`[data-anular-subrow="${ncId}"]`);
+                    const select     = subrow?.querySelector('.nc-vale-select');
+                    const errDiv     = contenedor.querySelector(`[data-error-nc="${ncId}"]`);
+                    const ventaId    = select?.value;
+                    const ventaLabel = select?.options[select.selectedIndex]?.text || '';
+
+                    if (!ventaId) return;
+
+                    if (!confirm(`¿Anular "${ventaLabel}" usando esta nota de crédito?\n\nEl vale quedará marcado como "Anulado x NC" y no podrá ser cobrado.\nEsta acción es irreversible.`)) return;
+
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                    if (errDiv) errDiv.classList.add('d-none');
+
+                    try {
+                        const form = new FormData();
+                        form.append('venta_id', ventaId);
+                        await ncPost(`/casadets/saldos-favor/nc/${ncId}/anular-vale`, form);
+                        window.location.href = '/casadets/saldos-favor';
+                    } catch (err) {
+                        if (errDiv) {
+                            errDiv.textContent = err.message;
+                            errDiv.classList.remove('d-none');
+                        } else {
+                            alert(err.message);
+                        }
+                        this.disabled = false;
+                        this.innerHTML = '<i class="bi bi-check-circle me-1"></i>Confirmar';
                     }
                 });
             });

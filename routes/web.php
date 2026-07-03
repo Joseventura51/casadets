@@ -165,6 +165,7 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::post('/casadets/saldos-favor/crear',                          [SaldoFavorController::class, 'crear'])           ->middleware('caja.abierta');
         Route::post('/casadets/saldos-favor/nc/{venta}/cliente',             [SaldoFavorController::class, 'asignarClienteNC'])->middleware('caja.abierta');
         Route::post('/casadets/saldos-favor/nc/{venta}/convertir',           [SaldoFavorController::class, 'convertirNC'])     ->middleware('caja.abierta');
+        Route::post('/casadets/saldos-favor/nc/{venta}/anular-vale',        [SaldoFavorController::class, 'anularValeConNC'])  ->middleware('caja.abierta');
         Route::post('/casadets/saldos-favor/{saldo}/aplicar',                [SaldoFavorController::class, 'aplicar'])         ->middleware('caja.abierta');
         Route::post('/casadets/saldos-favor/{saldo}/anular',                 [SaldoFavorController::class, 'anular']);
     });

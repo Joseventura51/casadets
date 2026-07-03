@@ -141,7 +141,7 @@ class Venta extends Model
      */
     public function recalcularEstado(): void
     {
-        if ($this->estado === 'anulado') {
+        if (in_array($this->estado, ['anulado', 'anulado_nc'])) {
             return;
         }
 
