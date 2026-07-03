@@ -1076,7 +1076,7 @@ function renderNotasCredito(ncs) {
                                     <option value="">Cargando vales pendientes...</option>
                                 </select>
                                 <div class="form-text small mt-1">
-                                    Solo vales pendientes o parciales del mismo cliente. La NC debe cubrir el saldo pendiente.
+                                    Solo vales pendientes.
                                 </div>
                             </div>
                             <div class="d-flex gap-1 align-self-start mt-4">
