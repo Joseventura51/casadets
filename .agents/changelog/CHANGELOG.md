@@ -1,0 +1,112 @@
+# Registro de Cambios — casadets ERP/POS
+
+Historial de cambios implementados por sesión de trabajo.
+Formato: `[YYYY-MM-DD] Área — Descripción`
+
+---
+
+## 2026-07-03 — Sesión actual
+
+### Prioridad 1: Restricción de datos por vendedor (VendedorScope)
+
+**Archivos nuevos:**
+- `app/Services/VendedorScope.php` — Servicio centralizado de restricción por vendedor. Métodos: `activo()`, `ids()`, `aplicar()`, `aplicarCompras()`, `aplicarSaldos()`, `aplicarMovimientos()`.
+
+**Controladores actualizados:**
+- `app/Http/Controllers/VentaController.php` — Reemplazado `esVendedor()` → `debeRestringirPorVendedor()` en 9 lugares.
+- `app/Http/Controllers/ReporteController.php` — Reemplazado `esVendedor()` → `debeRestringirPorVendedor()` en 4 lugares. Añadida exclusión de referencias fiscales en `qVentas()` y `qDetalles()`.
+- `app/Http/Controllers/CompraController.php` — Añadido `VendedorScope::aplicarCompras()` en `index()`.
+- `app/Http/Controllers/SaldoFavorController.php` — Añadido `VendedorScope::aplicarSaldos()` en `index()`.
+- `app/Http/Controllers/MovimientoController.php` — Añadido `VendedorScope::aplicarMovimientos()` en `index()`. Actualizado `create()` para pasar vendedores. Actualizado `store()` con validación `vendedor_id` requerido para salidas.
+
+---
+
+### Prioridad 2: Referencias fiscales (es_referencia_fiscal)
+
+**Migración nueva:**
+- `database/migrations/2026_05_30_000001_add_es_referencia_fiscal_to_ventas.php` — Agrega columna `es_referencia_fiscal` (boolean, default false) a tabla `ventas`.
+
+**Modelo actualizado:**
+- `app/Models/Venta.php` — Añadido `es_referencia_fiscal` a `$fillable` y `$casts`. Scopes: `scopeNoFiscal()`, `scopeEsFiscal()`. `getSaldoPendienteAttribute()` retorna 0 para referencias fiscales. `recalcularEstado()` fuerza estado `pagado` para referencias fiscales.
+
+**Vistas actualizadas:**
+- `resources/views/casadets/ventas/index.blade.php` — `$esRefFiscal` usa nuevo campo (`es_referencia_fiscal`). Botón "Verificar pago" oculto para referencias fiscales.
+- `resources/views/casadets/ventas/show.blade.php` — `$esCanjeadaFiscal` usa nuevo campo. Botón "Verificar pago" oculto para referencias fiscales.
+
+**Exclusión en reportes:**
+- `ReporteController::qVentas()` — Añadido `->where('ventas.es_referencia_fiscal', false)`.
+- `ReporteController::qDetalles()` — Añadido `->where('v.es_referencia_fiscal', false)`.
+
+---
+
+### Prioridad 3: Vendedor en movimientos
+
+**Migración nueva:**
+- `database/migrations/2026_05_30_000002_add_vendedor_id_to_movimientos.php` — Agrega FK `vendedor_id` (nullable) a tabla `movimientos`.
+
+**Modelo actualizado:**
+- `app/Models/Movimiento.php` — Añadido `vendedor_id` a `$fillable`. Añadida relación `vendedor()`.
+
+**Vista actualizada:**
+- `resources/views/movimientos/create.blade.php` — Selector de vendedor visible solo cuando `$tipo === 'salida'`, marcado como requerido.
+
+---
+
+### Prioridad 4: Seguridad visual (puedeHacer)
+
+**Vistas actualizadas:**
+- `resources/views/casadets/ventas/index.blade.php` — Botones "Importar", "Nueva venta", "Editar", "Verificar pago", "Eliminar" protegidos con `puedeHacer()`.
+- `resources/views/casadets/ventas/show.blade.php` — Botones "Verificar pago" y "Editar" protegidos con `puedeHacer()`.
+
+**Pendiente (no implementado aún):**
+- Proteger botones en compras, productos, vendedores, movimientos, clientes.
+
+---
+
+## Sesiones anteriores (resumen)
+
+### 2026-07-03 (sesión previa) — Notas de crédito aplicadas a ventas
+
+**Archivos nuevos:**
+- `app/Models/NotaCreditoAplicacion.php` — Modelo para tabla `nota_credito_aplicaciones`. Relaciones: `notaCredito()`, `venta()`, `registradoPor()`.
+- `database/migrations/2026_07_03_000001_nc_aplicaciones_y_nc_aplicado_ventas.php` — Agrega columna `nc_aplicado` a `ventas` y crea tabla `nota_credito_aplicaciones`.
+
+**Modelo actualizado:**
+- `app/Models/Venta.php` — Añadido `nc_aplicado` a `$fillable` y `$casts`.
+
+---
+
+### Sistema de roles y permisos dinámicos
+
+**Archivos creados:**
+- `app/Support/PermisoCatalog.php` — Catálogo estático de módulos y permisos. 14 módulos, 22+ permisos.
+- `app/Http/Middleware/CheckPermiso.php` — Middleware de verificación de permisos.
+- `database/seeders/RolSeeder.php` — 4 roles por defecto: Admin, Supervisor, Cajero, Vendedor.
+
+**Modelos actualizados:**
+- `app/Models/User.php` — Métodos: `puedeVer()`, `puedeHacer()`, `esVendedor()`, `debeRestringirPorVendedor()`, `vendedorIds()`.
+- `app/Models/Rol.php` — Columnas JSON: `modulos`, `permisos`.
+
+---
+
+## Convenciones del sistema
+
+| Elemento | Valor |
+|---|---|
+| Auth dev | `admin@sistema.com` / `12345678` |
+| DB dev | SQLite (Replit) |
+| DB prod | MySQL `bd_casadets` |
+| Vendor scope | `debeRestringirPorVendedor()` (no `esVendedor()`) |
+| Fiscal refs | `es_referencia_fiscal = true` → excluir de KPIs, reportes, deuda |
+| NC aplicadas | `nc_aplicado` en ventas + tabla `nota_credito_aplicaciones` |
+| Permiso check | `$user->puedeHacer('modulo.accion')` (string con punto) |
+
+---
+
+## Pendiente por implementar
+
+- [ ] **P4**: Proteger botones en compras, productos, vendedores, movimientos
+- [ ] **P5**: Dashboard gerencial con Chart.js (7 KPIs + 10 gráficos)
+- [ ] Excluir `es_referencia_fiscal` en CobranzaService y cálculo de deuda de clientes
+- [ ] Campo `vendedor_id` en el formulario de edición de movimientos
+- [ ] Aplicar NC desde interfaz (formulario + controller)
