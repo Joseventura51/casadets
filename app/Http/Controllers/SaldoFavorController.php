@@ -354,6 +354,61 @@ class SaldoFavorController extends Controller
         }
     }
 
+    public function anularValeConSaldo(Request $request, SaldoFavor $saldo)
+    {
+        if (!in_array($saldo->estado, ['disponible', 'parcialmente_usado'])) {
+            return response()->json(['success' => false, 'message' => 'El saldo a favor no está disponible para usar.'], 422);
+        }
+
+        if ((float) $saldo->monto_disponible <= 0) {
+            return response()->json(['success' => false, 'message' => 'El saldo a favor no tiene monto disponible.'], 422);
+        }
+
+        $data  = $request->validate(['venta_id' => 'required|exists:ventas,id']);
+        $venta = Venta::findOrFail($data['venta_id']);
+
+        if ($saldo->cliente_id && $venta->cliente_id !== $saldo->cliente_id) {
+            return response()->json(['success' => false, 'message' => 'El vale no pertenece al mismo cliente del saldo a favor.'], 422);
+        }
+
+        if (!in_array($venta->estado, ['pendiente', 'parcial'])) {
+            return response()->json(['success' => false, 'message' => 'Solo se pueden anular vales en estado pendiente o parcial.'], 422);
+        }
+
+        $saldoPendiente = round((float) $venta->saldo_pendiente, 2);
+        $disponible     = round((float) $saldo->monto_disponible, 2);
+
+        if ($disponible < $saldoPendiente) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El saldo disponible (S/ ' . number_format($disponible, 2) . ') no cubre el saldo del vale (S/ ' . number_format($saldoPendiente, 2) . ').',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($saldo, $venta, $saldoPendiente) {
+            $nuevoDisponible = round((float) $saldo->monto_disponible - $saldoPendiente, 2);
+            $saldo->update([
+                'monto_disponible' => $nuevoDisponible,
+                'estado'           => $nuevoDisponible <= 0 ? 'usado' : 'parcialmente_usado',
+            ]);
+
+            $venta->update([
+                'estado'        => 'anulado_nc',
+                'observaciones' => trim(($venta->observaciones ? $venta->observaciones . ' — ' : '')
+                    . 'Anulado por SF #' . $saldo->id),
+            ]);
+        });
+
+        $ventaLabel = $venta->documento_tipo
+            ? ucfirst($venta->documento_tipo) . ' ' . $venta->documento_numero
+            : 'Vale #' . $venta->id;
+
+        return response()->json([
+            'success' => true,
+            'message' => $ventaLabel . ' anulado usando saldo a favor SF#' . $saldo->id . '.',
+        ]);
+    }
+
     public function anularValeConNC(Request $request, Venta $nc)
     {
         $error = $this->validarNotaCreditoAnulable($nc);

@@ -459,6 +459,12 @@
                                 onclick="abrirModalSaldoEspecifico({{ $cliente->id }}, '{{ addslashes($cliente->nombre) }}', {{ (float)$cliente->saldo_total }}, {{ $s->id }})">
                             <i class="bi bi-lightning-fill me-1"></i>Usar este
                         </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning sf-btn-anular-vale"
+                                data-saldo-id="{{ $s->id }}"
+                                data-cliente-id="{{ $cliente->id }}"
+                                data-disponible="{{ number_format($s->monto_disponible, 2, '.', '') }}">
+                            <i class="bi bi-x-circle me-1"></i>Anular vale
+                        </button>
                         @else
                         <span class="text-muted small me-1">Sin ventas pendientes</span>
                         @endif
@@ -466,6 +472,30 @@
                                 onclick="confirmarAnularSaldo({{ $s->id }}, '{{ addslashes($s->descripcion ?? '') }}', {{ number_format($s->monto_disponible, 2, '.', '') }})">
                             <i class="bi bi-x-circle me-1"></i>Anular
                         </button>
+                        </div>
+                    </td>
+                </tr>
+                <tr class="sf-anular-subrow d-none" data-sf-subrow="{{ $s->id }}">
+                    <td colspan="6" class="bg-warning bg-opacity-10 border-top-0 pt-0 pb-2 px-3">
+                        <div class="d-flex gap-2 align-items-end flex-wrap pt-2">
+                            <div class="flex-grow-1">
+                                <label class="form-label fw-semibold small mb-1 text-warning">
+                                    <i class="bi bi-x-circle me-1"></i>Vale a anular con este saldo
+                                </label>
+                                <select class="form-select form-select-sm sf-vale-select" data-saldo-id="{{ $s->id }}" disabled>
+                                    <option value="">Cargando vales...</option>
+                                </select>
+                                <div class="form-text small mt-1">Solo vales que cubren la deuda exacta.</div>
+                                <div class="alert alert-danger small py-1 mt-1 d-none sf-error-div" data-sf-error="{{ $s->id }}"></div>
+                            </div>
+                            <div class="d-flex gap-1 align-self-start mt-4">
+                                <button type="button" class="btn btn-sm btn-warning text-dark sf-btn-confirmar" data-saldo-id="{{ $s->id }}" disabled>
+                                    <i class="bi bi-check-circle me-1"></i>Confirmar
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary sf-btn-cancelar" data-saldo-id="{{ $s->id }}">
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -979,6 +1009,110 @@ document.getElementById('btnConfirmarAnularSaldo').addEventListener('click', asy
         btn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Anular saldo';
         document.getElementById('anularSaldoConfirm').checked = false;
     }
+});
+
+/* ── Anular vale con saldo a favor ───────────────────────── */
+document.querySelectorAll('.sf-btn-anular-vale').forEach(btn => {
+    btn.addEventListener('click', async function () {
+        const saldoId   = this.dataset.saldoId;
+        const clienteId = this.dataset.clienteId;
+        const disponible = parseFloat(this.dataset.disponible);
+        const subrow    = document.querySelector(`[data-sf-subrow="${saldoId}"]`);
+        const select    = subrow?.querySelector('.sf-vale-select');
+
+        if (!subrow) return;
+
+        if (!subrow.classList.contains('d-none')) {
+            subrow.classList.add('d-none');
+            return;
+        }
+
+        subrow.classList.remove('d-none');
+        if (select) {
+            select.innerHTML = '<option value="">Cargando vales...</option>';
+            select.disabled = true;
+        }
+        const confirmBtn = subrow.querySelector('.sf-btn-confirmar');
+        if (confirmBtn) confirmBtn.disabled = true;
+        const errDiv = subrow.querySelector('.sf-error-div');
+        if (errDiv) errDiv.classList.add('d-none');
+
+        try {
+            const res   = await fetch(`/casadets/saldos-favor/cliente/${clienteId}/ventas.json`, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const vales = await res.json();
+            const validos = vales.filter(v => parseFloat(v.saldo_pendiente) <= disponible + 0.005);
+
+            if (!validos.length) {
+                select.innerHTML = '<option value="">— Sin vales que cubra este saldo —</option>';
+            } else {
+                select.innerHTML = '<option value="">Seleccionar vale...</option>' +
+                    validos.map(v => `<option value="${v.id}">${v.label.replace(/</g,'&lt;')}</option>`).join('');
+                select.disabled = false;
+            }
+        } catch {
+            select.innerHTML = '<option value="">Error al cargar vales</option>';
+        }
+    });
+});
+
+document.querySelectorAll('.sf-vale-select').forEach(sel => {
+    sel.addEventListener('change', function () {
+        const saldoId    = this.dataset.saldoId;
+        const confirmBtn = document.querySelector(`.sf-btn-confirmar[data-saldo-id="${saldoId}"]`);
+        if (confirmBtn) confirmBtn.disabled = !this.value;
+    });
+});
+
+document.querySelectorAll('.sf-btn-cancelar').forEach(btn => {
+    btn.addEventListener('click', function () {
+        const subrow = document.querySelector(`[data-sf-subrow="${this.dataset.saldoId}"]`);
+        if (subrow) subrow.classList.add('d-none');
+    });
+});
+
+document.querySelectorAll('.sf-btn-confirmar').forEach(btn => {
+    btn.addEventListener('click', async function () {
+        const saldoId    = this.dataset.saldoId;
+        const subrow     = document.querySelector(`[data-sf-subrow="${saldoId}"]`);
+        const select     = subrow?.querySelector('.sf-vale-select');
+        const errDiv     = subrow?.querySelector('.sf-error-div');
+        const ventaId    = select?.value;
+        const ventaLabel = select?.options[select.selectedIndex]?.text || '';
+
+        if (!ventaId) return;
+
+        if (!confirm(`¿Anular "${ventaLabel}" usando este saldo a favor?\n\nEl vale quedará marcado como "Anulado x NC" y no podrá ser cobrado.\nEsta acción es irreversible.`)) return;
+
+        this.disabled = true;
+        this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        if (errDiv) errDiv.classList.add('d-none');
+
+        try {
+            const form = new FormData();
+            form.append('_token', document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}');
+            form.append('venta_id', ventaId);
+
+            const res  = await fetch(`/casadets/saldos-favor/${saldoId}/anular-vale`, {
+                method:  'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body:    form,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.message || 'No se pudo anular el vale.');
+            window.location.reload();
+        } catch (err) {
+            if (errDiv) {
+                errDiv.textContent = err.message;
+                errDiv.classList.remove('d-none');
+            } else {
+                alert(err.message);
+            }
+            this.disabled = false;
+            this.innerHTML = '<i class="bi bi-check-circle me-1"></i>Confirmar';
+        }
+    });
 });
 
 /* Modal 3: Convertir notas de credito */
