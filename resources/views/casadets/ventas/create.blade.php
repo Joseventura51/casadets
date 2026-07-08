@@ -265,10 +265,12 @@
     nuevaFila();
 
     // ── Autocompletado de cliente ──────────────────────────────────
+    const _clientesData = @json($clientes->map(fn($c) => [
+        'id'    => $c->id,
+        'label' => $c->nombre . ($c->documento ? ' (' . $c->documento . ')' : ''),
+    ])->values());
     const clienteMap = {};
-    @foreach($clientes as $c)
-    clienteMap[{{ json_encode($c->nombre . ($c->documento ? ' (' . $c->documento . ')' : '')) }}] = {{ $c->id }};
-    @endforeach
+    _clientesData.forEach(c => { clienteMap[c.label] = c.id; });
 
     const searchEl  = document.getElementById('clienteSearch');
     const hiddenEl  = document.getElementById('clienteIdHidden');
