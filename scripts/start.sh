@@ -72,6 +72,9 @@ php artisan config:clear
 php artisan route:clear
 php artisan view:clear
 
+# Cierre de sesiones vencidas al arrancar (cubre el caso de servidor apagado durante la noche)
+php artisan caja:cierre-automatico >> storage/logs/cierre-automatico-caja.log 2>&1 || true
+
 # Iniciar scheduler en segundo plano (cierre automático de cajas a medianoche)
 (while true; do php artisan schedule:run >> storage/logs/scheduler.log 2>&1; sleep 60; done) &
 
