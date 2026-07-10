@@ -101,10 +101,23 @@
             </div>
 
         @elseif($sesionHoy->estaAbierta())
+            {{-- Alerta si la sesión es de un día anterior --}}
+            @php $sesionEsDeAyer = $sesionHoy->fecha < \Carbon\Carbon::today()->toDateString(); @endphp
+            @if($sesionEsDeAyer)
+            <div class="alert alert-warning d-flex align-items-start gap-2 mb-3 py-2" role="alert">
+                <i class="bi bi-exclamation-triangle-fill fs-5 mt-1 flex-shrink-0"></i>
+                <div>
+                    <strong>La caja quedó abierta del día {{ \Carbon\Carbon::parse($sesionHoy->fecha)->format('d/m/Y') }}.</strong>
+                    Los movimientos de hoy se están registrando dentro de esa sesión anterior.
+                    <br>Cierra la caja ahora para generar el reporte del día pasado y poder abrir una sesión nueva de hoy.
+                </div>
+            </div>
+            @endif
             {{-- Caja abierta --}}
             <div class="d-flex align-items-center gap-3 flex-wrap">
-                <span class="badge bg-success" style="font-size:.8rem;">
+                <span class="badge {{ $sesionEsDeAyer ? 'bg-warning text-dark' : 'bg-success' }}" style="font-size:.8rem;">
                     <i class="bi bi-door-open me-1"></i>Caja abierta
+                    @if($sesionEsDeAyer) — sesión del {{ \Carbon\Carbon::parse($sesionHoy->fecha)->format('d/m/Y') }} @endif
                 </span>
                 <span class="small text-muted">
                     Apertura: <strong class="text-dark">S/ {{ number_format($sesionHoy->monto_apertura, 2) }}</strong>

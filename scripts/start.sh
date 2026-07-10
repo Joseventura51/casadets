@@ -72,5 +72,8 @@ php artisan config:clear
 php artisan route:clear
 php artisan view:clear
 
+# Iniciar scheduler en segundo plano (cierre automático de cajas a medianoche)
+(while true; do php artisan schedule:run >> storage/logs/scheduler.log 2>&1; sleep 60; done) &
+
 # Iniciar servidor
 php -d upload_max_filesize=100M -d post_max_size=100M -d max_input_vars=10000 artisan serve --host=0.0.0.0 --port=5000
