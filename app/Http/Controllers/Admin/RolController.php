@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Rol;
 use App\Support\PermisoCatalog;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class RolController extends Controller
 {
@@ -24,7 +25,7 @@ class RolController extends Controller
 
     public function store(Request $request)
     {
-        $data = $this->validar($request);
+        $data = $this->validar($request, null);
         Rol::create($data);
         return redirect('/admin/roles')->with('success', 'Rol creado correctamente.');
     }
@@ -37,7 +38,7 @@ class RolController extends Controller
 
     public function update(Request $request, Rol $rol)
     {
-        $data = $this->validar($request);
+        $data = $this->validar($request, $rol);
         $rol->update($data);
         return redirect('/admin/roles')->with('success', 'Rol actualizado correctamente.');
     }

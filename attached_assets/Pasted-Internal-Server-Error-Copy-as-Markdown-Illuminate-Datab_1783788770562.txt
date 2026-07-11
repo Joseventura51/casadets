@@ -1,0 +1,232 @@
+Internal Server Error
+
+Copy as Markdown
+Illuminate\Database\UniqueConstraintViolationException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+SQLSTATE[23000]: Integrity constraint violation: 19 UNIQUE constraint failed: roles.nombre (Connection: sqlite, Database: C:\Users\PC01\Documents\GitHub\casadets\database\database.sqlite, SQL: update "roles" set "nombre" = Cajero(a) de tienda, "modulos" = ["dashboard","reportes","reportes-caja","caja","ventas","pendientes","compras","clientes","vendedores","saldos-favor","movimientos","devoluciones"], "permisos" = ["ventas.crear","ventas.editar","ventas.eliminar","ventas.importar","ventas.pago","compras.crear","compras.editar","compras.eliminar","clientes.crear","clientes.editar","caja.abrir","caja.cerrar","movimientos.crear","pendientes.ver_todos","saldos.crear","saldos.aplicar","devoluciones.procesar"], "updated_at" = 2026-07-11 11:52:31 where "id" = 5)
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE 23000
+500
+PUT
+http://127.0.0.1:8000/admin/roles/5
+
+Exception trace
+9 vendor frames
+
+Illuminate\Database\Eloquent\Model->update(array)
+app\Http\Controllers\Admin\RolController.php:41
+
+36    }
+37
+38    public function update(Request $request, Rol $rol)
+39    {
+40        $data = $this->validar($request);
+41        $rol->update($data);
+42        return redirect('/admin/roles')->with('success', 'Rol actualizado correctamente.');
+43    }
+44
+45    public function destroy(Rol $rol)
+46    {
+47        if ($rol->users()->count() > 0) {
+48            return back()->with('error', 'No se puede eliminar un rol que tiene usuarios asignados.');
+49        }
+50        $rol->delete();
+51        return redirect('/admin/roles')->with('success', 'Rol eliminado.');
+52    }
+53
+5 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckRol.php:24
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 100
+sqlite
+PRAGMA foreign_keys = ON
+1.55ms
+sqlite
+select * from "sessions" where "id" = 'Vo7niX4upJW8WILTRYDzRe3d7kLURwSjOmduwOUy' limit 1
+1.08ms
+sqlite
+select * from "users" where "id" = 1 limit 1
+0.2ms
+sqlite
+select * from "roles" where "id" = '5' limit 1
+0.15ms
+sqlite
+select * from "roles" where "roles"."id" = 1 limit 1
+0.15ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = 1 and strftime('%Y-%m-%d', "fecha") = cast('2026-07-11' as text) and "estado" = 'abierta') as "exists"
+0.21ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = 1 and strftime('%Y-%m-%d', "fecha") = cast('2026-07-11' as text) and "estado" = 'abierta') as "exists"
+0.19ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = 1 and strftime('%Y-%m-%d', "fecha") = cast('2026-07-11' as text) and "estado" = 'abierta') as "exists"
+0.16ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = 1 and strftime('%Y-%m-%d', "fecha") = cast('2026-07-11' as text) and "estado" = 'abierta') as "exists"
+0.14ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = 1 and strftime('%Y-%m-%d', "fecha") = cast('2026-07-11' as text) and "estado" = 'abierta') as "exists"
+0.14ms
+
+
+1
+2
+3
+4
+5
+...
+10
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+content-length
+933
+cache-control
+max-age=0
+sec-ch-ua
+"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+dnt
+1
+upgrade-insecure-requests
+1
+content-type
+application/x-www-form-urlencoded
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
+origin
+http://127.0.0.1:8000
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/admin/roles/5/edit
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6ImRBbmx4U1I2MTlLTWQ0d2VPZHk2K3c9PSIsInZhbHVlIjoiTUM0WWhHbUxmS1ZIb0ZKa21EaXdoRGRKWTRNU1V6YlN3T0R0YTdEd241RHBsbGUrUkZjWlB5T0JrbEovdm80dVY2UUh3VndJaXhMc1JJVzV1OFNRa2MrYm1VNmJyTit0TFEyeFVUcU1lV1MyZWMrL3JYdTI3ZFBIbG9EQ05MMjkiLCJtYWMiOiI5NTlhZTBlYTBkYTkzNDhjZTBmMGE4ZGE1NjRlNjlhMzYzNTQwODA0YmNmYzI0YTY1YTVlMDU1MTE3MTU0M2I3IiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6Ino0UEt6eTM4elF0cGtHNEtBRUdPUGc9PSIsInZhbHVlIjoiUHVGcEhhcExzNU4xMmIvU0pNdElFSHpsWDdTSUZaaHR5bktKNDZIcWhRbCthdG16eWRobTNxWGg2SnVDNGUyc0pRVDdzT3hJQ1huQSt1UUFRV015cXVJTlJqT0I0QnVKeEUzSjhGOG12bDlxclRZc1RjZWF5S3RTNUZaNFRocjciLCJtYWMiOiI1ZmM5ZjU1ZjcxODM0NWMyZWY5YTVlNDEzN2ZiNDU3ZWJlMjZkZmY3OThjMWMwNTBkM2U0NWUwYTczNGFmZDU0IiwidGFnIjoiIn0%3D
+Body
+{
+    "_token": "QskMYA2KNkLCsyPVAGkVAEh1F4j3ryYUBMDC0nTD",
+    "_method": "PUT",
+    "nombre": "Cajero(a) de tienda",
+    "descripcion": "Caja, ventas y cobranza",
+    "modulos": [
+        "dashboard",
+        "reportes",
+        "reportes-caja",
+        "caja",
+        "ventas",
+        "pendientes",
+        "compras",
+        "clientes",
+        "vendedores",
+        "saldos-favor",
+        "movimientos",
+        "devoluciones"
+    ],
+    "permisos": [
+        "ventas.crear",
+        "ventas.editar",
+        "ventas.eliminar",
+        "ventas.importar",
+        "ventas.pago",
+        "compras.crear",
+        "compras.editar",
+        "compras.eliminar",
+        "clientes.crear",
+        "clientes.editar",
+        "caja.abrir",
+        "caja.cerrar",
+        "movimientos.crear",
+        "pendientes.ver_todos",
+        "saldos.crear",
+        "saldos.aplicar",
+        "devoluciones.procesar"
+    ]
+}
+Routing
+controller
+App\Http\Controllers\Admin\RolController@update
+middleware
+web, auth, check.activo, rol:admin.roles
+Routing parameters
+{
+    "rol": {
+        "id": 5,
+        "nombre": "Cajero(a) de tienda",
+        "descripcion": "Caja, ventas y cobranza",
+        "created_at": "2026-07-11T16:15:46.000000Z",
+        "updated_at": "2026-07-11T16:52:31.000000Z",
+        "modulos": [
+            "dashboard",
+            "reportes",
+            "reportes-caja",
+            "caja",
+            "ventas",
+            "pendientes",
+            "compras",
+            "clientes",
+            "vendedores",
+            "saldos-favor",
+            "movimientos",
+            "devoluciones"
+        ],
+        "permisos": [
+            "ventas.crear",
+            "ventas.editar",
+            "ventas.eliminar",
+            "ventas.importar",
+            "ventas.pago",
+            "compras.crear",
+            "compras.editar",
+            "compras.eliminar",
+            "clientes.crear",
+            "clientes.editar",
+            "caja.abrir",
+            "caja.cerrar",
+            "movimientos.crear",
+            "pendientes.ver_todos",
+            "saldos.crear",
+            "saldos.aplicar",
+            "devoluciones.procesar"
+        ]
+    }
+}
