@@ -21,6 +21,7 @@ class ReporteSemanal extends Model
         'utilidad',
         'margen',
         'comision_utilidad',
+        'ajuste_supuestos',
         'ventas_pendientes',
         'cerrado_por_id',
     ];
@@ -33,7 +34,8 @@ class ReporteSemanal extends Model
         'total_costo'       => 'decimal:2',
         'utilidad'          => 'decimal:2',
         'margen'            => 'decimal:2',
-        'comision_utilidad' => 'decimal:2',
+        'comision_utilidad'  => 'decimal:2',
+        'ajuste_supuestos'   => 'decimal:2',
     ];
 
     public function cerradoPor(): BelongsTo

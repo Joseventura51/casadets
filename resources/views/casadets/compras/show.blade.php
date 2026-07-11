@@ -4,12 +4,63 @@
 @php $porVenta = $compra->detalles->groupBy('venta_id'); @endphp
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Compra #{{ $compra->id }}</h3>
+    <div class="d-flex align-items-center gap-2">
+        <h3 class="mb-0">Compra #{{ $compra->id }}</h3>
+        @if($compra->es_supuesto)
+            <span class="badge" style="background:#fef3c7;color:#92400e;font-size:.78rem;">
+                <i class="bi bi-tag-fill me-1"></i> VALE SUPUESTO
+            </span>
+        @endif
+    </div>
     <div class="d-flex gap-2">
-        <a href="/casadets/compras/{{ $compra->id }}/edit" class="btn btn-primary btn-sm"><i class="bi bi-pencil"></i> Editar</a>
+        @if($compra->es_supuesto && !($compra->ajusteSupuesto?->compra_real_id))
+            <a href="/casadets/compras/{{ $compra->id }}/reconciliar" class="btn btn-warning btn-sm">
+                <i class="bi bi-arrow-left-right me-1"></i> Reconciliar precio real
+            </a>
+        @else
+            <a href="/casadets/compras/{{ $compra->id }}/edit" class="btn btn-primary btn-sm"><i class="bi bi-pencil"></i> Editar</a>
+        @endif
         <a href="/casadets/compras" class="btn btn-outline-secondary btn-sm">← Volver</a>
     </div>
 </div>
+
+@if($compra->es_supuesto)
+    @php $ajuste = $compra->ajusteSupuesto; @endphp
+    @if($ajuste && $ajuste->compra_real_id)
+        <div class="alert d-flex align-items-center gap-3 mb-3 py-2"
+             style="background:#f0fdf4;border:1px solid #bbf7d0;">
+            <i class="bi bi-check-circle-fill text-success fs-5 flex-shrink-0"></i>
+            <div class="flex-grow-1">
+                <strong>Vale reconciliado</strong> — Compra real <strong>#{{ $ajuste->compra_real_id }}</strong> registrada el {{ $ajuste->compraReal?->fecha?->format('d/m/Y') ?? '—' }}.
+                @if($ajuste->diferencia_total != 0)
+                    Diferencia:
+                    <strong class="{{ $ajuste->diferencia_total > 0 ? 'text-danger' : 'text-success' }}">
+                        {{ $ajuste->diferencia_total > 0 ? '+' : '' }}S/ {{ number_format($ajuste->diferencia_total, 2) }}
+                    </strong>
+                    ({{ $ajuste->diferencia_total > 0 ? 'real fue más caro' : 'real fue más barato' }})
+                    — {{ $ajuste->aplicado ? 'Aplicado en cierre semanal' : 'Pendiente de aplicar en próximo cierre' }}.
+                @else
+                    Sin diferencia de precio.
+                @endif
+            </div>
+            <a href="/casadets/compras/{{ $ajuste->compra_real_id }}" class="btn btn-sm btn-outline-success flex-shrink-0">
+                Ver compra real
+            </a>
+        </div>
+    @else
+        <div class="alert d-flex align-items-center gap-3 mb-3 py-2"
+             style="background:#fffbeb;border:1px solid #fde68a;">
+            <i class="bi bi-clock-fill text-warning fs-5 flex-shrink-0"></i>
+            <div class="flex-grow-1">
+                <strong>Precio estimado — pendiente de reconciliar.</strong>
+                La utilidad calculada con este vale es <em>aproximada</em>. Cuando el proveedor entregue la factura real, usa el botón para registrar el precio definitivo.
+            </div>
+            <a href="/casadets/compras/{{ $compra->id }}/reconciliar" class="btn btn-sm btn-warning flex-shrink-0">
+                <i class="bi bi-arrow-left-right me-1"></i> Reconciliar
+            </a>
+        </div>
+    @endif
+@endif
 
 <div class="row g-3 mb-3">
     <div class="col-md-3"><div class="card kpi-card"><small class="text-muted">Fecha</small><h6 class="mb-0">{{ $compra->fecha->format('d/m/Y') }}</h6></div></div>

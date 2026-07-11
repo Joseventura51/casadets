@@ -36,13 +36,23 @@
                 <label class="form-label small mb-1">Empresa / Proveedor</label>
                 <input type="text" name="empresa" value="{{ request('empresa') }}" class="form-control form-control-sm" placeholder="Buscar...">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Desde</label>
                 <input type="date" name="desde" value="{{ $desde }}" class="form-control form-control-sm">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small mb-1">Hasta</label>
                 <input type="date" name="hasta" value="{{ $hasta }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2 d-flex flex-column gap-1 pt-1">
+                <div class="form-check form-check-sm mb-0">
+                    <input class="form-check-input" type="checkbox" name="solo_supuestos" id="soloSupuestos" value="1" {{ $soloSupuestos ? 'checked' : '' }}>
+                    <label class="form-check-label small" for="soloSupuestos">Solo vales supuestos</label>
+                </div>
+                <div class="form-check form-check-sm mb-0">
+                    <input class="form-check-input" type="checkbox" name="sin_reconciliar" id="sinReconciliar" value="1" {{ $sinReconciliar ? 'checked' : '' }}>
+                    <label class="form-check-label small" for="sinReconciliar">Sin reconciliar</label>
+                </div>
             </div>
             <div class="col-md-2 d-flex gap-2">
                 <button class="btn btn-sm btn-outline-primary">Filtrar</button>
@@ -64,6 +74,7 @@
                     <th>Pago</th>
                     <th class="text-end">Total</th>
                     <th>Venta vinculada</th>
+                    <th>Estado</th>
                     <th class="text-end">Acciones</th>
                 </tr>
             </thead>
@@ -71,7 +82,14 @@
                 @forelse($compras as $c)
                 <tr data-buscar="{{ strtolower($c->empresa . ' ' . $c->documento_numero . ' ' . $c->documento_tipo) }}">
                     <td>{{ $c->fecha->format('d/m/Y') }}</td>
-                    <td>{{ $c->empresa }}</td>
+                    <td>
+                        {{ $c->empresa }}
+                        @if($c->es_supuesto)
+                            <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:.66rem;vertical-align:middle;">
+                                <i class="bi bi-tag-fill me-1"></i>SUPUESTO
+                            </span>
+                        @endif
+                    </td>
                     <td class="text-muted small">{{ $c->documento_tipo ? ucfirst($c->documento_tipo) : '' }} {{ $c->documento_numero }}</td>
                     <td style="max-width:220px;">
                         @if($c->lineas->count())
@@ -124,9 +142,36 @@
                             <span class="text-muted">—</span>
                         @endif
                     </td>
+                    <td>
+                        @if($c->es_supuesto)
+                            @php $ajuste = $c->ajusteSupuesto; @endphp
+                            @if($ajuste && $ajuste->compra_real_id)
+                                <span class="badge" style="background:#dcfce7;color:#166534;font-size:.7rem;">
+                                    <i class="bi bi-check-circle me-1"></i>Reconciliado
+                                </span>
+                                @if($ajuste->diferencia_total != 0)
+                                    <span class="badge ms-1 {{ $ajuste->diferencia_total > 0 ? 'bg-danger' : 'bg-success' }}" style="font-size:.7rem;">
+                                        {{ $ajuste->diferencia_total > 0 ? '+' : '' }}{{ number_format($ajuste->diferencia_total, 2) }}
+                                    </span>
+                                @endif
+                            @else
+                                <span class="badge" style="background:#fef9c3;color:#92400e;font-size:.7rem;">
+                                    <i class="bi bi-clock me-1"></i>Pendiente
+                                </span>
+                            @endif
+                        @else
+                            <span class="text-muted small">—</span>
+                        @endif
+                    </td>
                     <td class="text-end">
                         <a href="/casadets/compras/{{ $c->id }}" class="btn btn-sm btn-outline-secondary">Ver</a>
-                        <a href="/casadets/compras/{{ $c->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
+                        @if($c->es_supuesto && !($c->ajusteSupuesto?->compra_real_id))
+                            <a href="/casadets/compras/{{ $c->id }}/reconciliar" class="btn btn-sm btn-warning">
+                                <i class="bi bi-arrow-left-right me-1"></i>Reconciliar
+                            </a>
+                        @else
+                            <a href="/casadets/compras/{{ $c->id }}/edit" class="btn btn-sm btn-outline-primary">Editar</a>
+                        @endif
                         <form action="/casadets/compras/{{ $c->id }}" method="POST" class="d-inline" onsubmit="return confirm('¿Eliminar compra?')">
                             @csrf @method('DELETE')
                             <button class="btn btn-sm btn-outline-danger">Eliminar</button>
@@ -134,7 +179,7 @@
                     </td>
                 </tr>
                 @empty
-                <tr><td colspan="7" class="text-center text-muted py-4">No hay compras registradas.</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-4">No hay compras registradas.</td></tr>
                 @endforelse
             </tbody>
             @if($compras->count())

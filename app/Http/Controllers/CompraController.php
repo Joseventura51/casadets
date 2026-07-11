@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AjustePrecioSupuesto;
 use App\Models\Compra;
 use App\Models\CompraLinea;
 use App\Models\Movimiento;
@@ -26,14 +27,26 @@ class CompraController extends Controller
         $hasta = $request->input('hasta', $desde);
         if ($hasta < $desde) $hasta = $desde;
 
+        $soloSupuestos = $request->boolean('solo_supuestos');
+        $sinReconciliar = $request->boolean('sin_reconciliar');
+
         $query = Compra::with([
                 'lineas:id,compra_id,producto,cantidad,monto_total',
                 'detalles:id,venta_id',
                 'detalles.venta:id,documento_tipo,documento_numero',
+                'ajusteSupuesto:id,compra_supuesta_id,compra_real_id,diferencia_total,aplicado',
             ])
-            ->select('id', 'empresa', 'documento_tipo', 'documento_numero', 'fecha', 'metodo_pago', 'monto_total', 'observaciones')
+            ->select('id', 'empresa', 'documento_tipo', 'documento_numero', 'fecha', 'metodo_pago', 'monto_total', 'observaciones', 'es_supuesto')
             ->orderBy('fecha', 'desc')
             ->orderBy('id', 'desc');
+
+        if ($soloSupuestos) {
+            $query->where('es_supuesto', true);
+        }
+        if ($sinReconciliar) {
+            $query->where('es_supuesto', true)
+                  ->whereDoesntHave('ajusteSupuesto', fn($q) => $q->whereNotNull('compra_real_id'));
+        }
 
         // Restricción por vendedor asignado al usuario
         VendedorScope::aplicarCompras($query);
@@ -53,7 +66,7 @@ class CompraController extends Controller
 
         $cajaAbierta = CajaService::cajaAbierta();
 
-        return view('casadets.compras.index', compact('compras', 'desde', 'hasta', 'cajaAbierta', 'totalFiltrado'));
+        return view('casadets.compras.index', compact('compras', 'desde', 'hasta', 'cajaAbierta', 'totalFiltrado', 'soloSupuestos', 'sinReconciliar'));
     }
 
     public function create()
@@ -77,6 +90,7 @@ class CompraController extends Controller
                 [
                     'monto_total' => $total,
                     'caja_id'     => session('caja_id'),
+                    'es_supuesto' => (bool) $request->boolean('es_supuesto'),
                 ]
             ));
 
@@ -128,6 +142,11 @@ class CompraController extends Controller
             $syncData  = $this->buildSyncData($request, $lineasCreadas);
             $overrides = array_map('intval', $request->input('detalles_override', []));
             $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
+
+            // Si es vale supuesto, crear registro de ajuste pendiente de reconciliar
+            if ($compra->es_supuesto) {
+                AjustePrecioSupuesto::create(['compra_supuesta_id' => $compra->id]);
+            }
         });
 
         return redirect('/casadets/compras')->with('success', 'Compra registrada.');
@@ -135,7 +154,7 @@ class CompraController extends Controller
 
     public function show(Compra $compra)
     {
-        $compra->load(['lineas.producto', 'detalles.venta.vendedor', 'auditorias.usuario']);
+        $compra->load(['lineas.producto', 'detalles.venta.vendedor', 'auditorias.usuario', 'ajusteSupuesto.compraReal']);
         return view('casadets.compras.show', compact('compra'));
     }
 
@@ -162,10 +181,11 @@ class CompraController extends Controller
         DB::transaction(function () use ($data, $request, $compra) {
             $lineas = $data['lineas'] ?? [];
             $total  = collect($lineas)->sum('monto_total');
+            $esSupuesto = (bool) $request->boolean('es_supuesto');
 
             $compra->update(array_merge(
                 collect($data)->except('lineas')->toArray(),
-                ['monto_total' => $total]
+                ['monto_total' => $total, 'es_supuesto' => $esSupuesto]
             ));
 
             $productoIdsAntes = $compra->lineas()->pluck('producto_id')->filter()->unique();
@@ -246,9 +266,130 @@ class CompraController extends Controller
             $syncData  = $this->buildSyncData($request, $lineasCreadas);
             $overrides = array_map('intval', $request->input('detalles_override', []));
             $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
+
+            // Gestionar registro de ajuste si cambió es_supuesto
+            $tieneAjuste = $compra->ajusteSupuesto()->exists();
+            if ($esSupuesto && !$tieneAjuste) {
+                AjustePrecioSupuesto::create(['compra_supuesta_id' => $compra->id]);
+            } elseif (!$esSupuesto && $tieneAjuste) {
+                $compra->ajusteSupuesto()->whereNull('compra_real_id')->delete();
+            }
         });
 
         return redirect('/casadets/compras/' . $compra->id)->with('success', 'Compra actualizada.');
+    }
+
+    public function reconciliarForm(Compra $compra)
+    {
+        abort_if(!$compra->es_supuesto, 404, 'Esta compra no es un vale supuesto.');
+        $compra->load(['lineas', 'ajusteSupuesto.compraReal']);
+
+        if ($compra->ajusteSupuesto?->compra_real_id) {
+            return redirect('/casadets/compras/' . $compra->id)
+                ->with('info', 'Este vale ya fue reconciliado con la compra real.');
+        }
+
+        return view('casadets.compras.reconciliar', compact('compra'));
+    }
+
+    public function reconciliar(Request $request, Compra $compra)
+    {
+        abort_if(!$compra->es_supuesto, 404, 'Esta compra no es un vale supuesto.');
+        $compra->load(['lineas', 'ajusteSupuesto']);
+
+        if ($compra->ajusteSupuesto?->compra_real_id) {
+            return redirect('/casadets/compras/' . $compra->id)
+                ->with('info', 'Este vale ya fue reconciliado.');
+        }
+
+        $request->validate([
+            'empresa'            => 'required|string|max:255',
+            'documento_tipo'     => 'nullable|string|max:50',
+            'documento_numero'   => 'nullable|string|max:100',
+            'fecha'              => 'required|date',
+            'metodo_pago'        => 'nullable|string|in:efectivo,transferencia',
+            'observaciones'      => 'nullable|string',
+            'precios_reales'     => 'required|array',
+            'precios_reales.*'   => 'required|numeric|min:0',
+        ]);
+
+        DB::transaction(function () use ($request, $compra) {
+            $totalReal = 0;
+            $lineasProcesadas = [];
+
+            foreach ($compra->lineas as $linea) {
+                $precioReal   = (float) ($request->input("precios_reales.{$linea->id}") ?? $linea->monto_unitario);
+                $montoTotal   = round($precioReal * (float) $linea->cantidad, 2);
+                $totalReal   += $montoTotal;
+                $lineasProcesadas[$linea->id] = [
+                    'precio_real' => $precioReal,
+                    'monto_total' => $montoTotal,
+                ];
+            }
+
+            // Crear compra real (sin StockMovimiento — bienes ya están en inventario)
+            $compraReal = Compra::create([
+                'empresa'          => $request->empresa,
+                'caja_id'          => session('caja_id'),
+                'documento_tipo'   => $request->documento_tipo,
+                'documento_numero' => $request->documento_numero,
+                'fecha'            => $request->fecha,
+                'monto_total'      => round($totalReal, 2),
+                'metodo_pago'      => $request->metodo_pago,
+                'observaciones'    => $request->observaciones,
+                'es_supuesto'      => false,
+            ]);
+
+            foreach ($compra->lineas as $linea) {
+                $compraReal->lineas()->create([
+                    'producto_id'    => $linea->producto_id,
+                    'producto'       => $linea->producto,
+                    'cantidad'       => $linea->cantidad,
+                    'monto_unitario' => $lineasProcesadas[$linea->id]['precio_real'],
+                    'monto_total'    => $lineasProcesadas[$linea->id]['monto_total'],
+                ]);
+
+                // Actualizar precio_costo del producto al precio real
+                if ($linea->producto_id) {
+                    Producto::where('id', $linea->producto_id)
+                        ->update(['precio_costo' => $lineasProcesadas[$linea->id]['precio_real']]);
+                }
+            }
+
+            // Movimiento de salida (pago real al proveedor)
+            $metodoLabel = $compraReal->metodo_pago ? ' [' . ucfirst($compraReal->metodo_pago) . ']' : '';
+            Movimiento::create([
+                'tipo'             => 'salida',
+                'subtipo'          => 'compra',
+                'origen'           => 'auto',
+                'estado'           => 'activo',
+                'empresa'          => 'casadets',
+                'caja_id'          => session('caja_id'),
+                'categoria'        => 'Reconciliación vale — ' . $compraReal->empresa,
+                'referencia_tipo'  => 'compra',
+                'referencia_id'    => $compraReal->id,
+                'metodo_pago'      => $compraReal->metodo_pago,
+                'documento_tipo'   => $compraReal->documento_tipo,
+                'documento_numero' => $compraReal->documento_numero,
+                'monto'            => round($totalReal, 2),
+                'fecha'            => $request->fecha,
+                'observaciones'    => 'Reconciliación de vale #' . $compra->id . $metodoLabel
+                    . ($compraReal->observaciones ? ' — ' . $compraReal->observaciones : ''),
+            ]);
+
+            // Diferencia: positivo = real fue más caro; negativo = real fue más barato
+            $diferencia = round($totalReal - (float) $compra->monto_total, 2);
+
+            $ajuste = $compra->ajusteSupuesto
+                ?? AjustePrecioSupuesto::firstOrNew(['compra_supuesta_id' => $compra->id]);
+            $ajuste->compra_real_id   = $compraReal->id;
+            $ajuste->diferencia_total = $diferencia;
+            $ajuste->aplicado         = false;
+            $ajuste->save();
+        });
+
+        return redirect('/casadets/compras/' . $compra->id)
+            ->with('success', 'Vale reconciliado correctamente. La diferencia de precio quedará registrada para el próximo cierre de utilidad.');
     }
 
     public function destroy(Compra $compra)

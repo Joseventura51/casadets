@@ -56,9 +56,23 @@
                     <option value="transferencia" {{ old('metodo_pago', $compra->metodo_pago ?? '') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
                 </select>
             </div>
-            <div class="col-md-8">
+            <div class="col-md-6">
                 <label class="form-label">Observaciones</label>
                 <textarea name="observaciones" class="form-control" rows="2">{{ old('observaciones', $compra->observaciones ?? '') }}</textarea>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="p-3 border rounded w-100" style="background:#fffbeb;border-color:#fde68a!important;">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="es_supuesto" id="esSupuesto" value="1"
+                            {{ old('es_supuesto', $compra->es_supuesto ?? false) ? 'checked' : '' }}>
+                        <label class="form-check-label fw-semibold" for="esSupuesto">
+                            <i class="bi bi-tag me-1 text-warning"></i> Vale supuesto (precio estimado)
+                        </label>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        Actívalo cuando el proveedor aún no ha entregado factura. Podrás <strong>reconciliar</strong> el precio real después. La diferencia se ajusta en el próximo cierre de utilidad.
+                    </small>
+                </div>
             </div>
         </div>
 

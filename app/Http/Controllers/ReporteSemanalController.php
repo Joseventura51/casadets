@@ -91,6 +91,13 @@ class ReporteSemanalController extends Controller
         $margen   = $totalVentasValidas > 0 ? round($utilidad / $totalVentasValidas * 100, 1) : 0;
         $comisionUtilidad = ComisionUtilidad::calcular($validIdsUtilidad);
 
+        // Ajuste por precios supuestos reconciliados pero aún no aplicados a un cierre
+        $ajusteSupuestos = round(-(float) DB::table('ajustes_precio_supuesto')
+            ->where('aplicado', false)
+            ->whereNotNull('compra_real_id')
+            ->whereNotNull('diferencia_total')
+            ->sum('diferencia_total'), 2);
+
         $comprasRango = DB::table('compras')
             ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
             ->whereNull('deleted_at')
@@ -108,14 +115,15 @@ class ReporteSemanalController extends Controller
             'pendiente_venta_ids' => $pendientesIds,
             'compra_ids' => $comprasRango->pluck('id'),
             'totales' => [
-                'total_ventas' => round($totalVentas, 2),
-                'cantidad_ventas' => $cantVentas,
-                'total_compras' => round($totalCompras, 2),
-                'cantidad_compras' => $cantCompras,
-                'total_costo' => round($totalCosto, 2),
-                'utilidad' => $utilidad,
-                'margen' => $margen,
+                'total_ventas'      => round($totalVentas, 2),
+                'cantidad_ventas'   => $cantVentas,
+                'total_compras'     => round($totalCompras, 2),
+                'cantidad_compras'  => $cantCompras,
+                'total_costo'       => round($totalCosto, 2),
+                'utilidad'          => $utilidad,
+                'margen'            => $margen,
                 'comision_utilidad' => round($comisionUtilidad, 2),
+                'ajuste_supuestos'  => $ajusteSupuestos,
                 'ventas_pendientes' => $pendientesIds->count(),
             ],
         ];
@@ -145,9 +153,16 @@ class ReporteSemanalController extends Controller
 
         $inicioSugerido = $this->resolverInicio();
 
+        $pendientesSupuestos = \DB::table('ajustes_precio_supuesto')
+            ->where('aplicado', false)
+            ->whereNotNull('compra_real_id')
+            ->whereNotNull('diferencia_total')
+            ->count();
+
         return response()->json([
-            'reportes' => $reportes,
-            'inicio_sugerido' => $inicioSugerido?->format('Y-m-d'),
+            'reportes'              => $reportes,
+            'inicio_sugerido'       => $inicioSugerido?->format('Y-m-d'),
+            'pendientes_supuestos'  => $pendientesSupuestos,
         ]);
     }
 
@@ -169,9 +184,9 @@ class ReporteSemanalController extends Controller
         $resultado = $this->calcular($inicio, $fin);
 
         return response()->json([
-            'periodo_inicio' => $inicio->format('d/m/Y'),
-            'periodo_fin'    => $fin->format('d/m/Y'),
-            'totales'        => $resultado['totales'],
+            'periodo_inicio'       => $inicio->format('d/m/Y'),
+            'periodo_fin'          => $fin->format('d/m/Y'),
+            'totales'              => $resultado['totales'],
         ]);
     }
 
@@ -210,9 +225,20 @@ class ReporteSemanalController extends Controller
                 'utilidad'          => $resultado['totales']['utilidad'],
                 'margen'            => $resultado['totales']['margen'],
                 'comision_utilidad' => $resultado['totales']['comision_utilidad'],
+                'ajuste_supuestos'  => $resultado['totales']['ajuste_supuestos'],
                 'ventas_pendientes' => $resultado['totales']['ventas_pendientes'],
                 'cerrado_por_id'    => $r->user()?->id,
             ]);
+
+            // Marcar ajustes de supuestos como aplicados en este cierre
+            DB::table('ajustes_precio_supuesto')
+                ->where('aplicado', false)
+                ->whereNotNull('compra_real_id')
+                ->whereNotNull('diferencia_total')
+                ->update([
+                    'aplicado'           => true,
+                    'reporte_semanal_id' => $reporte->id,
+                ]);
 
             if ($resultado['archivar_venta_ids']->isNotEmpty()) {
                 DB::table('ventas')

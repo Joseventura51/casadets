@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use App\Models\ConciliacionAuditoria;
@@ -22,11 +23,13 @@ class Compra extends Model
         'monto_total',
         'metodo_pago',
         'observaciones',
+        'es_supuesto',
     ];
 
     protected $casts = [
         'fecha'       => 'date',
         'monto_total' => 'decimal:2',
+        'es_supuesto' => 'boolean',
     ];
 
     public function lineas(): HasMany
@@ -50,6 +53,18 @@ class Compra extends Model
     public function auditorias(): HasMany
     {
         return $this->hasMany(ConciliacionAuditoria::class)->orderBy('created_at', 'desc');
+    }
+
+    /** El registro de ajuste cuando esta compra es el vale supuesto. */
+    public function ajusteSupuesto(): HasOne
+    {
+        return $this->hasOne(AjustePrecioSupuesto::class, 'compra_supuesta_id');
+    }
+
+    /** El registro de ajuste cuando esta compra es la compra real (reconciliación). */
+    public function ajusteComoReal(): HasOne
+    {
+        return $this->hasOne(AjustePrecioSupuesto::class, 'compra_real_id');
     }
 
     /**

@@ -545,6 +545,17 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="semPvAjusteSupuestosRow" class="mb-2" style="display:none;">
+                            <div class="alert d-flex align-items-center gap-2 py-2 mb-0"
+                                 style="background:#fffbeb;border:1px solid #fde68a;">
+                                <i class="bi bi-tag-fill text-warning flex-shrink-0"></i>
+                                <div class="small flex-grow-1">
+                                    <strong>Ajuste por vales supuestos reconciliados:</strong>
+                                    <span class="fw-bold ms-1" id="semPvAjusteSupuestos">S/ 0.00</span>
+                                    <span class="text-muted ms-1">(diferencia real − estimado acumulada)</span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="alert alert-warning small py-2 mb-3" id="semPvPendientesAlert" style="display:none;">
                             <i class="bi bi-exclamation-triangle me-1"></i>
                             <span id="semPvPendientesTexto"></span> venta(s) no anuladas, no pagadas o sin costeo completo
@@ -575,13 +586,14 @@
                             <th class="text-end">Compras</th>
                             <th class="text-end">Utilidad</th>
                             <th class="text-end">Comisión</th>
+                            <th class="text-end">Aj. Supuestos</th>
                             <th class="text-center">Pendientes</th>
                             <th>Cerrado por</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody id="tbodySemanales">
-                        <tr><td colspan="8" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1359,18 +1371,23 @@ function renderTablaSemanales(lista) {
         tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>';
         return;
     }
-    tbody.innerHTML = lista.map(r => `
+    tbody.innerHTML = lista.map(r => {
+        const aj = r.ajuste_supuestos ?? 0;
+        const ajColor = aj < -0.001 ? 'text-danger' : aj > 0.001 ? 'text-success' : 'text-muted';
+        const ajStr   = aj !== 0 ? `<span class="${ajColor} fw-semibold">${aj > 0 ? '+' : ''}${fmt(aj)}</span>` : '<span class="text-muted">—</span>';
+        return `
         <tr>
             <td>${r.periodo_inicio} — ${r.periodo_fin}</td>
             <td class="text-end">${fmt(r.total_ventas)}</td>
             <td class="text-end">${fmt(r.total_compras)}</td>
             <td class="text-end">${fmt(r.utilidad)}</td>
             <td class="text-end">${fmt(r.comision_utilidad)}</td>
+            <td class="text-end">${ajStr}</td>
             <td class="text-center">${r.ventas_pendientes > 0 ? `<span class="badge bg-warning text-dark">${r.ventas_pendientes}</span>` : '<span class="badge bg-success">0</span>'}</td>
             <td>${r.cerrado_por || '—'}</td>
             <td><a class="btn btn-sm btn-outline-success" href="/reportes/semanales/${r.id}/excel" title="Descargar Excel"><i class="bi bi-file-earmark-excel"></i></a></td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function previsualizarCierre() {
@@ -1389,6 +1406,18 @@ function previsualizarCierre() {
             document.getElementById('semPvUtilidad').textContent    = fmt(t.utilidad);
             document.getElementById('semPvMargen').textContent      = t.margen + '%';
             document.getElementById('semPvComision').textContent    = fmt(t.comision_utilidad);
+
+            // Ajuste por vales supuestos
+            const ajSupRow = document.getElementById('semPvAjusteSupuestosRow');
+            const ajSup = t.ajuste_supuestos ?? 0;
+            if (ajSup !== 0) {
+                document.getElementById('semPvAjusteSupuestos').textContent = (ajSup > 0 ? '+' : '') + fmt(ajSup);
+                document.getElementById('semPvAjusteSupuestos').className =
+                    'fw-bold ms-1 ' + (ajSup < -0.001 ? 'text-danger' : 'text-success');
+                ajSupRow.style.display = '';
+            } else {
+                ajSupRow.style.display = 'none';
+            }
 
             const alertBox = document.getElementById('semPvPendientesAlert');
             if (t.ventas_pendientes > 0) {
