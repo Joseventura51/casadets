@@ -52,10 +52,13 @@ class RolController extends Controller
         return redirect('/admin/roles')->with('success', 'Rol eliminado.');
     }
 
-    private function validar(Request $request): array
+    private function validar(Request $request, ?Rol $rol = null): array
     {
         $request->validate([
-            'nombre'      => 'required|string|max:100',
+            'nombre'      => [
+                'required', 'string', 'max:100',
+                Rule::unique('roles', 'nombre')->ignore($rol?->id),
+            ],
             'descripcion' => 'nullable|string|max:255',
         ]);
 
