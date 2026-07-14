@@ -1,0 +1,189 @@
+Internal Server Error
+
+Copy as Markdown
+Illuminate\Database\QueryException
+vendor\laravel\framework\src\Illuminate\Database\Connection.php:838
+SQLSTATE[HY000]: General error: 1 table compras has no column named es_supuesto (Connection: sqlite, Database: C:\Users\PC01\Documents\GitHub\casadets\database\database.sqlite, SQL: insert into "compras" ("empresa", "documento_tipo", "documento_numero", "fecha", "metodo_pago", "observaciones", "monto_total", "caja_id", "es_supuesto", "updated_at", "created_at") values (CERAMICAS, otro, S00607, 2026-07-14 00:00:00, efectivo, ?, 689.04, 1, 0, 2026-07-14 18:29:53, 2026-07-14 18:29:53))
+
+LARAVEL
+12.55.1
+PHP
+8.2.12
+UNHANDLED
+CODE HY000
+500
+POST
+http://127.0.0.1:8000/casadets/compras
+
+Exception trace
+16 vendor frames
+
+Illuminate\Database\Eloquent\Model::__callStatic(string, array)
+app\Http\Controllers\CompraController.php:88
+
+83
+84        DB::transaction(function () use ($data, $request) {
+85            $lineas = $data['lineas'] ?? [];
+86            $total  = collect($lineas)->sum('monto_total');
+87
+88            $compra = Compra::create(array_merge(
+89                collect($data)->except('lineas')->toArray(),
+90                [
+91                    'monto_total' => $total,
+92                    'caja_id'     => session('caja_id'),
+93                    'es_supuesto' => (bool) $request->boolean('es_supuesto'),
+94                ]
+95            ));
+96
+97            $lineasCreadas = [];
+98            foreach ($lineas as $idx => $l) {
+99                $producto = $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
+100
+3 vendor frames
+
+Illuminate\Support\Facades\Facade::__callStatic(string, array)
+app\Http\Controllers\CompraController.php:84
+
+5 vendor frames
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CajaAbierta.php:34
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckRol.php:24
+
+1 vendor frame
+
+Illuminate\Pipeline\Pipeline->Illuminate\Pipeline\{closure}(object(Illuminate\Http\Request))
+app\Http\Middleware\CheckActivo.php:21
+
+45 vendor frames
+
+Illuminate\Foundation\Application->handleRequest(object(Illuminate\Http\Request))
+public\index.php:20
+
+1 vendor frame
+
+Queries
+1-10 of 100
+sqlite
+PRAGMA foreign_keys = ON
+1.04ms
+sqlite
+select * from "sessions" where "id" = 'dgokogaFtG3jHlketVmquYGbZjrITkZIsGSfd5Qq' limit 1
+2.15ms
+sqlite
+select * from "users" where "id" = 1 limit 1
+0.2ms
+sqlite
+select * from "roles" where "roles"."id" = 1 limit 1
+0.18ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = '1' and "estado" = 'abierta') as "exists"
+0.14ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = '1' and strftime('%Y-%m-%d', "fecha") = cast('2026-07-14' as text) and "estado" = 'abierta') as "exists"
+0.19ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = '1' and strftime('%Y-%m-%d', "fecha") = cast('2026-07-14' as text) and "estado" = 'abierta') as "exists"
+0.19ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = '1' and strftime('%Y-%m-%d', "fecha") = cast('2026-07-14' as text) and "estado" = 'abierta') as "exists"
+0.22ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = '1' and strftime('%Y-%m-%d', "fecha") = cast('2026-07-14' as text) and "estado" = 'abierta') as "exists"
+0.2ms
+sqlite
+select exists(select * from "caja_sesiones" where "caja_id" = '1' and strftime('%Y-%m-%d', "fecha") = cast('2026-07-14' as text) and "estado" = 'abierta') as "exists"
+0.14ms
+
+
+1
+2
+3
+4
+5
+...
+10
+
+
+Headers
+host
+127.0.0.1:8000
+connection
+keep-alive
+content-length
+430
+cache-control
+max-age=0
+sec-ch-ua
+"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Windows"
+dnt
+1
+upgrade-insecure-requests
+1
+content-type
+application/x-www-form-urlencoded
+user-agent
+Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
+origin
+http://127.0.0.1:8000
+accept
+text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+sec-fetch-site
+same-origin
+sec-fetch-mode
+navigate
+sec-fetch-user
+?1
+sec-fetch-dest
+document
+referer
+http://127.0.0.1:8000/casadets/compras/create
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+es-419,es;q=0.9,en;q=0.8
+cookie
+XSRF-TOKEN=eyJpdiI6ImxEYWY4bkppall0dHk2RDZ2enpQYlE9PSIsInZhbHVlIjoiU0ZRc055TERvdWpnSjN0RkQ4TUtYcktTdGt0MGFCcUNEdE12K1BwYmhveE1UcVVhUWtDK2NEV0lOdW96R0hBNDhMQUx2NnlDcFgxYXhoaU9ibGdaU1RlZjU0anY4MklxSERZdnVNTGlydUd2N3VOdEJVUHJCYkZRcUlFdXY1YUciLCJtYWMiOiI3ZDhmY2MzOTA2YzJiNjU3NTBkMWI4OTY5N2QxZjIzN2ZkY2JkMjA0NjZhOTFjZDFiYTEzZmE1ODkzMGM1ZTFhIiwidGFnIjoiIn0%3D; laravel-session=eyJpdiI6IkJiaDVjejNiM3pBZUYvdzVUMk8rMFE9PSIsInZhbHVlIjoiS2Z6TmhHUU5KZnFwWlY3SUN2bkp5N1Bxd1Bod3BrRUVNUVEyckJBZ3VIV010ZTQ1Mklza3ZqWVN5ZVpGZ0hWUm81cjZhYkhnTXk3UnNMSVdmL0EzYUZkNnhwc2Y4VVR0Ny9xTjFYNDd3anJZU0hEd0laeTByWHRQQmFNNmdzcFgiLCJtYWMiOiJjYWIyMTNlOTBlZjhjMmJiMzZlMGM2ODM1YTQyMWVhNzUyYzI3YWFhYTBjNGZlNWNmYzgyN2RhM2UxNmYyMTU5IiwidGFnIjoiIn0%3D
+Body
+{
+    "_token": "qPJt2eeUa3fFakSLehjbSdccymxtD0PdBAudQKQv",
+    "empresa": "CERAMICAS",
+    "fecha": "2026-07-14",
+    "documento_tipo": "otro",
+    "documento_numero": "S00607",
+    "metodo_pago": "efectivo",
+    "observaciones": null,
+    "lineas": [
+        {
+            "producto": "FACHALETA HINDU 30X60 HUDSON GREY",
+            "cantidad": "15.84",
+            "monto_unitario": "43.50",
+            "monto_total": "689.04"
+        }
+    ],
+    "monto_total": "689.04",
+    "detalles": [
+        "11"
+    ],
+    "detalles_cantidad": {
+        "11": "15.84"
+    },
+    "detalles_linea": {
+        "11": "0"
+    }
+}
+Routing
+controller
+App\Http\Controllers\CompraController@store
+middleware
+web, auth, check.activo, rol:compras, caja.abierta
+Routing parameters
+// No routing parameters
