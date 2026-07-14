@@ -72,36 +72,53 @@ class CajaService
     }
 
     /**
-     * Verifica si la caja seleccionada está abierta.
-     * Si no hay caja_id en sesión, intenta auto-seleccionar una y verifica por empresa como fallback.
+     * Verifica si hay una caja abierta disponible para el usuario.
+     * Si la hay, actualiza session('caja_id') automáticamente para que el resto
+     * de la app opere sin necesitar que el usuario navegue primero por /caja.
      */
     public static function cajaAbierta(): bool
     {
         $cajaId = session('caja_id');
 
-        // Si hay caja_id en sesión, verificar directamente
+        // Ruta rápida: el caja_id en sesión está explícitamente abierto
         if ($cajaId) {
-            return CajaSesion::where('caja_id', $cajaId)
-                ->where('estado', 'abierta')
-                ->exists();
+            if (CajaSesion::where('caja_id', $cajaId)->where('estado', 'abierta')->exists()) {
+                return true;
+            }
+            // La sesión tiene un caja_id obsoleto (cerrado u otro día) — seguir buscando
         }
 
-        // Intentar auto-seleccionar si solo hay una caja disponible
+        // Buscar entre las cajas accesibles al usuario si hay alguna abierta
         $cajasDisponibles = self::cajasUsuario();
-        if ($cajasDisponibles->count() === 1) {
-            $cajaId = $cajasDisponibles->first()->id;
-            session(['caja_id' => $cajaId]);
-
-            return CajaSesion::where('caja_id', $cajaId)
+        if ($cajasDisponibles->isNotEmpty()) {
+            $sesionAbierta = CajaSesion::whereIn('caja_id', $cajasDisponibles->pluck('id'))
                 ->where('estado', 'abierta')
-                ->exists();
+                ->latest('id')
+                ->first();
+
+            if ($sesionAbierta) {
+                // Actualizar sesión para que las operaciones posteriores funcionen
+                session(['caja_id' => $sesionAbierta->caja_id]);
+                return true;
+            }
+
+            // El usuario tiene cajas asignadas pero ninguna está abierta
+            return false;
         }
 
-        // Fallback: verificar si hay alguna caja abierta (sin filtro por caja_id)
+        // Fallback final (admin sin cajas o usuario sin asignación): cualquier caja de la empresa
         $empresa = session('empresa', 'casadets');
-        return CajaSesion::where('empresa', $empresa)
+        $sesionFallback = CajaSesion::where('empresa', $empresa)
             ->where('estado', 'abierta')
-            ->exists();
+            ->latest('id')
+            ->first();
+
+        if ($sesionFallback) {
+            session(['caja_id' => $sesionFallback->caja_id]);
+            return true;
+        }
+
+        return false;
     }
 
     /**
