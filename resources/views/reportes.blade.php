@@ -545,6 +545,17 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="semPvGastosOpRow" class="mb-2" style="display:none;">
+                            <div class="alert d-flex align-items-center gap-2 py-2 mb-0"
+                                 style="background:#f0f9ff;border:1px solid #bae6fd;">
+                                <i class="bi bi-person-fill-gear text-info flex-shrink-0"></i>
+                                <div class="small flex-grow-1">
+                                    <strong>Gastos operativos del período (Movilidad + Pago a maestro):</strong>
+                                    <span class="fw-bold ms-1 text-danger" id="semPvGastosOp">S/ 0.00</span>
+                                    <span class="text-muted ms-1">(ya descontados de la utilidad)</span>
+                                </div>
+                            </div>
+                        </div>
                         <div id="semPvAjusteSupuestosRow" class="mb-2" style="display:none;">
                             <div class="alert d-flex align-items-center gap-2 py-2 mb-0"
                                  style="background:#fffbeb;border:1px solid #fde68a;">
@@ -584,6 +595,7 @@
                             <th>Período</th>
                             <th class="text-end">Ventas</th>
                             <th class="text-end">Compras</th>
+                            <th class="text-end">Gastos Op.</th>
                             <th class="text-end">Utilidad</th>
                             <th class="text-end">Comisión</th>
                             <th class="text-end">Aj. Supuestos</th>
@@ -593,7 +605,7 @@
                         </tr>
                     </thead>
                     <tbody id="tbodySemanales">
-                        <tr><td colspan="9" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1368,18 +1380,21 @@ function formatearFecha(iso) {
 function renderTablaSemanales(lista) {
     const tbody = document.getElementById('tbodySemanales');
     if (!lista.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">Sin semanas cerradas aún</td></tr>';
         return;
     }
     tbody.innerHTML = lista.map(r => {
         const aj = r.ajuste_supuestos ?? 0;
         const ajColor = aj < -0.001 ? 'text-danger' : aj > 0.001 ? 'text-success' : 'text-muted';
         const ajStr   = aj !== 0 ? `<span class="${ajColor} fw-semibold">${aj > 0 ? '+' : ''}${fmt(aj)}</span>` : '<span class="text-muted">—</span>';
+        const go = r.gastos_operativos ?? 0;
+        const goStr = go > 0.001 ? `<span class="text-danger fw-semibold">${fmt(go)}</span>` : '<span class="text-muted">—</span>';
         return `
         <tr>
             <td>${r.periodo_inicio} — ${r.periodo_fin}</td>
             <td class="text-end">${fmt(r.total_ventas)}</td>
             <td class="text-end">${fmt(r.total_compras)}</td>
+            <td class="text-end">${goStr}</td>
             <td class="text-end">${fmt(r.utilidad)}</td>
             <td class="text-end">${fmt(r.comision_utilidad)}</td>
             <td class="text-end">${ajStr}</td>
@@ -1406,6 +1421,16 @@ function previsualizarCierre() {
             document.getElementById('semPvUtilidad').textContent    = fmt(t.utilidad);
             document.getElementById('semPvMargen').textContent      = t.margen + '%';
             document.getElementById('semPvComision').textContent    = fmt(t.comision_utilidad);
+
+            // Gastos operativos (movilidad + pago a maestro)
+            const gastosOpRow = document.getElementById('semPvGastosOpRow');
+            const gastosOp = t.gastos_operativos ?? 0;
+            if (gastosOp > 0.001) {
+                document.getElementById('semPvGastosOp').textContent = fmt(gastosOp);
+                gastosOpRow.style.display = '';
+            } else {
+                gastosOpRow.style.display = 'none';
+            }
 
             // Ajuste por vales supuestos
             const ajSupRow = document.getElementById('semPvAjusteSupuestosRow');

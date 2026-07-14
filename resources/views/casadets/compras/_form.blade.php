@@ -49,12 +49,43 @@
                 <input type="text" name="documento_numero" value="{{ old('documento_numero', $compra->documento_numero ?? '') }}" class="form-control" placeholder="Ej. F001-123">
             </div>
             <div class="col-md-4">
+                <label class="form-label">Tipo de gasto</label>
+                <select name="tipo_gasto" id="tipoGastoSelect" class="form-select">
+                    <option value="">Normal / Material</option>
+                    @foreach($tiposGasto as $key => $label)
+                        <option value="{{ $key }}" {{ old('tipo_gasto', $compra->tipo_gasto ?? '') === $key ? 'selected' : '' }}>
+                            {{ $label }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-4">
                 <label class="form-label">Método de pago</label>
                 <select name="metodo_pago" class="form-select">
                     <option value="">— Sin especificar —</option>
                     <option value="efectivo"      {{ old('metodo_pago', $compra->metodo_pago ?? '') === 'efectivo'      ? 'selected' : '' }}>Efectivo</option>
                     <option value="transferencia" {{ old('metodo_pago', $compra->metodo_pago ?? '') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
                 </select>
+            </div>
+            <div class="col-12" id="ventaAsignadaRow" style="display:none;">
+                <div class="p-3 border rounded" style="background:#f0f9ff;border-color:#bae6fd!important;">
+                    <label class="form-label fw-semibold small mb-2 d-block">
+                        <i class="bi bi-link-45deg me-1 text-info"></i> Venta asociada a este gasto <span class="fw-normal text-muted">(opcional)</span>
+                    </label>
+                    <select name="venta_asignada_id" id="ventaAsignadaSelect" class="form-select form-select-sm">
+                        <option value="">— Sin asignar —</option>
+                        @foreach($facturas->sortByDesc('fecha') as $v)
+                            <option value="{{ $v->id }}"
+                                {{ old('venta_asignada_id', $compra->venta_asignada_id ?? '') == $v->id ? 'selected' : '' }}>
+                                {{ $v->fecha->format('d/m/Y') }}
+                                — {{ ucfirst($v->documento_tipo ?? '') }} {{ $v->documento_numero }}
+                                — {{ $v->vendedor->nombre ?? 'Sin vendedor' }}
+                                — S/ {{ number_format($v->total ?? 0, 2) }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <small class="text-muted d-block mt-1">Permite identificar a qué venta pertenece este gasto.</small>
+                </div>
             </div>
             <div class="col-md-6">
                 <label class="form-label">Observaciones</label>
@@ -107,7 +138,7 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm mb-3">
+<div class="card border-0 shadow-sm mb-3" id="vincularCard">
     <div class="card-header bg-white fw-semibold">
         <i class="bi bi-link-45deg me-1"></i> Vincular a productos de una venta
         <small class="text-muted fw-normal ms-1">— opcional, para productos no propios</small>
@@ -169,6 +200,25 @@
 </div>
 
 <script>
+// ── Tipo de gasto: mostrar/ocultar sección venta y vincular ────
+(function () {
+    const tipoSel      = document.getElementById('tipoGastoSelect');
+    const ventaRow     = document.getElementById('ventaAsignadaRow');
+    const supuestoBox  = document.getElementById('esSupuesto')?.closest('.col-md-6.d-flex');
+    const vincularCard = document.getElementById('vincularCard');
+    const gastos       = ['movilidad', 'pago_maestro'];
+
+    function toggle() {
+        const esGasto = gastos.includes(tipoSel.value);
+        ventaRow.style.display = esGasto ? '' : 'none';
+        if (supuestoBox)  supuestoBox.style.display  = esGasto ? 'none' : '';
+        if (vincularCard) vincularCard.style.display = esGasto ? 'none' : '';
+    }
+
+    tipoSel.addEventListener('change', toggle);
+    toggle(); // inicializar al cargar
+})();
+
 // ── Helpers ────────────────────────────────────────────────────
 function escHtml(s) {
     return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));

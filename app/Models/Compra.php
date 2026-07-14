@@ -14,6 +14,11 @@ class Compra extends Model
 {
     use SoftDeletes;
 
+    const TIPOS_GASTO = [
+        'movilidad'    => 'Movilidad',
+        'pago_maestro' => 'Pago a maestro',
+    ];
+
     protected $fillable = [
         'empresa',
         'caja_id',
@@ -24,6 +29,8 @@ class Compra extends Model
         'metodo_pago',
         'observaciones',
         'es_supuesto',
+        'tipo_gasto',
+        'venta_asignada_id',
     ];
 
     protected $casts = [
@@ -31,6 +38,11 @@ class Compra extends Model
         'monto_total' => 'decimal:2',
         'es_supuesto' => 'boolean',
     ];
+
+    public function esGastoOperativo(): bool
+    {
+        return in_array($this->tipo_gasto, array_keys(self::TIPOS_GASTO));
+    }
 
     public function lineas(): HasMany
     {
@@ -53,6 +65,11 @@ class Compra extends Model
     public function auditorias(): HasMany
     {
         return $this->hasMany(ConciliacionAuditoria::class)->orderBy('created_at', 'desc');
+    }
+
+    public function ventaAsignada(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Venta::class, 'venta_asignada_id');
     }
 
     /** El registro de ajuste cuando esta compra es el vale supuesto. */

@@ -74,7 +74,8 @@ class CompraController extends Controller
         $facturas = $this->facturasDisponibles();
         $compra   = new Compra();
         $detallesSeleccionados = [];
-        return view('casadets.compras.create', compact('facturas', 'compra', 'detallesSeleccionados'));
+        $tiposGasto = Compra::TIPOS_GASTO;
+        return view('casadets.compras.create', compact('facturas', 'compra', 'detallesSeleccionados', 'tiposGasto'));
     }
 
     public function store(Request $request)
@@ -85,18 +86,27 @@ class CompraController extends Controller
             $lineas = $data['lineas'] ?? [];
             $total  = collect($lineas)->sum('monto_total');
 
+            $tipoGasto        = $request->input('tipo_gasto') ?: null;
+            $ventaAsignadaId  = $request->filled('venta_asignada_id') ? (int) $request->venta_asignada_id : null;
+            $esGastoOperativo = in_array($tipoGasto, array_keys(Compra::TIPOS_GASTO));
+
             $compra = Compra::create(array_merge(
                 collect($data)->except('lineas')->toArray(),
                 [
-                    'monto_total' => $total,
-                    'caja_id'     => session('caja_id'),
-                    'es_supuesto' => (bool) $request->boolean('es_supuesto'),
+                    'monto_total'       => $total,
+                    'caja_id'           => session('caja_id'),
+                    'es_supuesto'       => $esGastoOperativo ? false : (bool) $request->boolean('es_supuesto'),
+                    'tipo_gasto'        => $tipoGasto,
+                    'venta_asignada_id' => $ventaAsignadaId,
                 ]
             ));
 
             $lineasCreadas = [];
             foreach ($lineas as $idx => $l) {
-                $producto = $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
+                // Para gastos operativos (movilidad/pago_maestro) no hay movimiento de stock
+                $producto = $esGastoOperativo
+                    ? null
+                    : $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
 
                 $linea = $compra->lineas()->create(array_merge($l, [
                     'producto_id' => $producto?->id,
@@ -139,6 +149,9 @@ class CompraController extends Controller
                 'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
             ]);
 
+            // Para gastos operativos (movilidad/pago_maestro): no hay conciliación ni stock
+            if ($esGastoOperativo) return;
+
             $syncData  = $this->buildSyncData($request, $lineasCreadas);
             $overrides = array_map('intval', $request->input('detalles_override', []));
             $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
@@ -154,7 +167,7 @@ class CompraController extends Controller
 
     public function show(Compra $compra)
     {
-        $compra->load(['lineas.producto', 'detalles.venta.vendedor', 'auditorias.usuario', 'ajusteSupuesto.compraReal']);
+        $compra->load(['lineas.producto', 'detalles.venta.vendedor', 'auditorias.usuario', 'ajusteSupuesto.compraReal', 'ventaAsignada']);
         return view('casadets.compras.show', compact('compra'));
     }
 
@@ -171,7 +184,8 @@ class CompraController extends Controller
             }
         }
 
-        return view('casadets.compras.edit', compact('compra', 'facturas', 'detallesSeleccionados'));
+        $tiposGasto = Compra::TIPOS_GASTO;
+        return view('casadets.compras.edit', compact('compra', 'facturas', 'detallesSeleccionados', 'tiposGasto'));
     }
 
     public function update(Request $request, Compra $compra)
@@ -181,11 +195,19 @@ class CompraController extends Controller
         DB::transaction(function () use ($data, $request, $compra) {
             $lineas = $data['lineas'] ?? [];
             $total  = collect($lineas)->sum('monto_total');
-            $esSupuesto = (bool) $request->boolean('es_supuesto');
+            $tipoGasto        = $request->input('tipo_gasto') ?: null;
+            $ventaAsignadaId  = $request->filled('venta_asignada_id') ? (int) $request->venta_asignada_id : null;
+            $esGastoOperativo = in_array($tipoGasto, array_keys(Compra::TIPOS_GASTO));
+            $esSupuesto       = $esGastoOperativo ? false : (bool) $request->boolean('es_supuesto');
 
             $compra->update(array_merge(
                 collect($data)->except('lineas')->toArray(),
-                ['monto_total' => $total, 'es_supuesto' => $esSupuesto]
+                [
+                    'monto_total'       => $total,
+                    'es_supuesto'       => $esSupuesto,
+                    'tipo_gasto'        => $tipoGasto,
+                    'venta_asignada_id' => $ventaAsignadaId,
+                ]
             ));
 
             $productoIdsAntes = $compra->lineas()->pluck('producto_id')->filter()->unique();
@@ -198,7 +220,9 @@ class CompraController extends Controller
 
             $lineasCreadas = [];
             foreach ($lineas as $idx => $l) {
-                $producto = $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
+                $producto = $esGastoOperativo
+                    ? null
+                    : $this->resolverProducto($l['producto'] ?? null, $l['monto_unitario']);
 
                 $linea = $compra->lineas()->create(array_merge($l, [
                     'producto_id' => $producto?->id,
@@ -262,6 +286,9 @@ class CompraController extends Controller
                     'observaciones'    => $compra->empresa . $metodoLabel . ($compra->observaciones ? ' — ' . $compra->observaciones : ''),
                 ]);
             }
+
+            // Para gastos operativos no hay conciliación
+            if ($esGastoOperativo) return;
 
             $syncData  = $this->buildSyncData($request, $lineasCreadas);
             $overrides = array_map('intval', $request->input('detalles_override', []));

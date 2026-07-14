@@ -6,7 +6,11 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div class="d-flex align-items-center gap-2">
         <h3 class="mb-0">Compra #{{ $compra->id }}</h3>
-        @if($compra->es_supuesto)
+        @if($compra->tipo_gasto)
+            <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:.78rem;">
+                <i class="bi bi-person-fill-gear me-1"></i> {{ \App\Models\Compra::TIPOS_GASTO[$compra->tipo_gasto] ?? $compra->tipo_gasto }}
+            </span>
+        @elseif($compra->es_supuesto)
             <span class="badge" style="background:#fef3c7;color:#92400e;font-size:.78rem;">
                 <i class="bi bi-tag-fill me-1"></i> VALE SUPUESTO
             </span>
@@ -82,6 +86,27 @@
     </div>
     <div class="col-md-2"><div class="card kpi-card"><small class="text-muted">Total</small><h6 class="mb-0 text-primary">S/ {{ number_format($compra->monto_total, 2) }}</h6></div></div>
 </div>
+
+@if($compra->tipo_gasto)
+<div class="alert d-flex align-items-center gap-3 mb-3 py-2"
+     style="background:#f0f9ff;border:1px solid #bae6fd;">
+    <i class="bi bi-person-fill-gear text-info fs-5 flex-shrink-0"></i>
+    <div class="flex-grow-1">
+        <strong>Gasto operativo — {{ \App\Models\Compra::TIPOS_GASTO[$compra->tipo_gasto] ?? $compra->tipo_gasto }}</strong>
+        @if($compra->ventaAsignada)
+            <span class="text-muted mx-2">·</span>
+            Asociado a:
+            <a href="/casadets/ventas/{{ $compra->ventaAsignada->id }}" class="fw-semibold ms-1">
+                {{ ucfirst($compra->ventaAsignada->documento_tipo ?? '') }} {{ $compra->ventaAsignada->documento_numero }}
+                — {{ $compra->ventaAsignada->fecha?->format('d/m/Y') }}
+            </a>
+        @else
+            <span class="text-muted ms-2">— sin venta asignada</span>
+        @endif
+        <div class="small text-muted mt-1">Este gasto se descuenta directamente de la utilidad en el cierre semanal.</div>
+    </div>
+</div>
+@endif
 
 @if($compra->observaciones)
 <div class="alert alert-light border mb-3"><small class="text-muted">Observaciones:</small> {{ $compra->observaciones }}</div>

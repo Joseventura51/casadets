@@ -87,7 +87,14 @@ class ReporteSemanalController extends Controller
             ->selectRaw('SUM(cvd.cantidad * vd.precio_unitario) as t')
             ->value('t');
 
-        $utilidad = round($totalVentasValidas - $totalCosto, 2);
+        // Gastos operativos del período (movilidad + pago a maestro) → descuento directo a utilidad
+        $gastosOperativos = round((float) DB::table('compras')
+            ->whereBetween('fecha', [$inicio->toDateString(), $fin->toDateString()])
+            ->whereNull('deleted_at')
+            ->whereIn('tipo_gasto', ['movilidad', 'pago_maestro'])
+            ->sum('monto_total'), 2);
+
+        $utilidad = round($totalVentasValidas - $totalCosto - $gastosOperativos, 2);
         $margen   = $totalVentasValidas > 0 ? round($utilidad / $totalVentasValidas * 100, 1) : 0;
         $comisionUtilidad = ComisionUtilidad::calcular($validIdsUtilidad);
 
@@ -124,6 +131,7 @@ class ReporteSemanalController extends Controller
                 'margen'            => $margen,
                 'comision_utilidad' => round($comisionUtilidad, 2),
                 'ajuste_supuestos'  => $ajusteSupuestos,
+                'gastos_operativos' => $gastosOperativos,
                 'ventas_pendientes' => $pendientesIds->count(),
             ],
         ];
@@ -146,6 +154,8 @@ class ReporteSemanalController extends Controller
                 'utilidad' => (float) $r->utilidad,
                 'margen' => (float) $r->margen,
                 'comision_utilidad' => (float) $r->comision_utilidad,
+                'ajuste_supuestos'  => (float) ($r->ajuste_supuestos ?? 0),
+                'gastos_operativos' => (float) ($r->gastos_operativos ?? 0),
                 'ventas_pendientes' => $r->ventas_pendientes,
                 'cerrado_por' => $r->cerradoPor?->name,
                 'cerrado_en' => $r->created_at->format('d/m/Y H:i'),
@@ -226,6 +236,7 @@ class ReporteSemanalController extends Controller
                 'margen'            => $resultado['totales']['margen'],
                 'comision_utilidad' => $resultado['totales']['comision_utilidad'],
                 'ajuste_supuestos'  => $resultado['totales']['ajuste_supuestos'],
+                'gastos_operativos' => $resultado['totales']['gastos_operativos'],
                 'ventas_pendientes' => $resultado['totales']['ventas_pendientes'],
                 'cerrado_por_id'    => $r->user()?->id,
             ]);

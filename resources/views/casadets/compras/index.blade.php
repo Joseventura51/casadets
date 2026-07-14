@@ -84,7 +84,11 @@
                     <td>{{ $c->fecha->format('d/m/Y') }}</td>
                     <td>
                         {{ $c->empresa }}
-                        @if($c->es_supuesto)
+                        @if($c->tipo_gasto)
+                            <span class="badge ms-1" style="background:#e0f2fe;color:#0369a1;font-size:.66rem;vertical-align:middle;">
+                                <i class="bi bi-person-fill-gear me-1"></i>{{ \App\Models\Compra::TIPOS_GASTO[$c->tipo_gasto] ?? $c->tipo_gasto }}
+                            </span>
+                        @elseif($c->es_supuesto)
                             <span class="badge ms-1" style="background:#fef3c7;color:#92400e;font-size:.66rem;vertical-align:middle;">
                                 <i class="bi bi-tag-fill me-1"></i>SUPUESTO
                             </span>
