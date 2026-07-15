@@ -41,6 +41,7 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::get('/casadets/reportes-caja',                    [\App\Http\Controllers\ReporteCajaController::class, 'index']);
         Route::get('/casadets/reportes-caja/{reporte}/descargar',[\App\Http\Controllers\ReporteCajaController::class, 'descargar']);
         Route::post('/casadets/reportes-caja/{reporte}/regenerar',[\App\Http\Controllers\ReporteCajaController::class, 'regenerar']);
+        Route::post('/casadets/reportes-caja/{reporte}/cerrar',   [\App\Http\Controllers\ReporteCajaController::class, 'cerrar']);
     });
 
     // Reportes

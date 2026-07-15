@@ -63,6 +63,10 @@ class ReporteCajaController extends Controller
 
     public function regenerar(ReporteCaja $reporte)
     {
+        if ($reporte->cerrado) {
+            return back()->with('error', 'Este reporte está cerrado y no puede regenerarse.');
+        }
+
         try {
             $sesion = $reporte->sesion;
             ReporteCajaService::generar($sesion);
@@ -70,5 +74,19 @@ class ReporteCajaController extends Controller
         } catch (\Throwable $e) {
             return back()->with('error', 'Error al regenerar: ' . $e->getMessage());
         }
+    }
+
+    public function cerrar(ReporteCaja $reporte)
+    {
+        if ($reporte->cerrado) {
+            return back()->with('error', 'Este reporte ya está cerrado.');
+        }
+
+        $reporte->update([
+            'cerrado'    => true,
+            'cerrado_at' => now(),
+        ]);
+
+        return back()->with('success', 'Reporte cerrado. Ya no puede regenerarse.');
     }
 }

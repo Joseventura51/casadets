@@ -9,11 +9,14 @@ class ReporteCaja extends Model
     protected $fillable = [
         'caja_sesion_id', 'caja_id', 'fecha', 'archivo', 'generado_at',
         'total_cobradas', 'total_otros', 'total_salidas', 'balance', 'efectivo_esperado',
+        'cerrado', 'cerrado_at',
     ];
 
     protected $casts = [
-        'fecha'        => 'date',
-        'generado_at'  => 'datetime',
+        'fecha'       => 'date',
+        'generado_at' => 'datetime',
+        'cerrado'     => 'boolean',
+        'cerrado_at'  => 'datetime',
     ];
 
     public function sesion()

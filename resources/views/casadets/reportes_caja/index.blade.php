@@ -187,20 +187,35 @@
                                 </small>
                             </td>
                             <td class="pe-4">
-                                <div class="d-flex gap-1">
+                                <div class="d-flex gap-1 align-items-center">
                                     @if($r->existeArchivo())
                                     <a href="/casadets/reportes-caja/{{ $r->id }}/descargar"
                                        class="btn btn-sm btn-success" title="Descargar Excel">
                                         <i class="bi bi-download me-1"></i>Excel
                                     </a>
                                     @endif
-                                    <form method="POST" action="/casadets/reportes-caja/{{ $r->id }}/regenerar"
-                                          onsubmit="return confirm('¿Regenerar el reporte de esta sesión?')">
-                                        @csrf
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Regenerar reporte">
-                                            <i class="bi bi-arrow-clockwise"></i>
-                                        </button>
-                                    </form>
+
+                                    @if($r->cerrado)
+                                        <span class="badge bg-secondary bg-opacity-15 text-secondary border border-secondary border-opacity-25 px-2 py-1"
+                                              title="Cerrado el {{ $r->cerrado_at?->format('d/m/Y H:i') }}">
+                                            <i class="bi bi-lock-fill me-1"></i>Cerrado
+                                        </span>
+                                    @else
+                                        <form method="POST" action="/casadets/reportes-caja/{{ $r->id }}/regenerar"
+                                              onsubmit="return confirm('¿Regenerar el reporte de esta sesión?')">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Regenerar reporte">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="/casadets/reportes-caja/{{ $r->id }}/cerrar"
+                                              onsubmit="return confirm('¿Cerrar este reporte? Ya no podrá regenerarse.')">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Cerrar reporte">
+                                                <i class="bi bi-lock"></i>
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
