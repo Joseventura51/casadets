@@ -68,22 +68,54 @@
                 </select>
             </div>
             <div class="col-12" id="ventaAsignadaRow" style="display:none;">
+                @php
+                    $ventaAsignadaActual = null;
+                    $ventaAsignadaId     = old('venta_asignada_id', $compra->venta_asignada_id ?? '');
+                    if ($ventaAsignadaId) {
+                        $va = $facturas->firstWhere('id', $ventaAsignadaId);
+                        if ($va) {
+                            $ventaAsignadaActual = $va->fecha->format('d/m/Y')
+                                . ' — ' . ucfirst($va->documento_tipo ?? '')
+                                . ' ' . $va->documento_numero
+                                . ' — ' . ($va->vendedor->nombre ?? 'Sin vendedor')
+                                . ' — S/ ' . number_format($va->total ?? 0, 2);
+                        }
+                    }
+                @endphp
                 <div class="p-3 border rounded" style="background:#f0f9ff;border-color:#bae6fd!important;">
                     <label class="form-label fw-semibold small mb-2 d-block">
                         <i class="bi bi-link-45deg me-1 text-info"></i> Venta asociada a este gasto <span class="fw-normal text-muted">(opcional)</span>
                     </label>
-                    <select name="venta_asignada_id" id="ventaAsignadaSelect" class="form-select form-select-sm">
-                        <option value="">— Sin asignar —</option>
-                        @foreach($facturas->sortByDesc('fecha') as $v)
-                            <option value="{{ $v->id }}"
-                                {{ old('venta_asignada_id', $compra->venta_asignada_id ?? '') == $v->id ? 'selected' : '' }}>
-                                {{ $v->fecha->format('d/m/Y') }}
-                                — {{ ucfirst($v->documento_tipo ?? '') }} {{ $v->documento_numero }}
-                                — {{ $v->vendedor->nombre ?? 'Sin vendedor' }}
-                                — S/ {{ number_format($v->total ?? 0, 2) }}
-                            </option>
-                        @endforeach
-                    </select>
+
+                    {{-- Hidden: valor real que se envía al servidor --}}
+                    <input type="hidden" name="venta_asignada_id" id="ventaAsignadaId"
+                           value="{{ $ventaAsignadaId }}">
+
+                    {{-- Input visible de búsqueda --}}
+                    <div class="position-relative">
+                        <span class="position-absolute top-50 translate-middle-y ms-2 text-muted" style="left:4px;pointer-events:none;">
+                            <i class="bi bi-search" style="font-size:.8rem;"></i>
+                        </span>
+                        <input type="text"
+                               id="ventaAsignadaBuscador"
+                               class="form-control form-control-sm ps-4"
+                               placeholder="Buscar por documento, vendedor…"
+                               autocomplete="off"
+                               value="{{ $ventaAsignadaActual ?? '' }}">
+                        <button type="button"
+                                id="ventaAsignadaClear"
+                                title="Quitar asignación"
+                                style="display:{{ $ventaAsignadaId ? '' : 'none' }};
+                                       position:absolute;right:6px;top:50%;transform:translateY(-50%);
+                                       border:none;background:transparent;color:#6c757d;cursor:pointer;
+                                       font-size:.8rem;line-height:1;padding:2px 4px;">✕</button>
+                        <div id="ventaAsignadaDropdown"
+                             style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1060;
+                                    max-height:260px;overflow-y:auto;border:1px solid #dee2e6;
+                                    border-radius:0 0 .375rem .375rem;background:#fff;
+                                    box-shadow:0 4px 12px rgba(0,0,0,.1);"></div>
+                    </div>
+
                     <small class="text-muted d-block mt-1">Permite identificar a qué venta pertenece este gasto.</small>
                 </div>
             </div>
@@ -470,6 +502,78 @@ function mostrarDropdown() {
 buscador.addEventListener('focus', mostrarDropdown);
 buscador.addEventListener('input', mostrarDropdown);
 buscador.addEventListener('blur',  () => setTimeout(() => { dropdown.style.display = 'none'; buscador.value = ''; }, 200));
+
+// ── Buscador "Venta asociada a este gasto" ─────────────────────
+(function () {
+    const inputBusc   = document.getElementById('ventaAsignadaBuscador');
+    const hiddenId    = document.getElementById('ventaAsignadaId');
+    const dropEl      = document.getElementById('ventaAsignadaDropdown');
+    const clearBtn    = document.getElementById('ventaAsignadaClear');
+    if (!inputBusc) return;
+
+    function labelVenta(v) {
+        return `${v.fecha_display} — ${v.tipo} ${v.numero} — ${v.vendedor} — S/ ${v.total}`;
+    }
+
+    function seleccionar(v) {
+        hiddenId.value  = v.id;
+        inputBusc.value = labelVenta(v);
+        clearBtn.style.display = '';
+        dropEl.style.display   = 'none';
+    }
+
+    function limpiar() {
+        hiddenId.value  = '';
+        inputBusc.value = '';
+        clearBtn.style.display = 'none';
+        dropEl.style.display   = 'none';
+    }
+
+    function mostrar() {
+        const texto = inputBusc.value.toLowerCase().trim();
+        const lista = todasLasVentas.filter(v => {
+            const s = (v.tipo + ' ' + v.numero + ' ' + v.vendedor + ' ' + v.fecha_display).toLowerCase();
+            return !texto || s.includes(texto);
+        });
+
+        dropEl.innerHTML = '';
+        if (lista.length === 0) {
+            dropEl.innerHTML = '<div style="padding:.5rem .9rem;color:#6c757d;font-size:.85rem;">Sin resultados</div>';
+        } else {
+            lista.slice(0, 50).forEach(v => {
+                const row = document.createElement('div');
+                row.style.cssText = 'padding:.4rem .9rem;cursor:pointer;font-size:.83rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:6px;';
+                row.innerHTML =
+                    `<span class="badge bg-secondary" style="font-size:.65rem;flex-shrink:0;">${escHtml(v.tipo)}</span>` +
+                    `<strong style="flex-shrink:0;">${escHtml(v.numero)}</strong>` +
+                    `<span class="text-muted" style="font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· ${v.fecha_display} · ${escHtml(v.vendedor)} · S/ ${v.total}</span>`;
+                row.addEventListener('mouseover', () => row.style.background = '#f0f4ff');
+                row.addEventListener('mouseout',  () => row.style.background = '');
+                row.addEventListener('mousedown', e => { e.preventDefault(); seleccionar(v); });
+                dropEl.appendChild(row);
+            });
+        }
+        dropEl.style.display = '';
+    }
+
+    clearBtn.addEventListener('click', limpiar);
+    inputBusc.addEventListener('focus', mostrar);
+    inputBusc.addEventListener('input', () => {
+        // Si el usuario escribe después de haber seleccionado, borra la selección
+        if (hiddenId.value) {
+            hiddenId.value = '';
+            clearBtn.style.display = 'none';
+        }
+        mostrar();
+    });
+    inputBusc.addEventListener('blur', () => {
+        setTimeout(() => {
+            dropEl.style.display = 'none';
+            // Si no hay valor seleccionado, limpia el texto también
+            if (!hiddenId.value) inputBusc.value = '';
+        }, 200);
+    });
+})();
 
 fechaDesde.addEventListener('change', () => { if (dropdown.style.display !== 'none') mostrarDropdown(); });
 fechaHasta.addEventListener('change', () => { if (dropdown.style.display !== 'none') mostrarDropdown(); });
