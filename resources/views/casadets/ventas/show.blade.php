@@ -375,6 +375,87 @@
     </div>
 </div>
 
+{{-- ── Evidencias de pago ─────────────────────────────────────── --}}
+@php
+    $todosLosArchivos = $venta->pagosAplicados
+        ->flatMap(fn($p) => $p->archivos ?? collect())
+        ->filter(fn($a) => $a->existeArchivo());
+@endphp
+@if($todosLosArchivos->count() > 0)
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-white fw-semibold d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-images me-1 text-primary"></i> Evidencias del pago</span>
+        <small class="text-muted">{{ $todosLosArchivos->count() }} imagen(es)</small>
+    </div>
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2">
+            @foreach($todosLosArchivos as $arch)
+            <div class="position-relative evidencia-thumb"
+                 style="width:90px;height:90px;cursor:pointer;"
+                 onclick="abrirVisor('{{ $arch->urlPublica() }}', '{{ addslashes($arch->nombre_original) }}')"
+                 title="{{ $arch->nombre_original }}">
+                <img src="{{ $arch->urlPublica() }}" alt="{{ $arch->nombre_original }}"
+                     loading="lazy"
+                     style="width:90px;height:90px;object-fit:cover;border-radius:8px;
+                            border:1px solid #dee2e6;transition:opacity .15s;">
+                <div class="evidencia-overlay position-absolute top-0 start-0 w-100 h-100
+                            d-flex align-items-center justify-content-center"
+                     style="border-radius:8px;background:rgba(0,0,0,.35);opacity:0;transition:opacity .15s;">
+                    <i class="bi bi-zoom-in text-white fs-5"></i>
+                </div>
+                @if(auth()->user()->puedeHacer('ventas.pago'))
+                <form method="POST" action="/casadets/cobranza-archivos/{{ $arch->id }}"
+                      onsubmit="return confirm('¿Eliminar esta imagen?')"
+                      style="position:absolute;top:-6px;right:-6px;">
+                    @csrf @method('DELETE')
+                    <button type="submit"
+                            style="width:22px;height:22px;border-radius:50%;border:none;
+                                   background:#dc3545;color:#fff;font-size:11px;line-height:1;
+                                   display:flex;align-items:center;justify-content:center;
+                                   cursor:pointer;padding:0;" title="Eliminar">✕</button>
+                </form>
+                @endif
+            </div>
+            @endforeach
+        </div>
+    </div>
+</div>
+
+{{-- Modal visor ──────────────────────────────────────────────── --}}
+<div class="modal fade" id="modalVisorEvidencia" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content bg-transparent border-0 shadow-none">
+            <div class="modal-body p-1 text-center position-relative">
+                <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-2"
+                        data-bs-dismiss="modal" style="z-index:10;"></button>
+                <img id="visorImg" src="" alt="" class="img-fluid rounded"
+                     style="max-height:85vh;object-fit:contain;">
+                <div class="mt-2">
+                    <a id="visorDescargar" href="#" download
+                       class="btn btn-sm btn-light">
+                        <i class="bi bi-download me-1"></i>Descargar
+                    </a>
+                    <span id="visorNombre" class="text-white small ms-2 opacity-75"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.evidencia-thumb:hover .evidencia-overlay { opacity:1 !important; }
+.evidencia-thumb:hover img { opacity:.85; }
+</style>
+<script>
+function abrirVisor(url, nombre) {
+    document.getElementById('visorImg').src        = url;
+    document.getElementById('visorDescargar').href = url;
+    document.getElementById('visorNombre').textContent = nombre;
+    new bootstrap.Modal(document.getElementById('modalVisorEvidencia')).show();
+}
+</script>
+@endif
+
 {{-- Compras vinculadas agrupadas por empresa --}}
 @if($comprasVinculadas->count())
 <div class="card border-0 shadow-sm">

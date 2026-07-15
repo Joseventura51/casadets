@@ -469,6 +469,27 @@
                         <i class="bi bi-plus-lg me-1"></i> Agregar método de pago
                     </button>
 
+                    {{-- ── Evidencia de pago (solo métodos no-efectivo) ──────── --}}
+                    <div id="seccionEvidencia" style="display:none;" class="mt-3">
+                        <div class="border rounded p-2" style="border-style:dashed !important; border-color:#0d6efd !important; background:#f8f9ff;">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-paperclip text-primary"></i>
+                                <span class="fw-semibold small text-primary">Evidencia del pago</span>
+                                <span class="text-muted small">(JPG, PNG, WEBP · máx. 5 MB c/u)</span>
+                            </div>
+                            <div id="dropZone"
+                                 class="rounded text-center py-3 px-2"
+                                 style="border:2px dashed #ced4da; cursor:pointer; transition:border-color .2s, background .2s;"
+                                 onclick="document.getElementById('inputEvidencia').click()">
+                                <i class="bi bi-cloud-upload fs-4 text-muted d-block mb-1"></i>
+                                <span class="text-muted small">Arrastrá las imágenes aquí o <strong>hacé clic</strong> para seleccionar</span>
+                            </div>
+                            <input type="file" id="inputEvidencia" accept=".jpg,.jpeg,.png,.webp"
+                                   multiple style="display:none;">
+                            <div id="listaEvidencia" class="mt-2 d-flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+
                     <div class="mt-3 p-2 bg-light pago-resumen">
                         <div class="row text-center">
                             <div class="col-4">
@@ -568,7 +589,9 @@ const YA_PAGADO      = Number(`{!! json_encode((float) $yaPagedo, JSON_UNESCAPED
 const SALDO_PENDIENTE = Number(`{!! json_encode((float) $saldoPendiente, JSON_UNESCAPED_UNICODE) !!}`);
 const VENTA_PAGADA    = JSON.parse(`{!! json_encode($ventaPagada, JSON_UNESCAPED_UNICODE) !!}`);
 const VENTA_ID        = Number(`{!! json_encode($venta->id, JSON_UNESCAPED_UNICODE) !!}`);
-const METODOS_CON_DESC = ['transferencia', 'tarjeta', 'yape', 'plin'];
+const METODOS_CON_DESC      = ['transferencia', 'tarjeta', 'yape', 'plin'];
+const METODOS_CON_EVIDENCIA = ['transferencia', 'tarjeta', 'yape', 'plin', 'otro'];
+let archivosEvidencia = []; // archivos seleccionados por el usuario
 let pagoIdx = Number(`{!! json_encode(count($primerosMetodos), JSON_UNESCAPED_UNICODE) !!}`);
 let saldoAdicionalSel = 0;
 
@@ -779,6 +802,7 @@ document.getElementById('pagosContainer').addEventListener('input', e => {
 document.getElementById('pagosContainer').addEventListener('change', e => {
     if (e.target.classList.contains('metodo-sel')) {
         toggleDesc(e.target.closest('.pago-row'));
+        actualizarSeccionEvidencia();
         recalc();
     }
 });
@@ -799,6 +823,76 @@ document.getElementById('btnAgregarPago').addEventListener('click', () => {
 });
 
 document.querySelectorAll('#pagosContainer .pago-row').forEach(toggleDesc);
+
+// ── Evidencia de pago ──────────────────────────────────────────
+function actualizarSeccionEvidencia() {
+    const metodos = Array.from(document.querySelectorAll('#pagosContainer select.metodo-sel'))
+        .map(s => s.value);
+    const tieneNoEfectivo = metodos.some(m => METODOS_CON_EVIDENCIA.includes(m) || (m !== 'efectivo' && m !== 'ninguno'));
+    document.getElementById('seccionEvidencia').style.display = tieneNoEfectivo ? '' : 'none';
+}
+
+function renderMiniaturas() {
+    const lista = document.getElementById('listaEvidencia');
+    lista.innerHTML = '';
+    archivosEvidencia.forEach((f, idx) => {
+        const url = URL.createObjectURL(f);
+        const item = document.createElement('div');
+        item.style.cssText = 'position:relative;width:72px;height:72px;flex-shrink:0;';
+        item.innerHTML = `
+            <img src="${url}" alt="${f.name}"
+                 style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6;">
+            <button type="button"
+                    style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;
+                           border:none;background:#dc3545;color:#fff;font-size:11px;line-height:1;
+                           display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;"
+                    onclick="quitarEvidencia(${idx})" title="Quitar">✕</button>`;
+        lista.appendChild(item);
+    });
+}
+
+function quitarEvidencia(idx) {
+    archivosEvidencia.splice(idx, 1);
+    renderMiniaturas();
+}
+
+function agregarArchivos(files) {
+    const permitidos = ['image/jpeg', 'image/png', 'image/webp'];
+    const maxSize    = 5 * 1024 * 1024;
+    let errores = [];
+    Array.from(files).forEach(f => {
+        if (!permitidos.includes(f.type)) { errores.push(`"${f.name}" no es JPG/PNG/WEBP.`); return; }
+        if (f.size > maxSize) { errores.push(`"${f.name}" supera 5 MB.`); return; }
+        archivosEvidencia.push(f);
+    });
+    if (errores.length) showToast(errores.join(' '), 'warning');
+    renderMiniaturas();
+}
+
+document.getElementById('inputEvidencia').addEventListener('change', e => {
+    agregarArchivos(e.target.files);
+    e.target.value = '';
+});
+
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#0d6efd';
+    dropZone.style.background  = '#e8f0fe';
+});
+dropZone.addEventListener('dragleave', () => {
+    dropZone.style.borderColor = '#ced4da';
+    dropZone.style.background  = '';
+});
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.borderColor = '#ced4da';
+    dropZone.style.background  = '';
+    agregarArchivos(e.dataTransfer.files);
+});
+
+// Inicializar visibilidad al cargar
+actualizarSeccionEvidencia();
 
 // ── Buscador de vales (si hay > 3) ────────────────────────────
 const buscarValeEl = document.getElementById('buscarVale');
@@ -844,7 +938,32 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
         if (json.success) {
             const extra = json.msg_saldo_favor ? ' ' + json.msg_saldo_favor : '';
             showToast('Pago guardado correctamente.' + extra, 'success');
-            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1600);
+
+            // Si hay archivos y se obtuvo un pago_id, subir evidencias
+            if (archivosEvidencia.length > 0 && json.pago_id) {
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Subiendo evidencia…';
+                try {
+                    const fdFiles = new FormData();
+                    fdFiles.append('pago_id', json.pago_id);
+                    archivosEvidencia.forEach(f => fdFiles.append('archivos[]', f));
+                    const token = fd.get('_token');
+                    const resFiles = await fetch('/casadets/cobranza-archivos/upload', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                        body: fdFiles,
+                    });
+                    const jsonFiles = await resFiles.json();
+                    if (jsonFiles.success) {
+                        showToast(jsonFiles.message, 'success');
+                    } else {
+                        showToast('Pago guardado, pero hubo un error subiendo imágenes.', 'warning');
+                    }
+                } catch(errFiles) {
+                    showToast('Pago guardado, pero no se pudo subir la evidencia.', 'warning');
+                }
+            }
+
+            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1800);
         } else {
             const errs = json.errors
                 ? Object.values(json.errors).flat().join(' ')

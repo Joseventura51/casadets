@@ -44,6 +44,17 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::post('/casadets/reportes-caja/{reporte}/cerrar',   [\App\Http\Controllers\ReporteCajaController::class, 'cerrar']);
     });
 
+    // Evidencias de cobranza
+    Route::middleware('auth')->group(function () {
+        Route::post('/casadets/cobranza-archivos/upload',               [\App\Http\Controllers\CobranzaArchivoController::class, 'upload']);
+        Route::delete('/casadets/cobranza-archivos/{archivo}',          [\App\Http\Controllers\CobranzaArchivoController::class, 'destroy']);
+        Route::get('/casadets/cobranza-archivos/{archivo}/ver',         [\App\Http\Controllers\CobranzaArchivoController::class, 'ver']);
+    });
+
+    // Cierre de rutas previas (dummy para que el parser no rompa)
+    Route::middleware('rol:reportes-caja')->group(function () {
+    });
+
     // Reportes
     Route::middleware('rol:reportes')->group(function () {
         Route::get('/reportes',                  [ReporteController::class, 'index']);

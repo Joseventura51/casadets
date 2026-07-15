@@ -1,0 +1,140 @@
+Nueva funcionalidad: Adjuntar evidencia de pago en las cobranzas
+
+Implementar una nueva funcionalidad en el módulo de Cobranzas / Pagos de Vales para permitir adjuntar imágenes como evidencia del pago.
+
+Objetivo
+
+Cuando el usuario registre una cobranza mediante un método de pago distinto de efectivo, el sistema deberá permitir adjuntar una o varias imágenes como respaldo del pago (voucher, transferencia, captura bancaria, etc.).
+
+Requisitos funcionales
+1. Mostrar el campo solo cuando corresponda
+
+Si el método de pago es:
+
+Transferencia
+Depósito
+Yape
+Plin
+Tarjeta
+Link de pago
+Otro método electrónico
+
+Debe aparecer una sección llamada:
+
+Evidencia del pago
+
+Si el método es:
+
+Efectivo
+
+La sección no debe mostrarse.
+
+2. Permitir adjuntar imágenes
+
+Debe permitir:
+
+Arrastrar archivos (drag & drop).
+O seleccionar desde el explorador.
+
+Tipos permitidos:
+
+JPG
+JPEG
+PNG
+WEBP
+
+Tamaño máximo por archivo:
+
+5 MB.
+
+3. Múltiples imágenes
+
+Permitir subir varias imágenes para una misma cobranza.
+
+Ejemplos:
+
+Voucher del banco.
+Captura de la transferencia.
+Captura del correo de confirmación.
+4. Base de datos
+
+Crear una nueva tabla para almacenar los archivos.
+
+Ejemplo:
+
+cobranza_archivos
+
+Campos sugeridos:
+
+id
+cobranza_id (FK)
+nombre_original
+ruta
+extension
+mime_type
+tamaño
+usuario_id
+created_at
+updated_at
+
+No guardar imágenes en la base de datos (BLOB).
+
+Guardar únicamente la ruta del archivo.
+
+5. Almacenamiento
+
+Guardar los archivos utilizando el sistema Filesystem de Laravel.
+
+Ruta sugerida:
+
+storage/app/public/cobranzas/
+
+Organizar por año y mes:
+
+storage/app/public/cobranzas/2026/07/
+
+Generar nombres únicos para evitar colisiones.
+
+6. Conversión automática
+
+Después de subir la imagen:
+
+Convertir automáticamente a WEBP.
+Reducir la resolución si es muy grande (aprox. 1600 px como máximo).
+Mantener buena calidad.
+Eliminar el archivo temporal si fue convertido.
+
+Esto ayudará a ahorrar espacio y mejorar el rendimiento.
+
+7. Visualización
+
+En el detalle de la cobranza mostrar una sección:
+
+Evidencias del pago
+
+Mostrar miniaturas.
+
+Al hacer clic sobre una miniatura, abrir la imagen en tamaño completo (modal o visor).
+
+Permitir descargar la imagen.
+
+8. Eliminación
+
+Si se elimina una cobranza, eliminar también todos los archivos asociados del almacenamiento para evitar archivos huérfanos.
+
+9. Validaciones
+
+Validar:
+
+Tipo de archivo permitido.
+Tamaño máximo.
+Que no se puedan subir ejecutables u otros archivos peligrosos.
+10. Integración
+
+La funcionalidad debe integrarse con el flujo actual de registro de cobranzas sin modificar la lógica existente de pagos.
+
+Debe ser opcional para métodos distintos de efectivo y no afectar el registro de pagos en efectivo.
+
+Objetivo final
+
+Que cada cobranza realizada mediante un medio electrónico pueda conservar sus comprobantes de pago para futuras auditorías, verificaciones y consultas, manteniendo un almacenamiento eficiente y preparado para escalar.

@@ -168,7 +168,12 @@ class VentaController extends Controller
     public function show(Venta $venta)
     {
         $this->authorizeVenta($venta);
-        $venta->load(['vendedor', 'cliente', 'detalles.compras.lineas', 'detalles.producto', 'devoluciones']);
+        $venta->load([
+            'vendedor', 'cliente',
+            'detalles.compras.lineas', 'detalles.producto',
+            'devoluciones',
+            'pagosAplicados.archivos',
+        ]);
         return view('casadets.ventas.show', compact('venta'));
     }
 
@@ -569,6 +574,7 @@ class VentaController extends Controller
             return response()->json([
                 'success'         => true,
                 'venta_id'        => $venta->id,
+                'pago_id'         => $result['pago']?->id,
                 'estado'          => $result['estado'],
                 'saldo_favor'     => $result['saldo_favor'],
                 'saldo_pendiente' => $result['saldo_pendiente'],

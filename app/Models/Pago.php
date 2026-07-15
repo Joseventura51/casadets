@@ -46,4 +46,9 @@ class Pago extends Model
                     ->withPivot('monto_aplicado')
                     ->withTimestamps();
     }
+
+    public function archivos()
+    {
+        return $this->hasMany(CobranzaArchivo::class);
+    }
 }
