@@ -355,6 +355,24 @@ if (lineasIniciales.length > 0) {
 // ── Vinculación con ventas ─────────────────────────────────────
 const facturasCargadas       = new Set();
 const container              = document.getElementById('facturasContainer');
+const _overridesConfirmados  = new Set();  // IDs de venta_detalle con override de cantidad confirmado
+
+function _actualizarOverrideInputs() {
+    let cont = document.getElementById('_overridesContainer');
+    if (!cont) {
+        cont = document.createElement('div');
+        cont.id = '_overridesContainer';
+        document.querySelector('form').appendChild(cont);
+    }
+    cont.innerHTML = '';
+    _overridesConfirmados.forEach(id => {
+        const inp = document.createElement('input');
+        inp.type  = 'hidden';
+        inp.name  = 'detalles_override[]';
+        inp.value = id;
+        cont.appendChild(inp);
+    });
+}
 const sinSel                 = document.getElementById('sinSeleccion');
 const seleccionadosIniciales = @json(array_map('intval', $detallesSeleccionados ?? []));
 const cantidadesIniciales    = @json($cantidadesYa->toArray());
@@ -692,12 +710,10 @@ function renderFactura(data) {
         const lineaSelect = tr.querySelector('.select-linea');
         const dotEl       = tr.querySelector('.dot-estado');
 
-        // Si ya está 100% cubierto por OTRAS compras y no estaba pre-marcado, bloquear checkbox
+        // Si ya está 100% cubierto por OTRAS compras y no estaba pre-marcado, ocultar la fila
         const yaCubiertoPorOtros = cubiertaOtros >= d.cantidad;
         if (yaCubiertoPorOtros && !checked) {
-            cb.disabled = true;
-            cb.title = 'Ya cubierto al 100% por otra compra';
-            tr.style.opacity = '0.7';
+            return; // fila completamente costeada — no se muestra en el formulario
         }
 
         function actualizarColorFila() {
@@ -726,7 +742,23 @@ function renderFactura(data) {
             actualizarColorFila();
             actualizarSinSel();
         });
-        cantInput.addEventListener('input', actualizarColorFila);
+        cantInput.addEventListener('input', function () {
+            const val = parseFloat(this.value) || 0;
+            if (val > d.cantidad && !_overridesConfirmados.has(d.id)) {
+                const ok = confirm(
+                    `⚠️ La cantidad ingresada (${val}) es mayor a la cantidad de venta (${d.cantidad}) del producto "${d.producto}".\n\n` +
+                    `¿Desea asignar igualmente esta cantidad?`
+                );
+                if (ok) {
+                    _overridesConfirmados.add(d.id);
+                    this.removeAttribute('max');
+                    _actualizarOverrideInputs();
+                } else {
+                    this.value = d.cantidad;
+                }
+            }
+            actualizarColorFila();
+        });
         actualizarColorFila();
     });
     card.querySelector('.btn-quitar-factura').addEventListener('click', () => {
