@@ -928,7 +928,11 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando…';
     try {
-        const fd  = new FormData(e.target);
+        const fd = new FormData(e.target);
+
+        // Adjuntar evidencias directamente al mismo request
+        archivosEvidencia.forEach(f => fd.append('evidencias[]', f));
+
         const res = await fetch(e.target.action, {
             method: 'POST',
             headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': fd.get('_token') },
@@ -938,32 +942,7 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
         if (json.success) {
             const extra = json.msg_saldo_favor ? ' ' + json.msg_saldo_favor : '';
             showToast('Pago guardado correctamente.' + extra, 'success');
-
-            // Si hay archivos y se obtuvo un pago_id, subir evidencias
-            if (archivosEvidencia.length > 0 && json.pago_id) {
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Subiendo evidencia…';
-                try {
-                    const fdFiles = new FormData();
-                    fdFiles.append('pago_id', json.pago_id);
-                    archivosEvidencia.forEach(f => fdFiles.append('archivos[]', f));
-                    const token = fd.get('_token');
-                    const resFiles = await fetch('/casadets/cobranza-archivos/upload', {
-                        method: 'POST',
-                        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
-                        body: fdFiles,
-                    });
-                    const jsonFiles = await resFiles.json();
-                    if (jsonFiles.success) {
-                        showToast(jsonFiles.message, 'success');
-                    } else {
-                        showToast('Pago guardado, pero hubo un error subiendo imágenes.', 'warning');
-                    }
-                } catch(errFiles) {
-                    showToast('Pago guardado, pero no se pudo subir la evidencia.', 'warning');
-                }
-            }
-
-            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1800);
+            setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1600);
         } else {
             const errs = json.errors
                 ? Object.values(json.errors).flat().join(' ')

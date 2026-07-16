@@ -509,6 +509,8 @@ class VentaController extends Controller
             'pagos.*.monto'       => 'required|numeric|min:0',
             'pagos.*.descripcion' => 'nullable|string|max:200',
             'estado_manual'       => 'nullable|in:pendiente,pagado,anulado',
+            'evidencias'          => 'nullable|array|max:10',
+            'evidencias.*'        => 'file|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $ventasAdicionales = array_values(array_filter(
@@ -570,11 +572,26 @@ class VentaController extends Controller
             $data['estado_manual'] ?? null
         );
 
+        // ── Guardar evidencias de pago si se subieron archivos ──────────
+        $pago = $result['pago'] ?? null;
+        if ($pago && $request->hasFile('evidencias')) {
+            $archivoService = app(\App\Services\CobranzaArchivoService::class);
+            foreach ($request->file('evidencias') as $file) {
+                try {
+                    $archivoService->guardar($file, $pago, auth()->id());
+                } catch (\Throwable $e) {
+                    \Log::warning('CobranzaArchivo: no se pudo guardar evidencia', [
+                        'pago_id' => $pago->id,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
         if ($request->expectsJson()) {
             return response()->json([
                 'success'         => true,
                 'venta_id'        => $venta->id,
-                'pago_id'         => $result['pago']?->id,
                 'estado'          => $result['estado'],
                 'saldo_favor'     => $result['saldo_favor'],
                 'saldo_pendiente' => $result['saldo_pendiente'],
