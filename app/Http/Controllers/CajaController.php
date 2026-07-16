@@ -20,10 +20,7 @@ class CajaController extends Controller
 {
     public function index(Request $request)
     {
-        $hoy    = Carbon::today()->toDateString();
-        $desde  = $request->input('desde', $hoy);
-        $hasta  = $request->input('hasta', $desde);
-        if ($hasta < $desde) $hasta = $desde;
+        $hoy = Carbon::today()->toDateString();
 
         // ── Cajas disponibles para el usuario (todas las empresas) ──────────
         $cajasDisponibles = CajaService::cajasUsuario()->values();
@@ -77,6 +74,22 @@ class CajaController extends Controller
                     ->whereDate('fecha', $hoy)
                     ->first();
         }
+
+        // ── Rango de fechas ──────────────────────────────────────────────────
+        // Si la sesión está abierta y se abrió ANTES de hoy, el "desde" por
+        // defecto retrocede hasta la fecha de apertura para que no se pierdan
+        // los movimientos de días anteriores dentro de la misma sesión.
+        $defaultDesde = $hoy;
+        if ($sesionHoy && $sesionHoy->estaAbierta()) {
+            $fechaApertura = Carbon::parse($sesionHoy->created_at)->toDateString();
+            if ($fechaApertura < $hoy) {
+                $defaultDesde = $fechaApertura;
+            }
+        }
+
+        $desde = $request->input('desde', $defaultDesde);
+        $hasta = $request->input('hasta', $hoy);
+        if ($hasta < $desde) $hasta = $desde;
 
         // ── Historial de sesiones del día (multi-apertura/cierre) ──────────
         $sesionesHoy = collect();

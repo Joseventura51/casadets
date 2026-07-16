@@ -47,8 +47,21 @@
     </form>
 </div>
 
-{{-- ── Apertura / Cierre de caja (solo visible cuando se ve el día de hoy) ── --}}
-@if(!$esRango && $desde === $hoy)
+{{-- ── Aviso sesión multi-día ─────────────────────────────────────────── --}}
+@if($sesionHoy && $sesionHoy->estaAbierta() && $desde < $hoy && !$request?->filled('desde'))
+<div class="alert alert-warning d-flex align-items-center gap-2 py-2 mb-3" role="alert">
+    <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+    <div class="small">
+        <strong>La caja quedó abierta del día anterior.</strong>
+        Se están mostrando todos los movimientos desde la apertura
+        (<strong>{{ \Carbon\Carbon::parse($sesionHoy->created_at)->format('d/m/Y H:i') }}</strong>).
+        Acordate de cerrar la caja al terminar el día.
+    </div>
+</div>
+@endif
+
+{{-- ── Apertura / Cierre de caja ─────────────────────────────────────────── --}}
+@if($sesionHoy || $desde === $hoy)
 <div class="card mb-4 border-0 shadow-sm">
     <div class="card-body py-3">
         @if(!$sesionHoy)
