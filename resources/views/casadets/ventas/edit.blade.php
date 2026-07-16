@@ -231,10 +231,6 @@ function actualizarAjuste() {
     }
 }
 
-const _ajusteOriginal   = {{ (float) $venta->ajuste }};
-let   _totalCobrarManual = false;
-document.getElementById('totalACobrar').addEventListener('input', () => { _totalCobrarManual = true; });
-
 function recalcTotal() {
     let total = 0;
     document.querySelectorAll('.producto-row').forEach(row => {
@@ -246,9 +242,6 @@ function recalcTotal() {
     });
     document.getElementById('totalProductosDisplay').textContent = 'S/ ' + total.toFixed(2);
     document.getElementById('totalOriginalDisplay').value = total.toFixed(2);
-    if (!_totalCobrarManual) {
-        document.getElementById('totalACobrar').value = (total + _ajusteOriginal).toFixed(2);
-    }
     actualizarAjuste();
 }
 

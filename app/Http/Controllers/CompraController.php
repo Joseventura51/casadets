@@ -153,8 +153,8 @@ class CompraController extends Controller
             if ($esGastoOperativo) return;
 
             $syncData  = $this->buildSyncData($request, $lineasCreadas);
-            $overrides = array_map('intval', $request->input('detalles_override', []));
-            $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
+
+            $this->conciliacion->sincronizar($compra, $syncData, $compra->id);
 
             // Si es vale supuesto, crear registro de ajuste pendiente de reconciliar
             if ($compra->es_supuesto) {
@@ -291,8 +291,8 @@ class CompraController extends Controller
             if ($esGastoOperativo) return;
 
             $syncData  = $this->buildSyncData($request, $lineasCreadas);
-            $overrides = array_map('intval', $request->input('detalles_override', []));
-            $this->conciliacion->sincronizar($compra, $syncData, $compra->id, $overrides);
+
+            $this->conciliacion->sincronizar($compra, $syncData, $compra->id);
 
             // Gestionar registro de ajuste si cambió es_supuesto
             $tieneAjuste = $compra->ajusteSupuesto()->exists();

@@ -31,10 +31,9 @@ class ConciliacionService
     public function sincronizar(
         Compra $compra,
         array  $syncData,
-        ?int   $compraIdExcluir       = null,
-        array  $ventaDetallesOverride = []
+        ?int   $compraIdExcluir = null
     ): void {
-        DB::transaction(function () use ($compra, $syncData, $compraIdExcluir, $ventaDetallesOverride) {
+        DB::transaction(function () use ($compra, $syncData, $compraIdExcluir) {
 
             // ── 1. LOCKING PESIMISTA ────────────────────────────────────
             // Adquiere lock de fila sobre cada venta_detalle involucrado.
@@ -48,7 +47,7 @@ class ConciliacionService
             }
 
             // ── 2. VALIDACIÓN CENTRALIZADA (post-lock) ──────────────────
-            $this->validar($syncData, $compraIdExcluir, $ventaDetallesOverride);
+            $this->validar($syncData, $compraIdExcluir);
 
             // ── 3. CAPTURA ESTADO ANTERIOR (para auditoría) ─────────────
             $estadoAnterior = $this->capturarEstado($compra->id);
@@ -68,7 +67,7 @@ class ConciliacionService
      * Valida que ninguna asignación exceda el saldo disponible.
      * Se ejecuta DENTRO del lock, por lo que no puede haber race condition.
      */
-    private function validar(array $syncData, ?int $compraIdExcluir, array $ventaDetallesOverride = []): void
+    private function validar(array $syncData, ?int $compraIdExcluir): void
     {
         $errors    = [];
         $acumLinea = [];   // compra_linea_id → total asignado en este sync
@@ -77,10 +76,8 @@ class ConciliacionService
             $cantidad = (float) ($pivot['cantidad'] ?? 0);
 
             // — Saldo disponible en venta_detalle —————————————————————
-            // Se omite si el usuario confirmó override para este ID.
-            $esOverride = in_array((int) $ventaDetalleId, $ventaDetallesOverride);
             $vd = VentaDetalle::find($ventaDetalleId);
-            if ($vd && !$esOverride) {
+            if ($vd) {
                 $yaAsignado = (float) DB::table('compra_venta_detalle')
                     ->where('venta_detalle_id', $ventaDetalleId)
                     ->when($compraIdExcluir, fn($q) => $q->where('compra_id', '!=', $compraIdExcluir))
