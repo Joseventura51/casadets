@@ -34,7 +34,7 @@ class CobranzaArchivo extends Model
 
     public function urlPublica(): string
     {
-        return Storage::disk('public')->url($this->ruta);
+        return url("/casadets/cobranza-archivos/{$this->id}/ver");
     }
 
     protected static function booted(): void
