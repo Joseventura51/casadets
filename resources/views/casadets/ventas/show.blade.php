@@ -378,8 +378,7 @@
 {{-- ── Evidencias de pago ─────────────────────────────────────── --}}
 @php
     $todosLosArchivos = $venta->pagosAplicados
-        ->flatMap(fn($p) => $p->archivos ?? collect())
-        ->filter(fn($a) => $a->existeArchivo());
+        ->flatMap(fn($p) => $p->archivos ?? collect());
 @endphp
 @if($todosLosArchivos->count() > 0)
 <div class="card border-0 shadow-sm mb-3">
