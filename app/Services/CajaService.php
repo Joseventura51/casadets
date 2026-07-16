@@ -146,9 +146,9 @@ class CajaService
      */
     public static function cerrarCaja(Caja $caja, float $montoCierre): CajaSesion
     {
-        $sesion = $caja->sesionAbiertaHoy();
+        $sesion = $caja->sesionAbierta();
         if (!$sesion) {
-            throw new \RuntimeException('No hay apertura registrada para hoy.');
+            throw new \RuntimeException('No hay ninguna sesión abierta para esta caja.');
         }
 
         $sesion->update([

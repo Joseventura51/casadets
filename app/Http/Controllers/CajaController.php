@@ -91,11 +91,19 @@ class CajaController extends Controller
         $hasta = $request->input('hasta', $hoy);
         if ($hasta < $desde) $hasta = $desde;
 
-        // ── Historial de sesiones del día (multi-apertura/cierre) ──────────
+        // ── Historial de sesiones del período ──────────────────────────────
+        // Incluye sesiones del rango de fechas visible MÁS la sesión activa
+        // aunque haya sido abierta en un día anterior.
         $sesionesHoy = collect();
         if ($cajaSeleccionada) {
             $sesionesHoy = CajaSesion::where('caja_id', $cajaSeleccionada->id)
-                ->whereDate('fecha', $hoy)
+                ->where(function ($q) use ($desde, $hasta, $sesionHoy) {
+                    $q->whereBetween('fecha', [$desde, $hasta]);
+                    // Incluir siempre la sesión activa aunque esté fuera del rango
+                    if ($sesionHoy) {
+                        $q->orWhere('id', $sesionHoy->id);
+                    }
+                })
                 ->orderBy('id')
                 ->get();
         }

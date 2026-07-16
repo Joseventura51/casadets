@@ -48,14 +48,14 @@
 </div>
 
 {{-- ── Aviso sesión multi-día ─────────────────────────────────────────── --}}
-@if($sesionHoy && $sesionHoy->estaAbierta() && $desde < $hoy && !$request?->filled('desde'))
+@if($sesionHoy && $sesionHoy->estaAbierta() && $desde < $hoy)
 <div class="alert alert-warning d-flex align-items-center gap-2 py-2 mb-3" role="alert">
     <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
     <div class="small">
-        <strong>La caja quedó abierta del día anterior.</strong>
-        Se están mostrando todos los movimientos desde la apertura
+        <strong>Sesión abierta desde el {{ \Carbon\Carbon::parse($sesionHoy->created_at)->format('d/m/Y') }}.</strong>
+        Se muestran todos los movimientos desde la apertura
         (<strong>{{ \Carbon\Carbon::parse($sesionHoy->created_at)->format('d/m/Y H:i') }}</strong>).
-        Acordate de cerrar la caja al terminar el día.
+        La caja permanece abierta hasta que la cierres manualmente.
     </div>
 </div>
 @endif
