@@ -154,6 +154,11 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
             ->middleware(['permiso:ventas.pago', 'caja.abierta']);
         Route::post('/casadets/ventas/{venta}/reducir-saldo', [VentaController::class, 'reducirSaldo'])
             ->middleware(['permiso:ventas.pago', 'caja.abierta']);
+
+        // ── Nubefact / Comprobantes electrónicos ───────────────────────────
+        Route::post('/casadets/ventas/{venta}/emitir',          [\App\Http\Controllers\NubefactController::class, 'emitir']);
+        Route::get('/casadets/nubefact/{comprobante}/ver',      [\App\Http\Controllers\NubefactController::class, 'ver'])->name('nubefact.ver');
+        Route::post('/casadets/nubefact/{comprobante}/reintentar', [\App\Http\Controllers\NubefactController::class, 'reintentar']);
     });
 
     // Devoluciones y Anulaciones

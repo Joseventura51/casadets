@@ -11,11 +11,22 @@ class VentaDetalle extends Model
 {
     protected $table = 'venta_detalles';
 
+    public const UNIDADES_MEDIDA = [
+        'NIU' => 'NIU – Unidad',
+        'UND' => 'UND – Unidad',
+        'PZ'  => 'PZ – Pieza',
+        'M'   => 'M – Metro',
+        'MTR' => 'MTR – Metro',
+        'M2'  => 'M2 – Metro cuadrado',
+        'ZZ'  => 'ZZ – Servicio/Sin unidad',
+    ];
+
     protected $fillable = [
         'venta_id',
         'producto_id',
         'producto',
         'codigo',
+        'unidad_medida',
         'cantidad',
         'precio_unitario',
         'subtotal',

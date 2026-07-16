@@ -217,17 +217,20 @@ class VentaController extends Controller
             'vendedor_id'          => 'required|exists:vendedores,id',
             'cliente_id'           => 'nullable|exists:clientes,id',
             'metodo_pago'          => 'nullable|string|max:100',
-            'documento_tipo'       => 'nullable|in:boleta,factura,proforma',
+            'documento_tipo'       => 'nullable|in:boleta,factura,proforma,nota_credito',
             'documento_numero'     => ['nullable', 'string', 'max:255',
                 Rule::unique('ventas')->where(fn ($q) => $q->where('documento_tipo', $request->documento_tipo))],
             'observaciones'        => 'nullable|string',
             'fecha'                => 'required|date',
             'es_referencia_fiscal' => 'boolean',
+            'igv_incluido'         => 'boolean',
+            'igv_porcentaje'       => 'nullable|numeric|min:0|max:100',
             'total_cobrar'         => 'nullable|numeric|min:0',
             'productos'            => 'required|array|min:1',
             'productos.*.producto'        => 'required|string|max:255',
             'productos.*.cantidad'        => 'required|numeric|min:0.01',
             'productos.*.precio_unitario' => 'required|numeric|min:0',
+            'productos.*.unidad_medida'   => 'nullable|string|max:10',
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
         DB::transaction(function () use ($data) {
@@ -267,6 +270,8 @@ class VentaController extends Controller
                 'observaciones'        => $data['observaciones'] ?? null,
                 'fecha'                => $data['fecha'],
                 'es_referencia_fiscal' => $data['es_referencia_fiscal'] ?? false,
+                'igv_incluido'         => $data['igv_incluido'] ?? true,
+                'igv_porcentaje'       => $data['igv_porcentaje'] ?? 18.00,
             ]);
 
             foreach ($data['productos'] as $p) {
@@ -275,6 +280,7 @@ class VentaController extends Controller
                 $venta->detalles()->create([
                     'producto_id'     => $producto->id,
                     'producto'        => $p['producto'],
+                    'unidad_medida'   => $p['unidad_medida'] ?? 'NIU',
                     'cantidad'        => $p['cantidad'],
                     'precio_unitario' => $p['precio_unitario'],
                     'subtotal'        => (float) bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 2),

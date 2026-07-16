@@ -26,6 +26,8 @@ class Venta extends Model
         'fecha',
         'estado',
         'es_referencia_fiscal',
+        'igv_incluido',
+        'igv_porcentaje',
     ];
 
     protected $casts = [
@@ -35,6 +37,8 @@ class Venta extends Model
         'nc_aplicado'          => 'decimal:2',
         'pagado'               => 'decimal:2',
         'es_referencia_fiscal' => 'boolean',
+        'igv_incluido'         => 'boolean',
+        'igv_porcentaje'       => 'decimal:2',
     ];
 
     // ── Relaciones ──────────────────────────────────────────────────────────
@@ -62,6 +66,11 @@ class Venta extends Model
     public function pagoFacturas(): HasMany
     {
         return $this->hasMany(DetallePagoFactura::class);
+    }
+
+    public function nubefactComprobante(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(\App\Models\NubefactComprobante::class)->latestOfMany();
     }
 
     public function devoluciones(): HasMany

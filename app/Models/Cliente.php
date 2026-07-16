@@ -10,7 +10,15 @@ class Cliente extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['nombre', 'documento', 'telefono', 'direccion', 'activo'];
+    protected $fillable = ['nombre', 'documento', 'tipo_documento', 'telefono', 'direccion', 'activo'];
+
+    public const TIPOS_DOCUMENTO = [
+        '1' => 'DNI',
+        '6' => 'RUC',
+        '4' => 'Carnet de Extranjería',
+        '7' => 'Pasaporte',
+        'A' => 'Cédula',
+    ];
 
     protected $casts = ['activo' => 'boolean'];
 
