@@ -189,8 +189,11 @@ class VentaController extends Controller
         }
         $clientes = \App\Models\Cliente::where('activo', true)->orderBy('nombre')->get();
 
-        // Series activas de la caja actual, indexadas por tipo_documento
-        $series = Serie::where('caja_id', session('caja_id'))
+        // Series activas de la caja actual (sesión o primera caja activa)
+        $cajaId = session('caja_id')
+            ?? DB::table('cajas')->where('activa', true)->value('id');
+
+        $series = Serie::where('caja_id', $cajaId)
             ->where('activa', true)
             ->get()
             ->keyBy('tipo_documento');
@@ -234,7 +237,13 @@ class VentaController extends Controller
             'productos.*.unidad_medida'   => 'nullable|string|max:10',
         ], ['documento_numero.unique' => 'Ya existe otra venta con ese número de documento del mismo tipo.']);
 
-        DB::transaction(function () use ($data) {
+        $venta = null;
+
+        DB::transaction(function () use ($data, &$venta) {
+            // Caja activa: sesión o primera caja activa disponible
+            $cajaId = session('caja_id')
+                ?? DB::table('cajas')->where('activa', true)->value('id');
+
             // Total Original exacto con bcmath (inmutable, suma de productos)
             $total = (float) collect($data['productos'])->reduce(
                 fn ($carry, $p) => bcadd($carry, bcmul((string) $p['cantidad'], (string) $p['precio_unitario'], 4), 2),
@@ -249,8 +258,8 @@ class VentaController extends Controller
 
             // Auto-generar número de documento desde la serie de la caja activa
             $docNumero = $data['documento_numero'] ?? null;
-            if (!empty($data['documento_tipo']) && session('caja_id')) {
-                $serie = Serie::where('caja_id', session('caja_id'))
+            if (!empty($data['documento_tipo']) && $cajaId) {
+                $serie = Serie::where('caja_id', $cajaId)
                     ->where('tipo_documento', $data['documento_tipo'])
                     ->where('activa', true)
                     ->first();
@@ -259,11 +268,10 @@ class VentaController extends Controller
                 }
             }
 
-            // Venta creada en estado pendiente — metodo_pago NULL hasta que CobranzaService lo asigne
             $venta = Venta::create([
                 'vendedor_id'          => $data['vendedor_id'],
                 'cliente_id'           => $data['cliente_id'] ?? null,
-                'caja_id'              => session('caja_id'),
+                'caja_id'              => $cajaId,
                 'total'                => $total,
                 'ajuste'               => $ajuste,
                 'documento_tipo'       => $data['documento_tipo'] ?? null,
@@ -308,6 +316,22 @@ class VentaController extends Controller
                 ]);
             }
         });
+
+        // ── Auto-emisión electrónica para Factura y Boleta ──────────
+        if ($venta && in_array($data['documento_tipo'] ?? '', ['factura', 'boleta'])) {
+            try {
+                $comprobante = app(\App\Services\NubefactService::class)->emitir($venta);
+                if ($comprobante->estaAceptado()) {
+                    return redirect('/casadets/ventas/' . $venta->id)
+                        ->with('success', '✓ Venta registrada y emitida a SUNAT correctamente. ' . $comprobante->numeroCompleto());
+                }
+                return redirect('/casadets/ventas/' . $venta->id)
+                    ->with('warning', 'Venta registrada. Error al emitir a SUNAT: ' . $comprobante->error_mensaje);
+            } catch (\Throwable $e) {
+                return redirect('/casadets/ventas/' . $venta->id)
+                    ->with('warning', 'Venta registrada. Error de conexión con Nubefact: ' . $e->getMessage());
+            }
+        }
 
         return redirect('/casadets/ventas')->with('success', 'Venta registrada.');
     }

@@ -70,13 +70,16 @@
                             @foreach($series as $tipo => $serie)
                                 <option value="{{ $tipo }}"
                                         data-preview="{{ $serie->codigo }}-{{ str_pad($serie->correlativo_actual + 1, 8, '0', STR_PAD_LEFT) }}"
+                                        data-electronico="{{ in_array($tipo, ['factura','boleta']) ? '1' : '0' }}"
                                         {{ old('documento_tipo') == $tipo ? 'selected' : '' }}>
                                     {{ ucfirst($tipo) }} ({{ $serie->codigo }})
                                 </option>
                             @endforeach
                         @else
                             @foreach(['boleta','factura','proforma'] as $d)
-                                <option value="{{ $d }}" {{ old('documento_tipo') == $d ? 'selected' : '' }}>{{ ucfirst($d) }}</option>
+                                <option value="{{ $d }}"
+                                        data-electronico="{{ in_array($d, ['factura','boleta']) ? '1' : '0' }}"
+                                        {{ old('documento_tipo') == $d ? 'selected' : '' }}>{{ ucfirst($d) }}</option>
                             @endforeach
                         @endif
                     </select>
@@ -111,6 +114,12 @@
                         </label>
                     </div>
                 </div>
+            </div>
+
+            {{-- ── Aviso auto-emisión electrónica ──────────────────── --}}
+            <div id="avisoNubefact" class="alert alert-info d-flex gap-2 align-items-center py-2 mb-2" style="display:none!important;">
+                <i class="bi bi-broadcast fs-5"></i>
+                <span class="small"><strong>Emisión electrónica automática:</strong> al guardar, se enviará a SUNAT vía Nubefact y se asignará el número de la serie automáticamente.</span>
             </div>
 
             {{-- ── Configuración IGV ───────────────────────────────── --}}
@@ -403,6 +412,25 @@
 
     tipoSel.addEventListener('change', actualizarPreview);
     actualizarPreview();
+})();
+
+// ── Aviso auto-emisión Nubefact ────────────────────────────────────
+(function () {
+    const tipoSel = document.getElementById('docTipo');
+    const aviso   = document.getElementById('avisoNubefact');
+    if (!tipoSel || !aviso) return;
+
+    function toggleAviso() {
+        const opt = tipoSel.options[tipoSel.selectedIndex];
+        if (opt?.dataset?.electronico === '1') {
+            aviso.style.removeProperty('display');
+        } else {
+            aviso.style.display = 'none';
+        }
+    }
+
+    tipoSel.addEventListener('change', toggleAviso);
+    toggleAviso();
 })();
 </script>
 @endsection

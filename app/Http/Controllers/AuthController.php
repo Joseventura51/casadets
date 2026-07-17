@@ -44,10 +44,15 @@ class AuthController extends Controller
         if (Auth::attempt(['email' => $user->email, 'password' => $request->input('password')], $remember)) {
             $request->session()->regenerate();
 
-            // Auto-seleccionar caja principal si el usuario tiene una asignada
+            // Auto-seleccionar caja principal; si no tiene, usar la primera caja activa
             $cajaPrincipal = $user->cajaPrincipal();
             if ($cajaPrincipal) {
                 session(['caja_id' => $cajaPrincipal->id]);
+            } else {
+                $primeraCaja = \Illuminate\Support\Facades\DB::table('cajas')->where('activa', true)->first();
+                if ($primeraCaja) {
+                    session(['caja_id' => $primeraCaja->id]);
+                }
             }
 
             return redirect()->intended('/');
