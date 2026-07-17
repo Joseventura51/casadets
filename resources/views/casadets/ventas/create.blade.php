@@ -407,7 +407,13 @@
     function actualizarPreview() {
         const opt = tipoSel.options[tipoSel.selectedIndex];
         const preview = opt?.dataset?.preview || '';
-        numPrev.placeholder = preview ? 'Siguiente: ' + preview : 'Se genera automáticamente';
+        if (preview) {
+            numPrev.value = preview;
+            numPrev.placeholder = '';
+        } else {
+            numPrev.value = '';
+            numPrev.placeholder = 'Se genera automáticamente';
+        }
     }
 
     tipoSel.addEventListener('change', actualizarPreview);
