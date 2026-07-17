@@ -36,14 +36,14 @@ return [
     ],
 
     'nubefact' => [
-        'token'           => env('NUBEFACT_TOKEN'),
-        'url'             => env('NUBEFACT_URL'),
-        'ruc'             => env('NUBEFACT_RUC'),
-        'razon_social'    => env('NUBEFACT_RAZON_SOCIAL'),
-        'nombre_comercial'=> env('NUBEFACT_NOMBRE_COMERCIAL'),
-        'direccion'       => env('NUBEFACT_DIRECCION'),
-        'serie_factura'   => env('NUBEFACT_SERIE_FACTURA', 'FFF1'),
-        'serie_boleta'    => env('NUBEFACT_SERIE_BOLETA', 'BBB1'),
+        'token'           => env('NUBEFACT_TOKEN', ''),
+        'url'             => 'https://api.nubefact.com/api/v1',
+        'ruc'             => '20537079127',
+        'razon_social'    => 'ACABADOS ZENDY S.R.L.',
+        'nombre_comercial'=> 'ACABADOS ZENDY',
+        'direccion'       => 'AV. PRINCIPAL S/N',
+        'serie_factura'   => 'FFF1',
+        'serie_boleta'    => 'BBB1',
     ],
 
 ];

@@ -112,6 +112,10 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::get('/casadets/ventas',        [VentaController::class, 'index']);
         Route::get('/casadets/ventas/export', [VentaController::class, 'export']);
 
+        // ── SUNAT: consulta de RUC / DNI ──────────────────────────────────
+        Route::get('/casadets/sunat/consultar',        [\App\Http\Controllers\SunatController::class, 'consultar']);
+        Route::post('/casadets/sunat/guardar-cliente', [\App\Http\Controllers\SunatController::class, 'guardarCliente']);
+
         // ── Crear venta ────────────────────────────────────────────────────
         Route::get('/casadets/ventas/create',  [VentaController::class, 'create'])
             ->middleware(['permiso:ventas.crear', 'caja.abierta']);

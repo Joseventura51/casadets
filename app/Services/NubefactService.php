@@ -18,12 +18,12 @@ class NubefactService
 
     public function __construct()
     {
-        $this->token           = config('services.nubefact.token', '');
-        $this->url             = config('services.nubefact.url', '');
-        $this->ruc             = config('services.nubefact.ruc', '');
-        $this->razonSocial     = config('services.nubefact.razon_social', '');
-        $this->nombreComercial = config('services.nubefact.nombre_comercial', '');
-        $this->direccion       = config('services.nubefact.direccion', '');
+        $this->token           = (string) (config('services.nubefact.token')           ?? '');
+        $this->url             = (string) (config('services.nubefact.url')             ?? 'https://api.nubefact.com/api/v1');
+        $this->ruc             = (string) (config('services.nubefact.ruc')             ?? '');
+        $this->razonSocial     = (string) (config('services.nubefact.razon_social')    ?? '');
+        $this->nombreComercial = (string) (config('services.nubefact.nombre_comercial')?? '');
+        $this->direccion       = (string) (config('services.nubefact.direccion')       ?? '');
     }
 
     public function emitir(Venta $venta, ?int $ventaReferenciaId = null): NubefactComprobante

@@ -33,18 +33,38 @@
 
                 <div class="col-md-4">
                     <label class="form-label">Cliente <small class="text-muted">(opcional)</small></label>
-                    <input type="text" id="clienteSearch" class="form-control"
-                           list="listClientes"
-                           placeholder="Escribe el nombre del cliente…"
-                           autocomplete="off"
-                           value="{{ old('_cliente_nombre', '') }}">
+                    <div class="input-group">
+                        <input type="text" id="clienteSearch" class="form-control"
+                               list="listClientes"
+                               placeholder="Escribe el nombre del cliente…"
+                               autocomplete="off"
+                               value="{{ old('_cliente_nombre', '') }}">
+                        <button type="button" class="btn btn-outline-secondary" id="btnBuscarSunat"
+                                title="Buscar por RUC o DNI en SUNAT">
+                            <i class="bi bi-search"></i> RUC/DNI
+                        </button>
+                    </div>
                     <datalist id="listClientes">
                         @foreach($clientes as $c)
                             <option value="{{ $c->nombre }}{{ $c->documento ? ' (' . $c->documento . ')' : '' }}">
                         @endforeach
                     </datalist>
                     <input type="hidden" name="cliente_id" id="clienteIdHidden" value="{{ old('cliente_id') }}">
-                    <div class="form-text">Escribe para buscar, o déjalo vacío si no hay cliente.</div>
+
+                    {{-- Panel de búsqueda SUNAT --}}
+                    <div id="sunatPanel" class="border rounded p-2 mt-1 bg-white shadow-sm" style="display:none;">
+                        <div class="input-group input-group-sm mb-1">
+                            <input type="text" id="sunatNumero" class="form-control"
+                                   placeholder="RUC (11 dígitos) o DNI (8 dígitos)"
+                                   maxlength="11" inputmode="numeric">
+                            <button type="button" class="btn btn-primary btn-sm" id="btnConsultarSunat">
+                                <span id="sunatSpinner" class="spinner-border spinner-border-sm d-none"></span>
+                                Consultar
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCerrarSunat">✕</button>
+                        </div>
+                        <div id="sunatResultado"></div>
+                    </div>
                 </div>
 
                 <div class="col-md-2">
@@ -437,6 +457,110 @@
 
     tipoSel.addEventListener('change', toggleAviso);
     toggleAviso();
+})();
+
+// ── Buscador SUNAT por RUC / DNI ───────────────────────────────────
+(function () {
+    const btnAbrir    = document.getElementById('btnBuscarSunat');
+    const btnCerrar   = document.getElementById('btnCerrarSunat');
+    const btnConsultar= document.getElementById('btnConsultarSunat');
+    const panel       = document.getElementById('sunatPanel');
+    const numInput    = document.getElementById('sunatNumero');
+    const resultado   = document.getElementById('sunatResultado');
+    const clienteSearch = document.getElementById('clienteSearch');
+    const clienteHidden = document.getElementById('clienteIdHidden');
+    const spinner     = document.getElementById('sunatSpinner');
+
+    if (!btnAbrir) return;
+
+    btnAbrir.addEventListener('click', () => {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        if (panel.style.display === 'block') numInput.focus();
+    });
+
+    btnCerrar.addEventListener('click', () => {
+        panel.style.display = 'none';
+        resultado.innerHTML = '';
+    });
+
+    numInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); btnConsultar.click(); } });
+
+    btnConsultar.addEventListener('click', async () => {
+        const numero = numInput.value.replace(/\D/g, '').trim();
+        if (numero.length !== 8 && numero.length !== 11) {
+            resultado.innerHTML = '<div class="alert alert-warning py-1 small mb-0">Ingresa un RUC (11 dígitos) o DNI (8 dígitos).</div>';
+            return;
+        }
+
+        spinner.classList.remove('d-none');
+        btnConsultar.disabled = true;
+        resultado.innerHTML = '<div class="text-muted small">Consultando SUNAT…</div>';
+
+        try {
+            const res  = await fetch(`/casadets/sunat/consultar?numero=${numero}`);
+            const data = await res.json();
+
+            if (data.error) {
+                resultado.innerHTML = `<div class="alert alert-danger py-1 small mb-0">${data.error}</div>`;
+                return;
+            }
+
+            resultado.innerHTML = `
+                <div class="border rounded p-2 bg-light">
+                    <div class="fw-semibold">${data.nombre}</div>
+                    <div class="text-muted small">${data.tipo}: ${data.numero}${data.direccion ? ' — ' + data.direccion : ''}</div>
+                    <div class="mt-2 d-flex gap-2">
+                        <button type="button" class="btn btn-success btn-sm" id="btnUsarCliente">
+                            <i class="bi bi-check-lg"></i> Usar cliente
+                        </button>
+                        ${!data.cliente_id ? `<button type="button" class="btn btn-outline-primary btn-sm" id="btnGuardarCliente">
+                            <i class="bi bi-person-plus"></i> Guardar en sistema
+                        </button>` : ''}
+                    </div>
+                </div>`;
+
+            // Guardar datos para usar
+            window._sunatData = data;
+
+            document.getElementById('btnUsarCliente')?.addEventListener('click', () => {
+                clienteSearch.value = data.nombre;
+                clienteHidden.value = data.cliente_id || '';
+                panel.style.display = 'none';
+                resultado.innerHTML = '';
+            });
+
+            document.getElementById('btnGuardarCliente')?.addEventListener('click', async () => {
+                const guardar = document.getElementById('btnGuardarCliente');
+                guardar.disabled = true;
+                guardar.textContent = 'Guardando…';
+
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content
+                    || document.querySelector('input[name="_token"]')?.value || '';
+
+                const r = await fetch('/casadets/sunat/guardar-cliente', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf },
+                    body: JSON.stringify({
+                        nombre: data.nombre,
+                        documento: data.numero,
+                        tipo_doc: data.tipo,
+                        direccion: data.direccion || '',
+                    }),
+                });
+                const saved = await r.json();
+                clienteSearch.value = saved.nombre;
+                clienteHidden.value = saved.id;
+                panel.style.display = 'none';
+                resultado.innerHTML = '';
+            });
+
+        } catch (e) {
+            resultado.innerHTML = `<div class="alert alert-danger py-1 small mb-0">Error de conexión: ${e.message}</div>`;
+        } finally {
+            spinner.classList.add('d-none');
+            btnConsultar.disabled = false;
+        }
+    });
 })();
 </script>
 @endsection

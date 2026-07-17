@@ -57,23 +57,20 @@ class RolSeeder extends Seeder
             ]
         );
 
-        // ── Series electrónicas ────────────────────────────────────────────
+        // ── Series electrónicas y de vales ────────────────────────────────
         Serie::firstOrCreate(
             ['codigo' => 'FFF1', 'caja_id' => $caja->id],
-            [
-                'tipo_documento'     => 'factura',
-                'correlativo_actual' => 0,
-                'activa'             => true,
-            ]
+            ['tipo_documento' => 'factura',  'correlativo_actual' => 0, 'activa' => true]
         );
 
         Serie::firstOrCreate(
             ['codigo' => 'BBB1', 'caja_id' => $caja->id],
-            [
-                'tipo_documento'     => 'boleta',
-                'correlativo_actual' => 0,
-                'activa'             => true,
-            ]
+            ['tipo_documento' => 'boleta',   'correlativo_actual' => 0, 'activa' => true]
+        );
+
+        Serie::firstOrCreate(
+            ['codigo' => 'V001', 'caja_id' => $caja->id],
+            ['tipo_documento' => 'proforma', 'correlativo_actual' => 0, 'activa' => true]
         );
 
         // ── Vincular admin a la caja principal ────────────────────────────
