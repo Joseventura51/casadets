@@ -59,6 +59,9 @@ composer install --no-interaction --prefer-dist --optimize-autoloader
 # Correr migraciones
 php artisan migrate --force
 
+# Sembrar datos iniciales (caja, series FFF1/BBB1, roles, admin) — idempotente
+php artisan db:seed --force
+
 # Limpiar caché
 php artisan config:clear
 php artisan route:clear
