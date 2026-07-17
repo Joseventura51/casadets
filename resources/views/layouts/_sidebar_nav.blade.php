@@ -190,6 +190,11 @@
                         <i class="bi bi-123 me-2"></i>Series
                     </a>
                 </li>
+                <li>
+                    <a href="/admin/nubefact" class="nav-link {{ request()->is('admin/nubefact*') ? 'active' : '' }}">
+                        <i class="bi bi-broadcast me-2"></i>Nubefact / SUNAT
+                    </a>
+                </li>
                 @endif
             </ul>
         </div>

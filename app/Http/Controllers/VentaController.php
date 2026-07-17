@@ -198,7 +198,9 @@ class VentaController extends Controller
             ->get()
             ->keyBy('tipo_documento');
 
-        return view('casadets.ventas.create', compact('vendedores', 'clientes', 'series'));
+        $nubefactConfigurado = app(\App\Services\NubefactService::class)->tokenConfigurado();
+
+        return view('casadets.ventas.create', compact('vendedores', 'clientes', 'series', 'nubefactConfigurado'));
     }
 
     public function store(Request $request)

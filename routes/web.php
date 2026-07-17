@@ -264,6 +264,13 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
             Route::patch('/cajas/{caja}/toggle', [CajaAdminController::class, 'toggleActiva']);
         });
 
+        // Nubefact / Facturación electrónica
+        Route::middleware('rol:admin.series')->group(function () {
+            Route::get('/nubefact',         [\App\Http\Controllers\ConfiguracionNubefactController::class, 'index']);
+            Route::put('/nubefact',         [\App\Http\Controllers\ConfiguracionNubefactController::class, 'update']);
+            Route::get('/nubefact/test',    [\App\Http\Controllers\ConfiguracionNubefactController::class, 'testConexion']);
+        });
+
         // Series
         Route::middleware('rol:admin.series')->group(function () {
             Route::get('/series',                [SerieController::class, 'index']);

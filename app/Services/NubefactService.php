@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Configuracion;
 use App\Models\NubefactComprobante;
 use App\Models\Venta;
 use Illuminate\Support\Facades\Http;
@@ -18,16 +19,27 @@ class NubefactService
 
     public function __construct()
     {
-        $this->token           = (string) (config('services.nubefact.token')           ?? '');
-        $this->url             = (string) (config('services.nubefact.url')             ?? 'https://api.nubefact.com/api/v1');
-        $this->ruc             = (string) (config('services.nubefact.ruc')             ?? '');
-        $this->razonSocial     = (string) (config('services.nubefact.razon_social')    ?? '');
-        $this->nombreComercial = (string) (config('services.nubefact.nombre_comercial')?? '');
-        $this->direccion       = (string) (config('services.nubefact.direccion')       ?? '');
+        $db = Configuracion::grupo('nubefact');
+
+        $this->token           = (string) ($db->get('nubefact_token')?->valor            ?: config('services.nubefact.token', ''));
+        $this->url             = (string) ($db->get('nubefact_url')?->valor               ?: config('services.nubefact.url', 'https://api.nubefact.com/api/v1'));
+        $this->ruc             = (string) ($db->get('nubefact_ruc')?->valor               ?: config('services.nubefact.ruc', ''));
+        $this->razonSocial     = (string) ($db->get('nubefact_razon_social')?->valor      ?: config('services.nubefact.razon_social', ''));
+        $this->nombreComercial = (string) ($db->get('nubefact_nombre_comercial')?->valor  ?: config('services.nubefact.nombre_comercial', ''));
+        $this->direccion       = (string) ($db->get('nubefact_direccion')?->valor         ?: config('services.nubefact.direccion', ''));
+    }
+
+    public function tokenConfigurado(): bool
+    {
+        return !empty($this->token);
     }
 
     public function emitir(Venta $venta, ?int $ventaReferenciaId = null): NubefactComprobante
     {
+        if (!$this->tokenConfigurado()) {
+            throw new \RuntimeException('El Token API de Nubefact no está configurado. Ve a Administración → Nubefact / SUNAT para ingresarlo.');
+        }
+
         $venta->load(['detalles', 'cliente']);
 
         $tipoComprobante = $this->tipoComprobante($venta->documento_tipo);

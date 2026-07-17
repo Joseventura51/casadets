@@ -137,10 +137,18 @@
             </div>
 
             {{-- ── Aviso auto-emisión electrónica ──────────────────── --}}
+            @if($nubefactConfigurado)
             <div id="avisoNubefact" class="alert alert-info d-flex gap-2 align-items-center py-2 mb-2" style="display:none!important;">
                 <i class="bi bi-broadcast fs-5"></i>
                 <span class="small"><strong>Emisión electrónica automática:</strong> al guardar, se enviará a SUNAT vía Nubefact y se asignará el número de la serie automáticamente.</span>
             </div>
+            @else
+            <div id="avisoNubefact" class="alert alert-warning d-flex gap-2 align-items-center py-2 mb-2" style="display:none!important;">
+                <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+                <span class="small"><strong>Nubefact no está configurado.</strong> La venta se guardará pero <em>no</em> se emitirá a SUNAT.
+                    <a href="/admin/nubefact" class="alert-link">Configura tu Token API aquí</a> para habilitar la emisión electrónica.</span>
+            </div>
+            @endif
 
             {{-- ── Configuración IGV ───────────────────────────────── --}}
             <div class="card border-0 bg-light mb-3 px-3 py-2" id="igvConfigCard">
