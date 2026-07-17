@@ -173,6 +173,7 @@ class VentaController extends Controller
             'detalles.compras.lineas', 'detalles.producto',
             'devoluciones',
             'pagosAplicados.archivos',
+            'nubefactComprobante',
         ]);
         return view('casadets.ventas.show', compact('venta'));
     }

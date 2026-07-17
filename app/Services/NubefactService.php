@@ -36,14 +36,18 @@ class NubefactService
 
         $payload = $this->buildPayload($venta, $tipoComprobante, $serie, $numero, $ventaReferenciaId);
 
-        $comprobante = NubefactComprobante::create([
-            'venta_id'           => $venta->id,
-            'tipo_comprobante'   => $tipoComprobante,
-            'serie'              => $serie,
-            'numero'             => $numero,
-            'estado'             => 'pendiente',
-            'venta_referencia_id'=> $ventaReferenciaId,
-        ]);
+        // updateOrCreate evita duplicados cuando se reintenta múltiples veces
+        $comprobante = NubefactComprobante::updateOrCreate(
+            ['venta_id' => $venta->id],
+            [
+                'tipo_comprobante'   => $tipoComprobante,
+                'serie'              => $serie,
+                'numero'             => $numero,
+                'estado'             => 'pendiente',
+                'error_mensaje'      => null,
+                'venta_referencia_id'=> $ventaReferenciaId,
+            ]
+        );
 
         try {
             $response = Http::withToken($this->token)
@@ -136,9 +140,10 @@ class NubefactService
             ];
         }
 
-        $totalGravada = round($totalGravada, 2);
-        $totalIgv     = round($totalIgv, 2);
         $totalTotal   = round($totalTotal, 2);
+        $totalGravada = round($totalGravada, 2);
+        // Calcular IGV como diferencia para evitar error de redondeo acumulado
+        $totalIgv     = round($totalTotal - $totalGravada, 2);
 
         $payload = [
             'operacion'                          => 'generar_comprobante',

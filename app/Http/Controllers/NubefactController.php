@@ -28,6 +28,14 @@ class NubefactController extends Controller
             return back()->with('error', 'Para emitir una Nota de Crédito electrónica debes indicar el comprobante original que modifica.');
         }
 
+        // Factura requiere cliente con RUC (tipo_documento = '6')
+        if ($venta->documento_tipo === 'factura') {
+            $tipoDoc = $venta->cliente?->tipo_documento ?? '';
+            if ($tipoDoc !== '6') {
+                return back()->with('error', 'Para emitir una Factura electrónica el cliente debe tener RUC (tipo de documento 6). Actualiza el cliente antes de emitir.');
+            }
+        }
+
         $comprobante = $this->nubefact->emitir($venta, $ventaReferenciaId ? (int) $ventaReferenciaId : null);
 
         if ($comprobante->estaAceptado()) {

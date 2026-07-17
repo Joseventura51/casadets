@@ -65,9 +65,79 @@
             <i class="bi bi-pencil me-1"></i>Editar
         </a>
         @endif
+        {{-- Botón Emitir electrónico --}}
+        @if(in_array($venta->documento_tipo, ['factura','boleta','nota_credito']) && !$esCanjeadaFiscal)
+            @if($venta->nubefactComprobante?->estaAceptado())
+                <a href="/casadets/nubefact/{{ $venta->nubefactComprobante->id }}/ver"
+                   class="btn btn-success btn-sm">
+                    <i class="bi bi-check-circle me-1"></i>SUNAT ✓
+                </a>
+            @else
+                <button type="button" class="btn btn-outline-primary btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#modalEmitir">
+                    <i class="bi bi-send me-1"></i>Emitir electrónico
+                </button>
+            @endif
+        @endif
         <a href="/casadets/ventas" class="btn btn-outline-secondary btn-sm">← Volver</a>
     </div>
 </div>
+
+{{-- Modal Emitir --}}
+@if(in_array($venta->documento_tipo, ['factura','boleta','nota_credito']) && !$esCanjeadaFiscal && !$venta->nubefactComprobante?->estaAceptado())
+<div class="modal fade" id="modalEmitir" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-send me-2"></i>Emitir comprobante electrónico</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="/casadets/ventas/{{ $venta->id }}/emitir">
+                @csrf
+                <div class="modal-body">
+                    <p class="mb-2">Se enviará a <strong>SUNAT vía Nubefact</strong>:</p>
+                    <ul class="mb-3">
+                        <li><strong>Tipo:</strong> {{ ucfirst($venta->documento_tipo) }}</li>
+                        <li><strong>Número:</strong> {{ $venta->documento_numero }}</li>
+                        <li><strong>Cliente:</strong> {{ $venta->cliente?->nombre ?? 'Cliente varios' }}</li>
+                        <li><strong>Total:</strong> S/ {{ number_format($venta->total_a_cobrar, 2) }}</li>
+                    </ul>
+                    @if($venta->documento_tipo === 'nota_credito')
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Comprobante original que modifica <span class="text-danger">*</span></label>
+                        <select name="venta_referencia_id" class="form-select" required>
+                            <option value="">— Selecciona —</option>
+                            @foreach(\App\Models\Venta::whereIn('documento_tipo',['factura','boleta'])
+                                ->where('cliente_id', $venta->cliente_id)
+                                ->orderByDesc('fecha')->limit(30)->get() as $vref)
+                                <option value="{{ $vref->id }}">
+                                    {{ ucfirst($vref->documento_tipo) }} {{ $vref->documento_numero }} — {{ $vref->fecha->format('d/m/Y') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @endif
+                    @if($venta->nubefactComprobante)
+                    <div class="alert alert-warning py-2 small">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        Intento previo: <strong>{{ $venta->nubefactComprobante->estado }}</strong>
+                        @if($venta->nubefactComprobante->error_mensaje)
+                            — {{ $venta->nubefactComprobante->error_mensaje }}
+                        @endif
+                    </div>
+                    @endif
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-send me-1"></i>Confirmar emisión
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 
 <div class="row g-3 mb-3">
     <div class="col-md-2">
