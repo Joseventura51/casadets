@@ -52,12 +52,13 @@ class VentaController extends Controller
 
         VendedorScope::aplicar($query);
 
-        // Filtrar ventas según la caja seleccionada:
-        // Si la caja tiene series asignadas, solo mostrar documentos que empiecen
-        // con alguna de esas series (F006-xxx, B006-xxx, P006-xxx…).
-        // Si no hay series asignadas, caer en filtro por caja_id.
+        // Filtrar ventas según la caja seleccionada.
+        // IMPORTANTE: si el VendedorScope ya aplica un filtro por vendedor_id,
+        // NO aplicar además el filtro por caja — son excluyentes (el usuario
+        // tiene vendedores O cajas, nunca ambos). Aplicar ambos en AND produciría
+        // 0 resultados para un vendedor cuyas ventas están en otra caja.
         $seriesDisponibles = collect();
-        if (session('caja_id')) {
+        if (session('caja_id') && VendedorScope::modo() !== 'vendedor') {
             $cajaId = session('caja_id');
             $seriesCodigos = Serie::where('caja_id', $cajaId)->pluck('codigo');
             $seriesDisponibles = Serie::where('caja_id', $cajaId)->orderBy('codigo')->get();

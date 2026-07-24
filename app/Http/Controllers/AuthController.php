@@ -44,15 +44,13 @@ class AuthController extends Controller
         if (Auth::attempt(['email' => $user->email, 'password' => $request->input('password')], $remember)) {
             $request->session()->regenerate();
 
-            // Auto-seleccionar caja principal; si no tiene, usar la primera caja activa
+            // Auto-seleccionar caja principal del usuario.
+            // El fallback a "primera caja del sistema" ya NO aplica:
+            // un usuario sin cajas asignadas (ej. rol Vendedor) no debe heredar
+            // una caja aleatoria que luego filtraría incorrectamente sus ventas.
             $cajaPrincipal = $user->cajaPrincipal();
             if ($cajaPrincipal) {
                 session(['caja_id' => $cajaPrincipal->id]);
-            } else {
-                $primeraCaja = \Illuminate\Support\Facades\DB::table('cajas')->where('activa', true)->first();
-                if ($primeraCaja) {
-                    session(['caja_id' => $primeraCaja->id]);
-                }
             }
 
             return redirect()->intended('/');
