@@ -120,11 +120,13 @@ class CajaController extends Controller
             $movQuery->where('caja_id', $cajaSeleccionada->id);
         }
 
-        // Si es vista del día actual (sin rango personalizado) y hay sesión identificada,
-        // acotar movimientos al rango de esa sesión para que múltiples aperturas/cierres
-        // del mismo día no se mezclen entre sí.
         $esHoy = ($desde === $hoy && $desde === $hasta);
-        if ($esHoy && $sesionHoy) {
+
+        // Si el usuario NO aplicó un rango manual de fechas y hay sesión identificada,
+        // acotar movimientos al rango de esa sesión para que múltiples aperturas/cierres
+        // (incluso si la sesión arrancó un día anterior) no mezclen datos entre sesiones.
+        $esSesionActiva = !$request->has('desde') && $sesionHoy !== null;
+        if ($esSesionActiva) {
             $movQuery->where('movimientos.created_at', '>=', $sesionHoy->created_at);
             if (!$sesionHoy->estaAbierta() && $sesionHoy->updated_at) {
                 $movQuery->where('movimientos.created_at', '<=', $sesionHoy->updated_at);
@@ -155,10 +157,10 @@ class CajaController extends Controller
             }
         }
 
-        // Cuando se ve el día de hoy con una sesión activa, acotar las ventas
-        // al período de esa sesión (igual que movimientos) para que al reabrir
-        // la caja el mismo día no se mezclen ventas de sesiones anteriores.
-        if ($esHoy && $sesionHoy) {
+        // Sin rango manual: acotar ventas al período de la sesión activa
+        // (igual que movimientos) para que sesiones del mismo día no se mezclen,
+        // incluso cuando la sesión arrancó un día anterior.
+        if ($esSesionActiva) {
             $ventasQuery->where('ventas.created_at', '>=', $sesionHoy->created_at);
             if (!$sesionHoy->estaAbierta() && $sesionHoy->updated_at) {
                 $ventasQuery->where('ventas.created_at', '<=', $sesionHoy->updated_at);
@@ -219,11 +221,10 @@ class CajaController extends Controller
         $esRango = $desde !== $hasta;
 
         // ── Reset al cerrar caja ─────────────────────────────────────────────
-        // Cuando la sesión de hoy está CERRADA y se ve el día actual (sin rango
-        // personalizado), mostramos todo en cero: la caja está lista para la
-        // próxima apertura y los datos del cierre están guardados en el reporte.
-        $cajaCerradaHoy = !$esRango
-            && $desde === $hoy
+        // Cuando la última sesión está CERRADA y el usuario no puso un rango
+        // manual, mostramos todo en cero: la caja está lista para la próxima
+        // apertura y los datos del cierre están guardados en el reporte.
+        $cajaCerradaHoy = !$request->has('desde')
             && $sesionHoy !== null
             && !$sesionHoy->estaAbierta();
 
