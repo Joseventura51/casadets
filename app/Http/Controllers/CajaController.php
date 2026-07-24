@@ -155,6 +155,16 @@ class CajaController extends Controller
             }
         }
 
+        // Cuando se ve el día de hoy con una sesión activa, acotar las ventas
+        // al período de esa sesión (igual que movimientos) para que al reabrir
+        // la caja el mismo día no se mezclen ventas de sesiones anteriores.
+        if ($esHoy && $sesionHoy) {
+            $ventasQuery->where('ventas.created_at', '>=', $sesionHoy->created_at);
+            if (!$sesionHoy->estaAbierta() && $sesionHoy->updated_at) {
+                $ventasQuery->where('ventas.created_at', '<=', $sesionHoy->updated_at);
+            }
+        }
+
         VendedorScope::aplicar($ventasQuery);
         $ventas = $ventasQuery->get();
 
