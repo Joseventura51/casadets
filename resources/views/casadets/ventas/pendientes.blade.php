@@ -222,7 +222,7 @@
             <tfoot class="table-light">
                 <tr>
                     <th colspan="9" class="text-end">Total por cobrar (visibles)</th>
-                    <th class="text-end text-danger" id="totalVisible">S/ {{ number_format($ventas->sum('total'), 2) }}</th>
+                    <th class="text-end text-danger" id="totalVisible">S/ {{ number_format($ventas->sum('saldo_pendiente'), 2) }}</th>
                     <th></th>
                 </tr>
             </tfoot>
@@ -335,7 +335,7 @@ function aplicarFiltros() {
         tr.classList.toggle('fila-oculta', !ok);
         if (ok) {
             conteo++;
-            monto += parseFloat(tr.dataset.total.replace(/,/g, '')) || 0;
+            monto += parseFloat(tr.dataset.saldo) || 0;
         }
     });
 
