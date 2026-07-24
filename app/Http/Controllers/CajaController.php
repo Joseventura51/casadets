@@ -289,12 +289,12 @@ class CajaController extends Controller
 
         // Fallback sin caja específica (compatibilidad histórica)
         $hoy = Carbon::today()->toDateString();
-        $sesion = CajaSesion::where('empresa', $request->empresa)
-            ->whereNull('caja_id')
+        // Verificar cualquier sesión abierta para la empresa (con o sin caja_id)
+        $sesionAbierta = CajaSesion::where('empresa', $request->empresa)
             ->where('estado', 'abierta')
             ->first();
 
-        if ($sesion) {
+        if ($sesionAbierta) {
             return back()->with('error', 'La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura.');
         }
 

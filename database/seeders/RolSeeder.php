@@ -79,18 +79,20 @@ class RolSeeder extends Seeder
             ['principal' => true, 'created_at' => now(), 'updated_at' => now()]
         );
 
-        // ── Sesión de caja del día ─────────────────────────────────────────
-        CajaSesion::firstOrCreate(
-            [
-                'caja_id' => $caja->id,
-                'fecha'   => now()->toDateString(),
-            ],
-            [
+        // ── Sesión de caja del día (solo si no hay ninguna abierta ya) ────────
+        $yaAbierta = CajaSesion::where('caja_id', $caja->id)
+            ->where('estado', 'abierta')
+            ->exists();
+
+        if (!$yaAbierta) {
+            CajaSesion::create([
+                'caja_id'        => $caja->id,
+                'fecha'          => now()->toDateString(),
                 'empresa'        => 'ACABADOS ZENDY S.R.L.',
                 'monto_apertura' => 0,
                 'estado'         => 'abierta',
-            ]
-        );
+            ]);
+        }
     }
 
     private function defaultsParaRol(string $nombre): array
