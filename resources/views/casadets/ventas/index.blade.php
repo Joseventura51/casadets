@@ -28,7 +28,7 @@
 <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2">
     <i class="bi bi-lock-fill fs-5 flex-shrink-0"></i>
     <div class="flex-grow-1">
-        <strong>Caja cerrada.</strong> No puedes crear ni modificar ventas hasta que se abra la caja del día.
+        <strong>Caja cerrada.</strong> No puedes crear ni modificar ventas hasta que se abra la caja.
     </div>
     <a href="/casadets/caja" class="btn btn-sm btn-warning flex-shrink-0">
         <i class="bi bi-box-arrow-in-right me-1"></i>Ir a Caja

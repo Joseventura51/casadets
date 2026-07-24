@@ -97,16 +97,15 @@ class CajaService
                 ->first();
 
             if ($sesionAbierta) {
-                // Actualizar sesión para que las operaciones posteriores funcionen
                 session(['caja_id' => $sesionAbierta->caja_id]);
                 return true;
             }
-
-            // El usuario tiene cajas asignadas pero ninguna está abierta
-            return false;
+            // No encontrada entre las cajas asignadas — continúa al fallback por empresa
+            // (cubre el caso de sesiones abiertas desde días anteriores o con contexto distinto)
         }
 
-        // Fallback final (admin sin cajas o usuario sin asignación): cualquier caja de la empresa
+        // Fallback final: cualquier sesión abierta de la empresa, sin importar qué caja
+        // ni desde qué día fue abierta.
         $empresa = session('empresa', 'casadets');
         $sesionFallback = CajaSesion::where('empresa', $empresa)
             ->where('estado', 'abierta')
@@ -115,6 +114,13 @@ class CajaService
 
         if ($sesionFallback) {
             session(['caja_id' => $sesionFallback->caja_id]);
+            return true;
+        }
+
+        // Último recurso: cualquier sesión abierta en el sistema (sin filtro de empresa)
+        $sesionCualquiera = CajaSesion::where('estado', 'abierta')->latest('id')->first();
+        if ($sesionCualquiera) {
+            session(['caja_id' => $sesionCualquiera->caja_id]);
             return true;
         }
 
