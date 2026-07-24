@@ -2,7 +2,7 @@
 
 namespace App\Providers;
 
-use App\Models\CajaSesion;
+use App\Models\Caja;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -22,16 +22,15 @@ class AppServiceProvider extends ServiceProvider
             try {
                 $cajaId = session('caja_id');
                 if ($cajaId) {
-                    // Verificar por caja_id de la sesión actual
-                    $cajaAbierta = CajaSesion::where('caja_id', $cajaId)
-                        ->whereDate('fecha', now()->toDateString())
-                        ->where('estado', 'abierta')
+                    // Leer el booleano directamente de la tabla cajas
+                    $cajaAbierta = Caja::where('id', $cajaId)
+                        ->where('esta_abierta', true)
                         ->exists();
                 } else {
-                    // Sin caja seleccionada: verificar si existe alguna caja abierta hoy
-                    $cajaAbierta = CajaSesion::whereNotNull('caja_id')
-                        ->whereDate('fecha', now()->toDateString())
-                        ->where('estado', 'abierta')
+                    // Sin caja seleccionada: verificar si alguna caja de la empresa está abierta
+                    $empresa     = session('empresa', 'casadets');
+                    $cajaAbierta = Caja::where('empresa', $empresa)
+                        ->where('esta_abierta', true)
                         ->exists();
                 }
             } catch (\Throwable $e) {

@@ -80,25 +80,24 @@ class CajaService
     {
         $cajaId = session('caja_id');
 
-        // Ruta rápida: el caja_id en sesión está explícitamente abierto
+        // Ruta rápida: leer el booleano directamente de la tabla cajas
         if ($cajaId) {
-            if (CajaSesion::where('caja_id', $cajaId)->where('estado', 'abierta')->exists()) {
+            if (Caja::where('id', $cajaId)->where('esta_abierta', true)->exists()) {
                 return true;
             }
-            // La sesión tiene un caja_id obsoleto (cerrado u otro día) — seguir buscando
+            // El caja_id en sesión ya no está abierto — buscar otra
         }
 
-        // Buscar sesión abierta SOLO entre las cajas que maneja el usuario,
-        // sin importar desde qué día fue abierta la sesión.
+        // Buscar caja abierta entre las que maneja el usuario
         $cajasDisponibles = self::cajasUsuario();
         if ($cajasDisponibles->isNotEmpty()) {
-            $sesionAbierta = CajaSesion::whereIn('caja_id', $cajasDisponibles->pluck('id'))
-                ->where('estado', 'abierta')
-                ->latest('id')
+            $cajaAbierta = Caja::whereIn('id', $cajasDisponibles->pluck('id'))
+                ->where('esta_abierta', true)
+                ->orderBy('id')
                 ->first();
 
-            if ($sesionAbierta) {
-                session(['caja_id' => $sesionAbierta->caja_id]);
+            if ($cajaAbierta) {
+                session(['caja_id' => $cajaAbierta->id]);
                 return true;
             }
         }
@@ -112,11 +111,11 @@ class CajaService
      */
     public static function abrirCaja(Caja $caja, float $montoApertura, ?string $observaciones = null): CajaSesion
     {
-        if ($caja->estaAbiertaHoy()) {
+        if ($caja->esta_abierta) {
             throw new \RuntimeException('La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura.');
         }
 
-        return CajaSesion::create([
+        $sesion = CajaSesion::create([
             'empresa'        => $caja->empresa,
             'caja_id'        => $caja->id,
             'fecha'          => now()->toDateString(),
@@ -124,6 +123,11 @@ class CajaService
             'estado'         => 'abierta',
             'observaciones'  => $observaciones,
         ]);
+
+        // Marcar la caja como abierta directamente en la tabla
+        $caja->update(['esta_abierta' => true]);
+
+        return $sesion;
     }
 
     /**
@@ -141,6 +145,9 @@ class CajaService
             'estado'       => 'cerrada',
         ]);
 
+        // Marcar la caja como cerrada directamente en la tabla
+        $caja->update(['esta_abierta' => false]);
+
         return $sesion;
     }
 
@@ -155,7 +162,7 @@ class CajaService
             'codigo'  => $c->codigo,
             'nombre'  => $c->nombre,
             'empresa' => $c->empresa,
-            'abierta' => $c->estaAbiertaHoy(),
+            'abierta' => (bool) $c->esta_abierta,
         ])->toArray();
     }
 }

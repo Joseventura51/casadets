@@ -12,10 +12,12 @@ class Caja extends Model
         'nombre',
         'empresa',
         'activa',
+        'esta_abierta',
     ];
 
     protected $casts = [
-        'activa' => 'boolean',
+        'activa'       => 'boolean',
+        'esta_abierta' => 'boolean',
     ];
 
     public function sesiones(): HasMany
@@ -48,7 +50,8 @@ class Caja extends Model
 
     public function estaAbierta(): bool
     {
-        return $this->sesionAbierta() !== null;
+        // Lee el booleano de la columna — sin consultar caja_sesiones
+        return (bool) $this->esta_abierta;
     }
 
     /** @deprecated Usar sesionAbierta() */
