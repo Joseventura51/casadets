@@ -246,6 +246,14 @@ class ReporteCajaService
         return [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas];
     }
 
+    /**
+     * Misma lógica que CajaController::calcularMetodosDePago:
+     *  1. Primario: movimientos pago_venta → PagoMetodo
+     *  2. Fallback 1: DetallePagoFactura → PagoMetodo
+     *  3. Fallback 2: ventas sin DetallePagoFactura → metodo_pago directo
+     * Los tres pasos deben estar en ambos lugares para que el efectivo en
+     * pantalla y en el reporte siempre coincidan.
+     */
     private static function calcularMetodos($movActivos, $ventasCobradas): \Illuminate\Support\Collection
     {
         $pagoIds = $movActivos
@@ -263,21 +271,39 @@ class ReporteCajaService
                 ->sortKeys();
         }
 
-        // Fallback
-        $vIds    = $ventasCobradas->pluck('id');
-        $pIds    = $vIds->isNotEmpty()
+        // Fallback 1: pagos registrados en DetallePagoFactura
+        $vIds = $ventasCobradas->pluck('id');
+        $pIds = $vIds->isNotEmpty()
             ? DetallePagoFactura::whereIn('venta_id', $vIds)->pluck('pago_id')->unique()
             : collect();
 
-        $metodos = $pIds->isNotEmpty()
+        $metodosDePagos = $pIds->isNotEmpty()
             ? PagoMetodo::whereIn('pago_id', $pIds)
                 ->selectRaw('metodo, SUM(monto) as total')
                 ->groupBy('metodo')
                 ->pluck('total', 'metodo')
-                ->map(fn ($t) => (float) $t)
+                ->map(fn ($t) => round((float) $t, 2))
             : collect();
 
-        return $metodos->sortKeys();
+        // Fallback 2: ventas cobradas sin DetallePagoFactura → usar metodo_pago directo
+        $ventasConPago = $pIds->isNotEmpty()
+            ? DetallePagoFactura::whereIn('venta_id', $vIds)->pluck('venta_id')->unique()
+            : collect();
+
+        $ventasSinPago = $ventasCobradas->filter(
+            fn ($v) => !$ventasConPago->contains($v->id) && !empty($v->metodo_pago)
+        );
+
+        $metodosDirectos = $ventasSinPago
+            ->groupBy('metodo_pago')
+            ->map(fn ($g) => round($g->sum(fn ($v) => (float) ($v->total_cobrado ?? $v->pagado ?? $v->total)), 2));
+
+        // Combinar ambos
+        $todos = $metodosDePagos->keys()->merge($metodosDirectos->keys())->unique();
+
+        return $todos->mapWithKeys(fn ($m) => [
+            $m => round(($metodosDePagos->get($m, 0)) + ($metodosDirectos->get($m, 0)), 2),
+        ])->sortKeys();
     }
 
     // ── Hoja 1: Resumen de sesión ─────────────────────────────────────────
