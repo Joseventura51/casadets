@@ -117,7 +117,8 @@
                 </button>
             </div>
             <div class="collapse mt-3" id="formCierre">
-                <form action="/casadets/caja/cierre" method="POST" class="d-flex gap-2 align-items-end flex-wrap">
+                <form id="formCierreForm" action="/casadets/caja/cierre" method="POST"
+                      class="d-flex gap-2 align-items-end flex-wrap">
                     @csrf
                     <input type="hidden" name="empresa" value="{{ $empresa }}">
                     @if($cajaSeleccionada)
@@ -125,15 +126,16 @@
                     @endif
                     <div>
                         <label class="form-label small mb-1">Monto de cierre contado (S/)</label>
-                        <input type="number" name="monto_cierre" step="0.01" min="0"
+                        <input type="number" id="montoCierreInput" name="monto_cierre" step="0.01" min="0"
                                value="{{ number_format($efectivoEnCaja, 2, '.', '') }}"
+                               data-esperado="{{ number_format($efectivoEnCaja, 2, '.', '') }}"
                                class="form-control form-control-sm" style="width:160px;" required>
                     </div>
                     <div class="small text-muted pt-3">
                         <i class="bi bi-info-circle me-1"></i>
                         Esperado en caja: <strong>S/ {{ number_format($efectivoEnCaja, 2) }}</strong>
                     </div>
-                    <button class="btn btn-danger btn-sm">
+                    <button type="submit" id="btnConfirmarCierre" class="btn btn-danger btn-sm">
                         <i class="bi bi-check-lg me-1"></i>Confirmar cierre
                     </button>
                 </form>
@@ -530,4 +532,34 @@
         </table>
     </div>
 </div>
+@push('scripts')
+<script>
+(function () {
+    const form  = document.getElementById('formCierreForm');
+    const btn   = document.getElementById('btnConfirmarCierre');
+    const input = document.getElementById('montoCierreInput');
+    if (!form || !btn || !input) return;
+
+    form.addEventListener('submit', function (e) {
+        const ingresado = parseFloat(input.value) || 0;
+        const esperado  = parseFloat(input.dataset.esperado) || 0;
+        const diff      = Math.abs(ingresado - esperado);
+
+        // Si hay diferencia significativa, pedir confirmación antes de cerrar
+        if (diff > 0.01) {
+            const signo = ingresado > esperado ? '+' : '-';
+            const msg = `El monto ingresado (S/ ${ingresado.toFixed(2)}) difiere del esperado (S/ ${esperado.toFixed(2)}) en ${signo}S/ ${diff.toFixed(2)}.\n\n¿Confirmar cierre con esta diferencia?`;
+            if (!confirm(msg)) {
+                e.preventDefault();
+                return;
+            }
+        }
+
+        // Deshabilitar botón para evitar doble envío
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Cerrando…';
+    });
+})();
+</script>
+@endpush
 @endsection
