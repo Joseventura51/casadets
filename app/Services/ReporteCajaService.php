@@ -49,7 +49,7 @@ class ReporteCajaService
 
         self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor, $ventas, $movimientos, $devoluciones, $ventasAnuladas);
         self::hojaVentas($spreadsheet, $ventas);
-        self::hojaMovimientos($spreadsheet, $movimientos);
+        self::hojaMovimientos($spreadsheet, $movimientos, (float) $sesion->monto_apertura);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -151,9 +151,15 @@ class ReporteCajaService
         }
 
         $ventasCobradas   = $ventas->where('estado', 'pagado');
+        $ventasCanjeadas  = $ventas->where('estado', 'canjeada');
 
-        // KPIs
-        $totalCobradas   = round($movActivos->where('subtipo', 'pago_venta')->sum('monto'), 2);
+        // KPIs — "Ventas cobradas" usa la suma real de pagado en las ventas (no movimientos),
+        // para que coincida con el detalle de la hoja Ventas y evite la inconsistencia 418 vs 1151.
+        $totalCobradas   = round(
+            $ventas->filter(fn ($v) => in_array($v->estado, ['pagado', 'parcial']))
+                   ->sum(fn ($v) => (float)($v->pagado ?? 0)),
+            2
+        );
         $totalOtros      = round($movActivos->filter(fn ($m) => $m->tipo === 'ingreso' && $m->subtipo !== 'pago_venta')->sum('monto'), 2);
         $totalSalidas    = round($movActivos->where('tipo', 'salida')->sum('monto'), 2);
         $balance         = round($totalCobradas + $totalOtros - $totalSalidas, 2);
@@ -179,18 +185,41 @@ class ReporteCajaService
             ? round((float)$sesion->monto_cierre - $efectivoEnCaja, 2)
             : null;
 
+        // KPIs adicionales
+        $ventasPagadasList  = $ventas->where('estado', 'pagado');
+        $ticketPromedio     = $ventasPagadasList->count() > 0
+            ? round($ventasPagadasList->sum(fn ($v) => (float)($v->pagado ?? $v->total)) / $ventasPagadasList->count(), 2)
+            : 0;
+        $mayorVenta = $ventasPagadasList->max(fn ($v) => (float)($v->pagado ?? $v->total)) ?? 0;
+        $menorVenta = $ventasPagadasList->min(fn ($v) => (float)($v->pagado ?? $v->total)) ?? 0;
+
+        // Medios electrónicos (todo excepto efectivo)
+        $metodosElectronicos = $metodos->except(['efectivo']);
+        $totalElectronico    = round($metodosElectronicos->sum(), 2);
+
         $kpis = [
-            'monto_apertura'   => (float) $sesion->monto_apertura,
-            'monto_cierre'     => $sesion->monto_cierre !== null ? (float) $sesion->monto_cierre : null,
-            'efectivo_en_caja' => $efectivoEnCaja,
-            'diferencia'       => $diferencia,
-            'total_cobradas'   => $totalCobradas,
-            'total_otros'      => $totalOtros,
-            'total_salidas'    => $totalSalidas,
-            'balance'          => $balance,
-            'total_ventas'     => $ventas->count(),
-            'ventas_cobradas'  => $ventasCobradas->count(),
-            'ventas_pendientes'=> $ventas->whereIn('estado', ['pendiente','parcial'])->count(),
+            'monto_apertura'      => (float) $sesion->monto_apertura,
+            'monto_cierre'        => $sesion->monto_cierre !== null ? (float) $sesion->monto_cierre : null,
+            'efectivo_en_caja'    => $efectivoEnCaja,
+            'efectivo_inicial'    => (float) $sesion->monto_apertura,
+            'efectivo_ingresos'   => round($metodos->get('efectivo', 0), 2),
+            'efectivo_salidas'    => round($comprasEfectivo + $salManualEfec, 2),
+            'total_electronico'   => $totalElectronico,
+            'diferencia'          => $diferencia,
+            'total_cobradas'      => $totalCobradas,
+            'total_otros'         => $totalOtros,
+            'total_salidas'       => $totalSalidas,
+            'balance'             => $balance,
+            'total_ventas'        => $ventas->count(),
+            'ventas_cobradas'     => $ventasCobradas->count(),
+            'ventas_canjeadas'    => $ventasCanjeadas->count(),
+            'ventas_pendientes'   => $ventas->whereIn('estado', ['pendiente','parcial'])->count(),
+            'ticket_promedio'     => $ticketPromedio,
+            'mayor_venta'         => $mayorVenta,
+            'menor_venta'         => $menorVenta,
+            'operaciones'         => $ventasPagadasList->count(),
+            'hora_apertura'       => $sesion->created_at?->format('H:i'),
+            'hora_cierre'         => $sesion->estado === 'cerrada' ? $sesion->updated_at?->format('H:i') : null,
         ];
 
         // Por vendedor
@@ -295,23 +324,66 @@ class ReporteCajaService
         self::fila2col($sheet, $row, 'Fecha', $fecha->format('d/m/Y'));                           $row++;
         self::fila2col($sheet, $row, 'Sesión ID', $sesion->id);                                  $row++;
         self::fila2col($sheet, $row, 'Estado', ucfirst($sesion->estado));                        $row++;
+        self::fila2col($sheet, $row, 'Hora apertura', $kpis['hora_apertura'] ?? 'N/D');          $row++;
+        if ($kpis['hora_cierre'] !== null) {
+            self::fila2col($sheet, $row, 'Hora cierre', $kpis['hora_cierre']);                   $row++;
+        }
         self::fila2col($sheet, $row, 'Apertura (S/)', $kpis['monto_apertura'], $montoFormat);    $row++;
         self::fila2col($sheet, $row, 'Cierre declarado (S/)',
             $kpis['monto_cierre'] ?? 'N/D', $kpis['monto_cierre'] !== null ? $montoFormat : null); $row++;
-        self::fila2col($sheet, $row, 'Efectivo esperado (S/)', $kpis['efectivo_en_caja'], $montoFormat); $row++;
+
+        $row++;
+
+        // ── Bloque: ARQUEO DE EFECTIVO ────────────────────────────────
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'ARQUEO DE EFECTIVO');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        self::fila2col($sheet, $row, 'Efectivo inicial (S/)',      $kpis['efectivo_inicial'],  $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Ingresos en efectivo (S/)',  $kpis['efectivo_ingresos'], $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Salidas en efectivo (S/)',   $kpis['efectivo_salidas'],  $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Efectivo esperado (S/)',     $kpis['efectivo_en_caja'],  $montoFormat);
+        $sheet->getStyle("B{$row}")->getFont()->setBold(true); $row++;
+        self::fila2col($sheet, $row, 'Conteo físico (cierre) (S/)',
+            $kpis['monto_cierre'] ?? 'N/D', $kpis['monto_cierre'] !== null ? $montoFormat : null); $row++;
 
         if ($kpis['diferencia'] !== null) {
             self::fila2col($sheet, $row, 'Diferencia (S/)', $kpis['diferencia'], $montoFormat);
+            $sheet->getStyle("A{$row}")->getFont()->setBold(true);
             if ($kpis['diferencia'] != 0) {
                 $color = $kpis['diferencia'] < 0 ? 'FEE2E2' : 'D1FAE5';
-                $sheet->getStyle("B{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($color);
+                $sheet->getStyle("A{$row}:B{$row}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($color);
             }
             $row++;
         }
 
         $row++;
 
-        // ── Bloque: KPIs ─────────────────────────────────────────────
+        // ── Bloque: MEDIOS ELECTRÓNICOS ───────────────────────────────
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'MEDIOS ELECTRÓNICOS (no afectan arqueo)');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        $hayElectronico = false;
+        foreach ($metodos as $metodo => $monto) {
+            if ($metodo === 'efectivo') continue;
+            self::fila2col($sheet, $row, ucfirst($metodo) . ' (S/)', $monto, $montoFormat);
+            $row++;
+            $hayElectronico = true;
+        }
+        if (!$hayElectronico) {
+            $sheet->setCellValue("A{$row}", 'Sin cobros electrónicos en esta sesión.'); $row++;
+        }
+        self::fila2col($sheet, $row, 'Total electrónico (S/)', $kpis['total_electronico'], $montoFormat);
+        $sheet->getStyle("B{$row}")->getFont()->setBold(true); $row++;
+
+        $row++;
+
+        // ── Bloque: RESUMEN FINANCIERO ────────────────────────────────
         $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'RESUMEN FINANCIERO');
         $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
@@ -327,7 +399,7 @@ class ReporteCajaService
 
         $row++;
 
-        // ── Bloque: Métodos de pago ───────────────────────────────────
+        // ── Bloque: Métodos de pago (todos) ──────────────────────────
         $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'INGRESOS POR MÉTODO DE PAGO');
         $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
@@ -361,6 +433,22 @@ class ReporteCajaService
 
         $row++;
 
+        // ── Bloque: KPIs OPERATIVOS ───────────────────────────────────
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'KPIs OPERATIVOS');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        self::fila2col($sheet, $row, 'Operaciones cobradas',   $kpis['operaciones']);                        $row++;
+        self::fila2col($sheet, $row, 'Ticket promedio (S/)',    $kpis['ticket_promedio'], $montoFormat);      $row++;
+        if ($kpis['mayor_venta'] > 0) {
+            self::fila2col($sheet, $row, 'Mayor venta (S/)',    $kpis['mayor_venta'],     $montoFormat);      $row++;
+            self::fila2col($sheet, $row, 'Menor venta (S/)',    $kpis['menor_venta'],     $montoFormat);      $row++;
+        }
+
+        $row++;
+
         // ── Bloque: Conteo ventas ─────────────────────────────────────
         $sheet->mergeCells("A{$row}:G{$row}");
         $sheet->setCellValue("A{$row}", 'CONTEO DE VENTAS');
@@ -368,9 +456,10 @@ class ReporteCajaService
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
-        self::fila2col($sheet, $row, 'Total documentos',  $kpis['total_ventas']);      $row++;
-        self::fila2col($sheet, $row, 'Cobradas',          $kpis['ventas_cobradas']);    $row++;
-        self::fila2col($sheet, $row, 'Pendientes/Parcial',$kpis['ventas_pendientes']);  $row++;
+        self::fila2col($sheet, $row, 'Total documentos emitidos', $kpis['total_ventas']);        $row++;
+        self::fila2col($sheet, $row, 'Cobradas',                  $kpis['ventas_cobradas']);     $row++;
+        self::fila2col($sheet, $row, 'Canjeadas',                 $kpis['ventas_canjeadas']);    $row++;
+        self::fila2col($sheet, $row, 'Pendientes / Parcial',      $kpis['ventas_pendientes']);   $row++;
 
         $row++;
 
@@ -634,12 +723,13 @@ class ReporteCajaService
 
     // ── Hoja 3: Movimientos ───────────────────────────────────────────────
 
-    private static function hojaMovimientos(Spreadsheet $sp, $movimientos): void
+    private static function hojaMovimientos(Spreadsheet $sp, $movimientos, float $montoApertura = 0): void
     {
         $sheet = $sp->createSheet();
         $sheet->setTitle('Movimientos');
 
-        $headers = ['#', 'Fecha', 'Tipo', 'Subtipo', 'Categoría', 'Método Pago', 'Cliente', 'Observaciones', 'Monto (S/)', 'Estado'];
+        // 11 columnas: añadimos Hora y Saldo acumulado
+        $headers = ['#', 'Hora', 'Fecha', 'Tipo', 'Subtipo', 'Categoría', 'Método Pago', 'Cliente', 'Observaciones', 'Monto (S/)', 'Saldo (S/)', 'Estado'];
         $sheet->fromArray($headers, null, 'A1');
 
         $headerStyle = [
@@ -647,43 +737,74 @@ class ReporteCajaService
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => self::AZUL]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
-        $sheet->getStyle('A1:J1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
 
-        $row = 2;
+        // Fila de apertura como punto de partida del saldo acumulado
+        $saldoAcum = $montoApertura;
+        $sheet->setCellValue('A2', '—');
+        $sheet->setCellValue('B2', '');
+        $sheet->setCellValue('C2', '');
+        $sheet->setCellValue('D2', 'Apertura');
+        $sheet->setCellValue('E2', '');
+        $sheet->setCellValue('F2', '');
+        $sheet->setCellValue('G2', 'Efectivo');
+        $sheet->setCellValue('H2', '');
+        $sheet->setCellValue('I2', 'Monto inicial de caja');
+        $sheet->setCellValue('J2', $montoApertura);
+        $sheet->setCellValue('K2', $saldoAcum);
+        $sheet->setCellValue('L2', 'Activo');
+        $sheet->getStyle('J2:K2')->getNumberFormat()->setFormatCode('#,##0.00');
+        $sheet->getStyle('A2:L2')->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('DBEAFE');
+
+        $row = 3;
         $n   = 1;
         foreach ($movimientos as $m) {
-            $sheet->setCellValue("A{$row}", $n++);
-            $sheet->setCellValue("B{$row}", $m->fecha ? \Carbon\Carbon::parse($m->fecha)->format('d/m/Y') : '');
-            $sheet->setCellValue("C{$row}", ucfirst($m->tipo ?? ''));
-            $sheet->setCellValue("D{$row}", $m->subtipo ?? '');
-            $sheet->setCellValue("E{$row}", $m->categoria ?? '');
-            $sheet->setCellValue("F{$row}", $m->metodo_pago ?? '');
-            $sheet->setCellValue("G{$row}", $m->cliente->nombre ?? '');
-            $sheet->setCellValue("H{$row}", $m->observaciones ?? '');
-            $sheet->setCellValue("I{$row}", (float) $m->monto);
-            $sheet->setCellValue("J{$row}", ucfirst($m->estado ?? ''));
+            $esIngreso = $m->tipo === 'ingreso' && $m->estado === 'activo';
+            $esSalida  = $m->tipo === 'salida'  && $m->estado === 'activo';
+            $monto     = (float) $m->monto;
 
-            if ($m->tipo === 'salida') {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()
+            if ($esIngreso) $saldoAcum = round($saldoAcum + $monto, 2);
+            if ($esSalida)  $saldoAcum = round($saldoAcum - $monto, 2);
+
+            $hora = $m->created_at
+                ? \Carbon\Carbon::parse($m->created_at)->format('H:i')
+                : '';
+
+            $sheet->setCellValue("A{$row}", $n++);
+            $sheet->setCellValue("B{$row}", $hora);
+            $sheet->setCellValue("C{$row}", $m->fecha ? \Carbon\Carbon::parse($m->fecha)->format('d/m/Y') : '');
+            $sheet->setCellValue("D{$row}", ucfirst($m->tipo ?? ''));
+            $sheet->setCellValue("E{$row}", $m->subtipo ?? '');
+            $sheet->setCellValue("F{$row}", $m->categoria ?? '');
+            $sheet->setCellValue("G{$row}", $m->metodo_pago ?? '');
+            $sheet->setCellValue("H{$row}", $m->cliente->nombre ?? '');
+            $sheet->setCellValue("I{$row}", $m->observaciones ?? '');
+            $sheet->setCellValue("J{$row}", $monto);
+            $sheet->setCellValue("K{$row}", ($m->estado === 'activo') ? $saldoAcum : '—');
+            $sheet->setCellValue("L{$row}", ucfirst($m->estado ?? ''));
+            $sheet->getStyle("J{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+            if ($m->estado === 'activo') {
+                $sheet->getStyle("K{$row}")->getNumberFormat()->setFormatCode('#,##0.00');
+            }
+
+            if ($m->tipo === 'salida' && $m->estado === 'activo') {
+                $sheet->getStyle("A{$row}:L{$row}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB(self::ROJO);
             } elseif ($m->estado === 'anulado') {
-                $sheet->getStyle("A{$row}:J{$row}")->getFill()
+                $sheet->getStyle("A{$row}:L{$row}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB(self::GRIS);
             }
             $row++;
         }
 
         if ($movimientos->isEmpty()) {
-            $sheet->mergeCells('A2:J2');
-            $sheet->setCellValue('A2', 'Sin movimientos en esta sesión.');
-            $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->mergeCells('A3:L3');
+            $sheet->setCellValue('A3', 'Sin movimientos en esta sesión.');
+            $sheet->getStyle('A3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
-        foreach (range('A', 'J') as $col) {
+        foreach (range('A', 'L') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
-        }
-        if ($row > 2) {
-            $sheet->getStyle("I2:I" . ($row - 1))->getNumberFormat()->setFormatCode('#,##0.00');
         }
     }
 }
