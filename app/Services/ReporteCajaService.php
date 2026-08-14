@@ -452,8 +452,12 @@ class ReporteCajaService
         $row = 1;
 
         // ── Bloque: Info de sesión ─────────────────────────────────────
+        $fechaCierre = $sesion->estado === 'cerrada' && $sesion->updated_at
+            ? \Carbon\Carbon::parse($sesion->updated_at)->format('d/m/Y')
+            : $fecha->format('d/m/Y');
+
         $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'REPORTE DE CIERRE DE CAJA');
+        $sheet->setCellValue("A{$row}", "REPORTE DE CIERRE DE CAJA — FECHA DE CIERRE: {$fechaCierre}");
         $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
@@ -515,72 +519,6 @@ class ReporteCajaService
         self::fila2col($sheet, $row, 'Total salidas (S/)',
             round($kpis['efectivo_salidas'] + $kpis['depositos_salidas'], 2), $montoFormat);
         $sheet->getStyle("B{$row}")->getFont()->setBold(true); $row++;
-
-        $row++;
-
-        // ── Desglose de ingresos por método ──────────────────────────
-        $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'DESGLOSE DE INGRESOS POR MÉTODO DE PAGO');
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
-        $sheet->getRowDimension($row)->setRowHeight(20);
-        $row++;
-
-        foreach ($metodos as $metodo => $monto) {
-            self::fila2col($sheet, $row, ucfirst($metodo) . ' (S/)', $monto, $montoFormat);
-            $row++;
-        }
-        if ($metodos->isEmpty()) {
-            $sheet->setCellValue("A{$row}", 'Sin ingresos por cobros en esta sesión.'); $row++;
-        }
-
-        $row++;
-
-        // ── Bloque: RESUMEN FINANCIERO ────────────────────────────────
-        $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'RESUMEN FINANCIERO');
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
-        $sheet->getRowDimension($row)->setRowHeight(20);
-        $row++;
-
-        self::fila2col($sheet, $row, 'Ventas cobradas (S/)',  $kpis['total_cobradas'], $montoFormat); $row++;
-        self::fila2col($sheet, $row, 'Otros ingresos (S/)',   $kpis['total_otros'],    $montoFormat); $row++;
-        self::fila2col($sheet, $row, 'Salidas (S/)',          $kpis['total_salidas'],  $montoFormat); $row++;
-        self::fila2col($sheet, $row, 'Balance neto (S/)',     $kpis['balance'],        $montoFormat);
-        $sheet->getStyle("B{$row}")->getFont()->setBold(true);
-        $row++;
-
-        $row++;
-
-        // ── Bloque: Por vendedor ──────────────────────────────────────
-        $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'VENTAS COBRADAS POR VENDEDOR');
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
-        $sheet->getRowDimension($row)->setRowHeight(20);
-        $row++;
-
-        foreach ($porVendedor as $vendedor => $total) {
-            self::fila2col($sheet, $row, $vendedor . ' (S/)', $total, $montoFormat);
-            $row++;
-        }
-        if ($porVendedor->isEmpty()) {
-            $sheet->setCellValue("A{$row}", 'Sin datos'); $row++;
-        }
-
-        $row++;
-
-        // ── Bloque: KPIs OPERATIVOS ───────────────────────────────────
-        $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'KPIs OPERATIVOS');
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
-        $sheet->getRowDimension($row)->setRowHeight(20);
-        $row++;
-
-        self::fila2col($sheet, $row, 'Operaciones cobradas',   $kpis['operaciones']);                        $row++;
-        self::fila2col($sheet, $row, 'Ticket promedio (S/)',    $kpis['ticket_promedio'], $montoFormat);      $row++;
-        if ($kpis['mayor_venta'] > 0) {
-            self::fila2col($sheet, $row, 'Mayor venta (S/)',    $kpis['mayor_venta'],     $montoFormat);      $row++;
-            self::fila2col($sheet, $row, 'Menor venta (S/)',    $kpis['menor_venta'],     $montoFormat);      $row++;
-        }
 
         $row++;
 
