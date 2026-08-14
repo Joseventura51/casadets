@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Caja;
 use App\Models\CajaSesion;
-use App\Models\Compra;
 use App\Models\DetallePagoFactura;
 use App\Models\Devolucion;
 use App\Models\Movimiento;
@@ -40,16 +39,16 @@ class ReporteCajaService
             : \Carbon\Carbon::parse($sesion->fecha);
 
         // ── Recopilar datos ───────────────────────────────────────────────
-        [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas] = self::recopilarDatos($sesion, $caja, $fecha);
+        [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas, $movimientosDetalle] = self::recopilarDatos($sesion, $caja, $fecha);
 
         // ── Generar Excel ─────────────────────────────────────────────────
         $spreadsheet = new Spreadsheet();
         $spreadsheet->getProperties()
             ->setTitle("Reporte Caja {$caja?->codigo} {$fecha->format('d/m/Y')}");
 
-        self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor, $ventas, $movimientos, $devoluciones, $ventasAnuladas);
+        self::hojaSesion($spreadsheet, $sesion, $caja, $fecha, $kpis, $metodos, $porVendedor, $ventas, $movimientosDetalle, $devoluciones, $ventasAnuladas);
         self::hojaVentas($spreadsheet, $ventas);
-        self::hojaMovimientos($spreadsheet, $movimientos, (float) $sesion->monto_apertura);
+        self::hojaMovimientos($spreadsheet, $movimientosDetalle, (float) $sesion->monto_apertura);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -188,24 +187,18 @@ class ReporteCajaService
         $totalSalidas    = round($movActivos->where('tipo', 'salida')->sum('monto'), 2);
         $balance         = round($totalCobradas + $totalOtros - $totalSalidas, 2);
 
-        // Efectivo
-        $comprasEfectivo = 0;
-        if ($caja) {
-            $comprasEfectivo = round(Compra::where('metodo_pago', 'efectivo')
-                ->where('caja_id', $caja->id)
-                ->whereDate('fecha', $desde)
-                ->where('created_at', '>=', $inicioSesion)
-                ->where('created_at', '<=', $finSesion)
-                ->sum('monto_total'), 2);
-        }
-        $ingManualEfec = round($movActivos->filter(fn ($m) => $m->tipo === 'ingreso' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
-        $salManualEfec = round($movActivos->filter(fn ($m) => $m->tipo === 'salida'  && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
-
         // Métodos de pago
         $metodos = self::calcularMetodos($movActivos, $ventasCobradas);
+        $movimientosDetalle = self::desglosarMovimientosPorMetodo($movimientos);
+        $flujo = self::calcularFlujo($movimientosDetalle, $metodos);
 
         // Efectivo esperado en caja al momento del cierre
-        $efectivoEnCaja = round((float)$sesion->monto_apertura + ($metodos->get('efectivo', 0)) + $ingManualEfec - $comprasEfectivo - $salManualEfec, 2);
+        $efectivoEnCaja = round(
+            (float) $sesion->monto_apertura
+            + $flujo['ingresos_efectivo']
+            - $flujo['salidas_efectivo'],
+            2
+        );
 
         $diferencia = $sesion->monto_cierre !== null
             ? round((float)$sesion->monto_cierre - $efectivoEnCaja, 2)
@@ -219,18 +212,15 @@ class ReporteCajaService
         $mayorVenta = $ventasPagadasList->max(fn ($v) => (float) $v->reporte_cobrado) ?? 0;
         $menorVenta = $ventasPagadasList->min(fn ($v) => (float) $v->reporte_cobrado) ?? 0;
 
-        // Medios electrónicos (todo excepto efectivo)
-        $metodosElectronicos = $metodos->except(['efectivo']);
-        $totalElectronico    = round($metodosElectronicos->sum(), 2);
-
         $kpis = [
             'monto_apertura'      => (float) $sesion->monto_apertura,
             'monto_cierre'        => $sesion->monto_cierre !== null ? (float) $sesion->monto_cierre : null,
             'efectivo_en_caja'    => $efectivoEnCaja,
             'efectivo_inicial'    => (float) $sesion->monto_apertura,
-            'efectivo_ingresos'   => round($metodos->get('efectivo', 0), 2),
-            'efectivo_salidas'    => round($comprasEfectivo + $salManualEfec, 2),
-            'total_electronico'   => $totalElectronico,
+            'efectivo_ingresos'   => $flujo['ingresos_efectivo'],
+            'depositos_ingresos'  => $flujo['ingresos_depositos'],
+            'efectivo_salidas'    => $flujo['salidas_efectivo'],
+            'depositos_salidas'   => $flujo['salidas_depositos'],
             'diferencia'          => $diferencia,
             'total_cobradas'      => $totalCobradas,
             'total_otros'         => $totalOtros,
@@ -271,7 +261,7 @@ class ReporteCajaService
         // ── Ventas anuladas en esta sesión ────────────────────────────────
         $ventasAnuladas = $ventas->where('estado', 'anulado');
 
-        return [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas];
+        return [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas, $movimientosDetalle];
     }
 
     /**
@@ -292,6 +282,80 @@ class ReporteCajaService
             : now();
 
         return [$inicio, $fin];
+    }
+
+    /**
+     * Divide los movimientos de un pago mixto en una fila por método.
+     * Así un cobro mitad efectivo y mitad depósito no termina clasificado
+     * entero en una sola categoría del Excel.
+     */
+    private static function desglosarMovimientosPorMetodo($movimientos): \Illuminate\Support\Collection
+    {
+        $pagoIds = $movimientos
+            ->filter(fn ($m) => $m->subtipo === 'pago_venta' && $m->referencia_tipo === 'pago')
+            ->pluck('referencia_id')
+            ->filter()
+            ->unique();
+
+        $metodosPorPago = $pagoIds->isNotEmpty()
+            ? PagoMetodo::whereIn('pago_id', $pagoIds)->get()->groupBy('pago_id')
+            : collect();
+
+        return $movimientos->flatMap(function ($movimiento) use ($metodosPorPago) {
+            if ($movimiento->subtipo !== 'pago_venta' || $movimiento->referencia_tipo !== 'pago') {
+                return [$movimiento];
+            }
+
+            $metodos = $metodosPorPago->get($movimiento->referencia_id, collect());
+            if ($metodos->isEmpty()) {
+                return [$movimiento];
+            }
+
+            return $metodos->map(function ($pagoMetodo) use ($movimiento) {
+                $detalle = clone $movimiento;
+                $detalle->metodo_pago = $pagoMetodo->metodo;
+                $detalle->monto = $pagoMetodo->monto;
+                $detalle->observaciones = trim(
+                    ($movimiento->observaciones ?? '')
+                    . ' [' . ucfirst($pagoMetodo->metodo) . ']'
+                );
+                return $detalle;
+            })->all();
+        })->values();
+    }
+
+    /**
+     * Resume ingresos y salidas en efectivo frente a depósitos/medios
+     * electrónicos. Los cobros de ventas vienen de $metodos para respetar
+     * pagos mixtos; los demás ingresos y todas las salidas vienen del ledger.
+     */
+    private static function calcularFlujo($movimientos, $metodos): array
+    {
+        $otrosIngresos = $movimientos->filter(
+            fn ($m) => $m->estado === 'activo'
+                && $m->tipo === 'ingreso'
+                && $m->subtipo !== 'pago_venta'
+        );
+        $salidas = $movimientos->filter(
+            fn ($m) => $m->estado === 'activo' && $m->tipo === 'salida'
+        );
+
+        $ingresosEfectivo = $metodos->get('efectivo', 0)
+            + $otrosIngresos->filter(fn ($m) => self::esEfectivo($m->metodo_pago))->sum('monto');
+        $ingresosDepositos = $metodos->except(['efectivo'])->sum()
+            + $otrosIngresos->reject(fn ($m) => self::esEfectivo($m->metodo_pago))->sum('monto');
+
+        return [
+            'ingresos_efectivo'  => round((float) $ingresosEfectivo, 2),
+            'ingresos_depositos' => round((float) $ingresosDepositos, 2),
+            'salidas_efectivo'   => round((float) $salidas->filter(fn ($m) => self::esEfectivo($m->metodo_pago))->sum('monto'), 2),
+            'salidas_depositos'  => round((float) $salidas->reject(fn ($m) => self::esEfectivo($m->metodo_pago))->sum('monto'), 2),
+        ];
+    }
+
+    private static function esEfectivo(?string $metodo): bool
+    {
+        return strtolower(trim((string) $metodo)) === 'efectivo';
     }
 
     /**
@@ -435,25 +499,39 @@ class ReporteCajaService
 
         $row++;
 
-        // ── Bloque: MEDIOS ELECTRÓNICOS ───────────────────────────────
+        // ── Bloque: FLUJO SEPARADO POR MEDIO ─────────────────────────
         $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'MEDIOS ELECTRÓNICOS (no afectan arqueo)');
+        $sheet->setCellValue("A{$row}", 'INGRESOS Y SALIDAS POR MEDIO');
         $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
         $sheet->getRowDimension($row)->setRowHeight(20);
         $row++;
 
-        $hayElectronico = false;
+        self::fila2col($sheet, $row, 'Ingresos en efectivo (S/)', $kpis['efectivo_ingresos'], $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Ingresos por depósitos (S/)', $kpis['depositos_ingresos'], $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Salidas en efectivo (S/)', $kpis['efectivo_salidas'], $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Salidas por depósitos (S/)', $kpis['depositos_salidas'], $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Total ingresos (S/)',
+            round($kpis['efectivo_ingresos'] + $kpis['depositos_ingresos'], 2), $montoFormat); $row++;
+        self::fila2col($sheet, $row, 'Total salidas (S/)',
+            round($kpis['efectivo_salidas'] + $kpis['depositos_salidas'], 2), $montoFormat);
+        $sheet->getStyle("B{$row}")->getFont()->setBold(true); $row++;
+
+        $row++;
+
+        // ── Desglose de ingresos por método ──────────────────────────
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", 'DESGLOSE DE INGRESOS POR MÉTODO DE PAGO');
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
         foreach ($metodos as $metodo => $monto) {
-            if ($metodo === 'efectivo') continue;
             self::fila2col($sheet, $row, ucfirst($metodo) . ' (S/)', $monto, $montoFormat);
             $row++;
-            $hayElectronico = true;
         }
-        if (!$hayElectronico) {
-            $sheet->setCellValue("A{$row}", 'Sin cobros electrónicos en esta sesión.'); $row++;
+        if ($metodos->isEmpty()) {
+            $sheet->setCellValue("A{$row}", 'Sin ingresos por cobros en esta sesión.'); $row++;
         }
-        self::fila2col($sheet, $row, 'Total electrónico (S/)', $kpis['total_electronico'], $montoFormat);
-        $sheet->getStyle("B{$row}")->getFont()->setBold(true); $row++;
 
         $row++;
 
@@ -470,23 +548,6 @@ class ReporteCajaService
         self::fila2col($sheet, $row, 'Balance neto (S/)',     $kpis['balance'],        $montoFormat);
         $sheet->getStyle("B{$row}")->getFont()->setBold(true);
         $row++;
-
-        $row++;
-
-        // ── Bloque: Métodos de pago (todos) ──────────────────────────
-        $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'INGRESOS POR MÉTODO DE PAGO');
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
-        $sheet->getRowDimension($row)->setRowHeight(20);
-        $row++;
-
-        foreach ($metodos as $metodo => $monto) {
-            self::fila2col($sheet, $row, ucfirst($metodo) . ' (S/)', $monto, $montoFormat);
-            $row++;
-        }
-        if ($metodos->isEmpty()) {
-            $sheet->setCellValue("A{$row}", 'Sin datos'); $row++;
-        }
 
         $row++;
 
@@ -547,7 +608,7 @@ class ReporteCajaService
         $row++;
 
         // Cabecera de tabla
-        $colsVales = ['#', 'Tipo Doc.', 'Nro. Documento', 'Cliente', 'Vendedor', 'Método Pago', 'Total (S/)'];
+        $colsVales = ['#', 'Tipo Doc.', 'Nro. Documento', 'Cliente', 'Vendedor', 'Método Pago', 'Cobrado en sesión (S/)'];
         foreach ($colsVales as $ci => $label) {
             $col = chr(65 + $ci); // A, B, C…
             $sheet->setCellValue("{$col}{$row}", $label);
@@ -555,7 +616,11 @@ class ReporteCajaService
         $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
         $row++;
 
-        $ventasList = $ventas ?? collect();
+        // Solo mostrar vales con un cobro aplicado durante esta sesión.
+        // Una venta pendiente o cobrada en otro turno no debe aparecer aquí.
+        $ventasList = ($ventas ?? collect())
+            ->filter(fn ($v) => (float) ($v->reporte_cobrado ?? 0) > 0)
+            ->values();
         $n = 1;
         foreach ($ventasList as $v) {
             $sheet->setCellValue("A{$row}", $n++);
@@ -581,7 +646,7 @@ class ReporteCajaService
         }
         if ($ventasList->isEmpty()) {
             $sheet->mergeCells("A{$row}:G{$row}");
-            $sheet->setCellValue("A{$row}", 'Sin vales registrados en esta sesión.');
+            $sheet->setCellValue("A{$row}", 'Sin vales cancelados durante esta sesión.');
             $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $row++;
         }
@@ -589,48 +654,48 @@ class ReporteCajaService
         $row++;
 
         // ══════════════════════════════════════════════════════════════
-        // ── Bloque: DETALLE DE INGRESOS Y SALIDAS ────────────────────
+        // ── Bloques separados de ingresos y salidas ─────────────────
         // ══════════════════════════════════════════════════════════════
-        $sheet->mergeCells("A{$row}:G{$row}");
-        $sheet->setCellValue("A{$row}", 'DETALLE DE INGRESOS Y SALIDAS (MOVIMIENTOS)');
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
-        $sheet->getRowDimension($row)->setRowHeight(20);
-        $row++;
+        $movActivosReporte = ($movimientos ?? collect())->where('estado', 'activo');
 
-        $colsMov = ['#', 'Tipo', 'Subtipo', 'Categoría', 'Método Pago', 'Observaciones', 'Monto (S/)'];
-        foreach ($colsMov as $ci => $label) {
-            $col = chr(65 + $ci);
-            $sheet->setCellValue("{$col}{$row}", $label);
-        }
-        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
-        $row++;
-
-        $movList = ($movimientos ?? collect())->where('estado', 'activo');
-        $n = 1;
-        foreach ($movList as $m) {
-            $sheet->setCellValue("A{$row}", $n++);
-            $sheet->setCellValue("B{$row}", ucfirst($m->tipo ?? ''));
-            $sheet->setCellValue("C{$row}", $m->subtipo ?? '');
-            $sheet->setCellValue("D{$row}", $m->categoria ?? '');
-            $sheet->setCellValue("E{$row}", ucfirst($m->metodo_pago ?? ''));
-            $sheet->setCellValue("F{$row}", $m->observaciones ?? '');
-            $sheet->setCellValue("G{$row}", (float) $m->monto);
-            $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode($montoFormat);
-
-            if ($m->tipo === 'salida') {
-                $sheet->getStyle("A{$row}:G{$row}")->getFill()
-                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB(self::ROJO);
-            }
-            $row++;
-        }
-        if ($movList->isEmpty()) {
-            $sheet->mergeCells("A{$row}:G{$row}");
-            $sheet->setCellValue("A{$row}", 'Sin movimientos activos en esta sesión.');
-            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $row++;
-        }
-
-        $row++;
+        self::bloqueMovimientos(
+            $sheet,
+            $row,
+            'INGRESOS EN EFECTIVO',
+            $movActivosReporte->filter(fn ($m) => $m->tipo === 'ingreso' && self::esEfectivo($m->metodo_pago)),
+            $headerStyle,
+            $subHeaderStyle,
+            $montoFormat
+        );
+        self::bloqueMovimientos(
+            $sheet,
+            $row,
+            'INGRESOS POR DEPÓSITOS / MEDIOS ELECTRÓNICOS',
+            $movActivosReporte->filter(fn ($m) => $m->tipo === 'ingreso' && !self::esEfectivo($m->metodo_pago)),
+            $headerStyle,
+            $subHeaderStyle,
+            $montoFormat
+        );
+        self::bloqueMovimientos(
+            $sheet,
+            $row,
+            'SALIDAS EN EFECTIVO',
+            $movActivosReporte->filter(fn ($m) => $m->tipo === 'salida' && self::esEfectivo($m->metodo_pago)),
+            $headerStyle,
+            $subHeaderStyle,
+            $montoFormat,
+            self::ROJO
+        );
+        self::bloqueMovimientos(
+            $sheet,
+            $row,
+            'SALIDAS POR DEPÓSITOS / MEDIOS ELECTRÓNICOS',
+            $movActivosReporte->filter(fn ($m) => $m->tipo === 'salida' && !self::esEfectivo($m->metodo_pago)),
+            $headerStyle,
+            $subHeaderStyle,
+            $montoFormat,
+            self::ROJO
+        );
 
         // ══════════════════════════════════════════════════════════════
         // ── Bloque: DEVOLUCIONES ──────────────────────────────────────
@@ -733,6 +798,58 @@ class ReporteCajaService
         if ($format && is_numeric($valor)) {
             $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($format);
         }
+    }
+
+    private static function bloqueMovimientos(
+        $sheet,
+        int &$row,
+        string $titulo,
+        $movimientos,
+        array $headerStyle,
+        array $subHeaderStyle,
+        string $montoFormat,
+        ?string $colorFila = null
+    ): void {
+        $sheet->mergeCells("A{$row}:G{$row}");
+        $sheet->setCellValue("A{$row}", $titulo);
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($headerStyle);
+        $sheet->getRowDimension($row)->setRowHeight(20);
+        $row++;
+
+        $columnas = ['#', 'Tipo', 'Subtipo', 'Categoría', 'Método Pago', 'Observaciones', 'Monto (S/)'];
+        foreach ($columnas as $indice => $label) {
+            $columna = chr(65 + $indice);
+            $sheet->setCellValue("{$columna}{$row}", $label);
+        }
+        $sheet->getStyle("A{$row}:G{$row}")->applyFromArray($subHeaderStyle);
+        $row++;
+
+        $n = 1;
+        foreach ($movimientos as $movimiento) {
+            $sheet->setCellValue("A{$row}", $n++);
+            $sheet->setCellValue("B{$row}", ucfirst($movimiento->tipo ?? ''));
+            $sheet->setCellValue("C{$row}", $movimiento->subtipo ?? '');
+            $sheet->setCellValue("D{$row}", $movimiento->categoria ?? '');
+            $sheet->setCellValue("E{$row}", ucfirst($movimiento->metodo_pago ?? ''));
+            $sheet->setCellValue("F{$row}", $movimiento->observaciones ?? '');
+            $sheet->setCellValue("G{$row}", (float) $movimiento->monto);
+            $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode($montoFormat);
+
+            if ($colorFila) {
+                $sheet->getStyle("A{$row}:G{$row}")->getFill()
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($colorFila);
+            }
+            $row++;
+        }
+
+        if ($movimientos->isEmpty()) {
+            $sheet->mergeCells("A{$row}:G{$row}");
+            $sheet->setCellValue("A{$row}", 'Sin movimientos en esta categoría.');
+            $sheet->getStyle("A{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $row++;
+        }
+
+        $row++;
     }
 
     // ── Hoja 2: Ventas ────────────────────────────────────────────────────
