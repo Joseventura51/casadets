@@ -94,29 +94,29 @@ class ReporteCajaService
     private static function recopilarDatos(CajaSesion $sesion, ?Caja $caja, \Carbon\Carbon $fecha): array
     {
         $desde = $fecha->toDateString();
-        $hasta = $desde;
+        [$inicioSesion, $finSesion] = self::limitesSesion($sesion, $fecha);
 
         // Movimientos — acotados al rango temporal de esta sesión específica
         // para que múltiples sesiones del mismo día no se mezclen en el reporte.
         $movQuery = Movimiento::with('cliente:id,nombre')
-            ->whereDate('fecha', $desde);
+            ->whereDate('movimientos.fecha', $desde)
+            ->where('movimientos.created_at', '>=', $inicioSesion)
+            ->where('movimientos.created_at', '<=', $finSesion);
         if ($caja) {
             $movQuery->where('caja_id', $caja->id);
         } else {
             $movQuery->where('empresa', $sesion->empresa)->whereNull('caja_id');
         }
-        // Desde la apertura de esta sesión
-        $movQuery->where('movimientos.created_at', '>=', $sesion->created_at);
-        // Hasta el cierre (updated_at al momento de cerrar) si la sesión ya está cerrada
-        if ($sesion->monto_cierre !== null && $sesion->updated_at) {
-            $movQuery->where('movimientos.created_at', '<=', $sesion->updated_at);
-        }
         $movimientos = $movQuery->orderBy('id')->get();
         $movActivos  = $movimientos->where('estado', 'activo');
 
-        // Ventas
+        // Ventas creadas durante esta sesión. Las ventas creadas antes de la
+        // apertura, pero cobradas aquí, se agregan más abajo a partir de sus
+        // movimientos de pago.
         $ventasQuery = Venta::with(['vendedor', 'cliente', 'detalles'])
-            ->whereDate('fecha', $desde);
+            ->whereDate('ventas.fecha', $desde)
+            ->where('ventas.created_at', '>=', $inicioSesion)
+            ->where('ventas.created_at', '<=', $finSesion);
         if ($caja) {
             $seriesCodigos = Serie::where('caja_id', $caja->id)->pluck('codigo');
             if ($seriesCodigos->isNotEmpty()) {
@@ -150,14 +150,38 @@ class ReporteCajaService
             }
         }
 
-        $ventasCobradas   = $ventas->where('estado', 'pagado');
+        // El estado y pagado de una venta son acumulados y pueden cambiar en
+        // sesiones posteriores. Para este reporte usamos solo lo aplicado por
+        // pagos pertenecientes a la ventana de la sesión actual.
+        $cobradoPorVenta = $pagoMovIds->isNotEmpty()
+            ? DetallePagoFactura::whereIn('pago_id', $pagoMovIds)
+                ->selectRaw('venta_id, SUM(monto_aplicado) as monto')
+                ->groupBy('venta_id')
+                ->pluck('monto', 'venta_id')
+            : collect();
+
+        $ventas->each(function ($venta) use ($cobradoPorVenta, $pagoMovIds) {
+            $monto = $cobradoPorVenta->get($venta->id);
+
+            // Compatibilidad con ventas históricas que no tienen movimiento
+            // de pago: solo se usa el acumulado si la venta nació en esta
+            // sesión, nunca para una venta de otro turno.
+            if ($monto === null && $pagoMovIds->isEmpty() && $venta->created_at) {
+                $monto = in_array($venta->estado, ['pagado', 'parcial'], true)
+                    ? $venta->pagado
+                    : 0;
+            }
+
+            $venta->setAttribute('reporte_cobrado', round((float) ($monto ?? 0), 2));
+        });
+
+        $ventasCobradas   = $ventas->filter(fn ($v) => (float) $v->reporte_cobrado > 0);
         $ventasCanjeadas  = $ventas->where('estado', 'canjeada');
 
-        // KPIs — "Ventas cobradas" usa la suma real de pagado en las ventas (no movimientos),
-        // para que coincida con el detalle de la hoja Ventas y evite la inconsistencia 418 vs 1151.
+        // Solo sumar lo cobrado dentro de esta sesión. No usar Venta.pagado
+        // directamente porque contiene el acumulado de toda la vida de la venta.
         $totalCobradas   = round(
-            $ventas->filter(fn ($v) => in_array($v->estado, ['pagado', 'parcial']))
-                   ->sum(fn ($v) => (float)($v->pagado ?? 0)),
+            $ventasCobradas->sum(fn ($v) => (float) $v->reporte_cobrado),
             2
         );
         $totalOtros      = round($movActivos->filter(fn ($m) => $m->tipo === 'ingreso' && $m->subtipo !== 'pago_venta')->sum('monto'), 2);
@@ -170,6 +194,8 @@ class ReporteCajaService
             $comprasEfectivo = round(Compra::where('metodo_pago', 'efectivo')
                 ->where('caja_id', $caja->id)
                 ->whereDate('fecha', $desde)
+                ->where('created_at', '>=', $inicioSesion)
+                ->where('created_at', '<=', $finSesion)
                 ->sum('monto_total'), 2);
         }
         $ingManualEfec = round($movActivos->filter(fn ($m) => $m->tipo === 'ingreso' && $m->subtipo === 'manual' && $m->metodo_pago === 'efectivo')->sum('monto'), 2);
@@ -186,12 +212,12 @@ class ReporteCajaService
             : null;
 
         // KPIs adicionales
-        $ventasPagadasList  = $ventas->where('estado', 'pagado');
+        $ventasPagadasList  = $ventasCobradas;
         $ticketPromedio     = $ventasPagadasList->count() > 0
-            ? round($ventasPagadasList->sum(fn ($v) => (float)($v->pagado ?? $v->total)) / $ventasPagadasList->count(), 2)
+            ? round($ventasPagadasList->sum(fn ($v) => (float) $v->reporte_cobrado) / $ventasPagadasList->count(), 2)
             : 0;
-        $mayorVenta = $ventasPagadasList->max(fn ($v) => (float)($v->pagado ?? $v->total)) ?? 0;
-        $menorVenta = $ventasPagadasList->min(fn ($v) => (float)($v->pagado ?? $v->total)) ?? 0;
+        $mayorVenta = $ventasPagadasList->max(fn ($v) => (float) $v->reporte_cobrado) ?? 0;
+        $menorVenta = $ventasPagadasList->min(fn ($v) => (float) $v->reporte_cobrado) ?? 0;
 
         // Medios electrónicos (todo excepto efectivo)
         $metodosElectronicos = $metodos->except(['efectivo']);
@@ -225,13 +251,15 @@ class ReporteCajaService
         // Por vendedor
         $porVendedor = $ventasCobradas
             ->groupBy(fn ($v) => $v->vendedor->nombre ?? 'Sin vendedor')
-            ->map(fn ($g) => round($g->sum(fn ($v) => $v->total_cobrado ?? 0), 2));
+            ->map(fn ($g) => round($g->sum(fn ($v) => (float) $v->reporte_cobrado), 2));
 
         // ── Devoluciones de esta sesión ───────────────────────────────────
-        // Filtramos solo por fecha. caja_id puede ser nulo en varias devoluciones,
-        // por eso aceptamos también las que no tienen caja asignada (orWhereNull).
+        // La fecha de negocio no distingue dos sesiones del mismo día; created_at
+        // delimita la devolución al turno que realmente la registró.
         $devQuery = Devolucion::with(['venta:id,documento_tipo,documento_numero', 'user:id,name'])
-            ->whereDate('devoluciones.fecha', $desde);
+            ->whereDate('devoluciones.fecha', $desde)
+            ->where('devoluciones.created_at', '>=', $inicioSesion)
+            ->where('devoluciones.created_at', '<=', $finSesion);
         if ($caja) {
             $devQuery->where(function ($q) use ($caja) {
                 $q->where('devoluciones.caja_id', $caja->id)
@@ -244,6 +272,26 @@ class ReporteCajaService
         $ventasAnuladas = $ventas->where('estado', 'anulado');
 
         return [$ventas, $movimientos, $kpis, $metodos, $porVendedor, $devoluciones, $ventasAnuladas];
+    }
+
+    /**
+     * Obtiene los límites reales de una sesión de caja.
+     *
+     * Una sesión cerrada termina en su updated_at, que es actualizado por
+     * CajaService::cerrarCaja(). Para reportes de una sesión aún abierta se
+     * usa el momento actual como límite superior.
+     */
+    private static function limitesSesion(CajaSesion $sesion, \Carbon\Carbon $fecha): array
+    {
+        $inicio = $sesion->created_at
+            ? \Carbon\Carbon::parse($sesion->created_at)
+            : $fecha->copy()->startOfDay();
+
+        $fin = $sesion->updated_at && $sesion->estado === 'cerrada'
+            ? \Carbon\Carbon::parse($sesion->updated_at)
+            : now();
+
+        return [$inicio, $fin];
     }
 
     /**
@@ -516,7 +564,7 @@ class ReporteCajaService
             $sheet->setCellValue("D{$row}", $v->cliente->nombre ?? 'Sin cliente');
             $sheet->setCellValue("E{$row}", $v->vendedor->nombre ?? '—');
             $sheet->setCellValue("F{$row}", ucfirst($v->metodo_pago ?? '—'));
-            $sheet->setCellValue("G{$row}", (float) ($v->pagado ?? $v->total));
+            $sheet->setCellValue("G{$row}", (float) ($v->reporte_cobrado ?? $v->pagado ?? $v->total));
             $sheet->getStyle("G{$row}")->getNumberFormat()->setFormatCode($montoFormat);
 
             $color = match ($v->estado ?? '') {
@@ -715,7 +763,7 @@ class ReporteCajaService
             $sheet->setCellValue("F{$row}", $v->vendedor->nombre ?? '');
             $sheet->setCellValue("G{$row}", $v->metodo_pago ?? '');
             $sheet->setCellValue("H{$row}", (float) $v->total);
-            $sheet->setCellValue("I{$row}", (float) ($v->pagado ?? 0));
+            $sheet->setCellValue("I{$row}", (float) ($v->reporte_cobrado ?? $v->pagado ?? 0));
             $sheet->setCellValue("J{$row}", ucfirst($v->estado ?? 'pendiente'));
 
             $color = match ($v->estado ?? '') {
