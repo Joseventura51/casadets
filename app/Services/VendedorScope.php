@@ -126,7 +126,16 @@ class VendedorScope
     {
         $cajas = static::cajaIds();
         if ($cajas !== null) {
-            $query->whereIn('caja_id', $cajas);
+            $query->where(function (Builder $q) use ($cajas) {
+                $q->whereIn('compras.caja_id', $cajas)
+                  ->orWhereExists(function ($sub) use ($cajas) {
+                      $sub->select(DB::raw(1))
+                          ->from('movimientos')
+                          ->whereColumn('movimientos.referencia_id', 'compras.id')
+                          ->where('movimientos.referencia_tipo', 'compra')
+                          ->whereIn('movimientos.caja_id', $cajas);
+                  });
+            });
             return $query;
         }
 

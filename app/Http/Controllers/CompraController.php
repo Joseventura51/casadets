@@ -52,7 +52,23 @@ class CompraController extends Controller
         VendedorScope::aplicarCompras($query);
 
         if (session('caja_id')) {
-            $query->where('caja_id', session('caja_id'));
+            $cajaId = session('caja_id');
+
+            // La compra y su movimiento se crean en la misma operación,
+            // pero las compras históricas pueden conservar caja_id nulo o
+            // distinto después de un cambio de sesión. Si el movimiento
+            // vinculado pertenece a la caja activa, la compra sigue siendo
+            // parte de este registro de caja.
+            $query->where(function ($q) use ($cajaId) {
+                $q->where('compras.caja_id', $cajaId)
+                  ->orWhereExists(function ($sub) use ($cajaId) {
+                      $sub->selectRaw('1')
+                          ->from('movimientos')
+                          ->whereColumn('movimientos.referencia_id', 'compras.id')
+                          ->where('movimientos.referencia_tipo', 'compra')
+                          ->where('movimientos.caja_id', $cajaId);
+                  });
+            });
         }
 
         if ($request->filled('empresa')) {
