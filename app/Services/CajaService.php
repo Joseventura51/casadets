@@ -114,6 +114,18 @@ class CajaService
             }
         }
 
+        // Compatibilidad con aperturas históricas que no tenían caja_id.
+        // CajaController también usa este fallback cuando no hay una caja
+        // seleccionada, por lo que Ventas debe reconocer la misma sesión.
+        $empresa = $cajasDisponibles->first()?->empresa
+            ?? session('empresa', 'casadets');
+        if (CajaSesion::where('empresa', $empresa)
+            ->whereNull('caja_id')
+            ->where('estado', 'abierta')
+            ->exists()) {
+            return true;
+        }
+
         return false;
     }
 
