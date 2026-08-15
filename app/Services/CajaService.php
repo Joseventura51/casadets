@@ -80,24 +80,36 @@ class CajaService
     {
         $cajaId = session('caja_id');
 
-        // Ruta rápida: leer el booleano directamente de la tabla cajas
+        // La sesión abierta es la fuente de verdad. La bandera
+        // cajas.esta_abierta se mantiene sincronizada como dato derivado.
         if ($cajaId) {
-            if (Caja::where('id', $cajaId)->where('esta_abierta', true)->exists()) {
+            $caja = Caja::find($cajaId);
+            if ($caja && $caja->sesionAbierta()) {
+                if (!$caja->esta_abierta) {
+                    $caja->update(['esta_abierta' => true]);
+                }
                 return true;
             }
-            // El caja_id en sesión ya no está abierto — buscar otra
+            // El indicador puede haber quedado activo sin una sesión real.
+            if ($caja && $caja->esta_abierta) {
+                $caja->update(['esta_abierta' => false]);
+            }
         }
 
-        // Buscar caja abierta entre las que maneja el usuario
+        // Buscar una sesión abierta entre las cajas que maneja el usuario.
         $cajasDisponibles = self::cajasUsuario();
         if ($cajasDisponibles->isNotEmpty()) {
-            $cajaAbierta = Caja::whereIn('id', $cajasDisponibles->pluck('id'))
-                ->where('esta_abierta', true)
+            $sesionAbierta = CajaSesion::whereIn('caja_id', $cajasDisponibles->pluck('id'))
+                ->where('estado', 'abierta')
                 ->orderBy('id')
                 ->first();
 
-            if ($cajaAbierta) {
-                session(['caja_id' => $cajaAbierta->id]);
+            if ($sesionAbierta) {
+                $cajaAbierta = Caja::find($sesionAbierta->caja_id);
+                if ($cajaAbierta && !$cajaAbierta->esta_abierta) {
+                    $cajaAbierta->update(['esta_abierta' => true]);
+                }
+                session(['caja_id' => $sesionAbierta->caja_id]);
                 return true;
             }
         }
@@ -111,8 +123,17 @@ class CajaService
      */
     public static function abrirCaja(Caja $caja, float $montoApertura, ?string $observaciones = null): CajaSesion
     {
-        if ($caja->esta_abierta) {
+        $sesionExistente = $caja->sesionAbierta();
+        if ($sesionExistente) {
+            if (!$caja->esta_abierta) {
+                $caja->update(['esta_abierta' => true]);
+            }
             throw new \RuntimeException('La caja ya se encuentra abierta. Debe cerrarla antes de realizar una nueva apertura.');
+        }
+
+        // Reparar una bandera antigua que quedó activa sin sesión abierta.
+        if ($caja->esta_abierta) {
+            $caja->update(['esta_abierta' => false]);
         }
 
         $sesion = CajaSesion::create([
@@ -124,7 +145,7 @@ class CajaService
             'observaciones'  => $observaciones,
         ]);
 
-        // Marcar la caja como abierta directamente en la tabla
+        // Mantener la bandera derivada sincronizada.
         $caja->update(['esta_abierta' => true]);
 
         return $sesion;
@@ -157,12 +178,17 @@ class CajaService
     public static function selectorOptions(): array
     {
         $cajas = self::cajasUsuario();
+        $cajasAbiertas = CajaSesion::whereIn('caja_id', $cajas->pluck('id'))
+            ->where('estado', 'abierta')
+            ->pluck('caja_id')
+            ->flip();
+
         return $cajas->map(fn ($c) => [
             'id'      => $c->id,
             'codigo'  => $c->codigo,
             'nombre'  => $c->nombre,
             'empresa' => $c->empresa,
-            'abierta' => (bool) $c->esta_abierta,
+            'abierta' => $cajasAbiertas->has($c->id),
         ])->toArray();
     }
 }
