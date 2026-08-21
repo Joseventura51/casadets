@@ -45,6 +45,9 @@ class SalidaAlmacenImportController extends Controller
         }
 
         $mensaje = "Importación completada: {$resultado['creadas']} salida(s), {$resultado['lineas']} línea(s).";
+        if ($resultado['almacenesCreados'] > 0 || $resultado['productosCreados'] > 0) {
+            $mensaje .= " Se crearon {$resultado['almacenesCreados']} almacén(es) y {$resultado['productosCreados']} producto(s).";
+        }
         if ($resultado['omitidas'] > 0) {
             $mensaje .= " {$resultado['omitidas']} salida(s) ya existían y fueron omitidas.";
         }
@@ -114,36 +117,28 @@ class SalidaAlmacenImportController extends Controller
             $destino = $this->buscarAlmacen($almacenes, $receptor);
             $producto = $productos->first(fn ($item) => $this->normalizar($item->codigo) === $this->normalizar($codigo));
 
-            if (!$origen) {
-                throw new RuntimeException("No existe un almacén activo para el emisor \"{$emisor}\" (fila {$fila['_fila_excel']}).");
-            }
-            if (!$destino) {
-                throw new RuntimeException("No existe un almacén activo para el receptor \"{$receptor}\" (fila {$fila['_fila_excel']}).");
-            }
-            if ($origen->id === $destino->id) {
+            if ($origen && $destino && $origen->id === $destino->id) {
                 throw new RuntimeException("El origen y destino son iguales en la fila {$fila['_fila_excel']}.");
-            }
-            if (!$producto) {
-                throw new RuntimeException("No existe un producto activo con código \"{$codigo}\" (fila {$fila['_fila_excel']}).");
             }
 
             $clave = $documento;
             $grupos[$clave] ??= [
                 'documento' => $documento,
                 'fecha' => $this->fecha($fila['fecha'], $fila['_fila_excel']),
-                'origen' => $origen,
-                'destino' => $destino,
+                'origen_nombre' => $emisor,
+                'destino_nombre' => $receptor,
                 'filas' => [],
             ];
 
-            if ($grupos[$clave]['origen']->id !== $origen->id || $grupos[$clave]['destino']->id !== $destino->id) {
+            if ($this->normalizar($grupos[$clave]['origen_nombre']) !== $this->normalizar($emisor)
+                || $this->normalizar($grupos[$clave]['destino_nombre']) !== $this->normalizar($receptor)) {
                 throw new RuntimeException("El documento {$documento} tiene distintos orígenes o destinos.");
             }
 
             $grupos[$clave]['filas'][] = [
-                'producto' => $producto,
+                'producto_codigo' => $codigo,
                 'codigo' => $codigo,
-                'descripcion' => trim((string) $fila['descripcion_producto']) ?: $producto->nombre,
+                'descripcion' => trim((string) $fila['descripcion_producto']) ?: "Producto {$codigo}",
                 'medida' => trim((string) $fila['medida']) ?: 'NIU',
                 'cantidad' => $cantidad,
                 'precio' => $this->numero($fila['precio']),
@@ -156,6 +151,8 @@ class SalidaAlmacenImportController extends Controller
             $creadas = 0;
             $lineas = 0;
             $omitidas = 0;
+            $almacenesCreados = 0;
+            $productosCreados = 0;
 
             foreach ($grupos as $grupo) {
                 if (SalidaAlmacen::where('documento', $grupo['documento'])->exists()) {
@@ -163,11 +160,25 @@ class SalidaAlmacenImportController extends Controller
                     continue;
                 }
 
+                $origen = $this->buscarAlmacen(Almacen::where('activo', true)->get(), $grupo['origen_nombre']);
+                if (!$origen) {
+                    $origen = $this->crearAlmacenImportado($grupo['origen_nombre']);
+                    $almacenesCreados++;
+                }
+                $destino = $this->buscarAlmacen(Almacen::where('activo', true)->get(), $grupo['destino_nombre']);
+                if (!$destino) {
+                    $destino = $this->crearAlmacenImportado($grupo['destino_nombre']);
+                    $almacenesCreados++;
+                }
+                if ($origen->id === $destino->id) {
+                    throw new RuntimeException("El documento {$grupo['documento']} tiene origen y destino iguales.");
+                }
+
                 $salida = SalidaAlmacen::create([
                     'documento' => $grupo['documento'],
                     'fecha' => $grupo['fecha'],
-                    'almacen_origen_id' => $grupo['origen']->id,
-                    'almacen_destino_id' => $grupo['destino']->id,
+                    'almacen_origen_id' => $origen->id,
+                    'almacen_destino_id' => $destino->id,
                     'estado' => SalidaAlmacen::REALIZADA,
                     'observaciones' => 'Importado desde reporte de transferencias valorizadas.',
                     'usuario_id' => auth()->id(),
@@ -175,9 +186,24 @@ class SalidaAlmacenImportController extends Controller
                 ]);
 
                 foreach ($grupo['filas'] as $fila) {
-                    $precio = $fila['precio'] > 0 ? $fila['precio'] : (float) $fila['producto']->precio_costo;
+                    $producto = Producto::whereRaw('LOWER(codigo) = ?', [mb_strtolower($fila['producto_codigo'], 'UTF-8')])
+                        ->where('activo', true)
+                        ->first();
+                    if (!$producto) {
+                        $producto = Producto::create([
+                            'codigo' => $fila['producto_codigo'],
+                            'nombre' => $fila['descripcion'],
+                            'empresa' => 'casadets',
+                            'precio_venta' => 0,
+                            'precio_costo' => $fila['precio'],
+                            'stock_actual' => 0,
+                            'activo' => true,
+                        ]);
+                        $productosCreados++;
+                    }
+                    $precio = $fila['precio'] > 0 ? $fila['precio'] : (float) $producto->precio_costo;
                     $salida->detalles()->create([
-                        'producto_id' => $fila['producto']->id,
+                        'producto_id' => $producto->id,
                         'codigo_producto' => $fila['codigo'],
                         'descripcion_original' => $fila['descripcion'],
                         'unidad_medida' => $fila['medida'],
@@ -187,7 +213,7 @@ class SalidaAlmacenImportController extends Controller
                         'lote' => $fila['lote'],
                     ]);
                     $this->inventario->mover(
-                        $fila['producto'], $grupo['origen'], 'salida', $fila['cantidad'],
+                        $producto, $origen, 'salida', $fila['cantidad'],
                         'salida_almacen', $salida->id,
                         'Importación de salida ' . $grupo['documento'], $precio
                     );
@@ -196,8 +222,26 @@ class SalidaAlmacenImportController extends Controller
                 $creadas++;
             }
 
-            return compact('creadas', 'lineas', 'omitidas');
+            return compact('creadas', 'lineas', 'omitidas', 'almacenesCreados', 'productosCreados');
         });
+    }
+
+    private function crearAlmacenImportado(string $nombre): Almacen
+    {
+        $base = strtoupper(trim((string) preg_replace('/[^A-Za-z0-9]+/', '-', $nombre)));
+        $base = trim($base, '-') ?: 'ALMACEN';
+        $codigo = 'IMP-' . mb_substr($base, 0, 40, 'UTF-8');
+        if (Almacen::where('codigo', $codigo)->exists()) {
+            $codigo = mb_substr($codigo, 0, 44, 'UTF-8') . '-' . substr(md5($nombre), 0, 5);
+        }
+
+        return Almacen::create([
+            'codigo' => $codigo,
+            'nombre' => trim($nombre),
+            'empresa' => 'casadets',
+            'activo' => true,
+            'observaciones' => 'Creado automáticamente al importar transferencias.',
+        ]);
     }
 
     private function buscarAlmacen($almacenes, string $valor): ?Almacen

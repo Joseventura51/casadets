@@ -40,10 +40,10 @@
                 <code class="d-block bg-light p-2 rounded">fecha, documento, emisor, estado, codigo_producto, descripcion_producto, medida, cantidad, precio, monto, lote, receptor</code>
                 <hr>
                 <ul class="mb-0 ps-3">
-                    <li>El emisor y receptor deben coincidir con el código o nombre de un almacén activo.</li>
-                    <li>El código de producto debe existir y estar activo.</li>
+                    <li>Si el emisor o receptor no existe, se crea automáticamente como almacén activo.</li>
+                    <li>Si el código de producto no existe, se crea automáticamente con su descripción y precio.</li>
                     <li>Se valida el stock del almacén origen antes de confirmar.</li>
-                    <li>Si una fila falla, no se registra ninguna salida del archivo.</li>
+                    <li>Si una fila falla, no se registra ninguna salida ni maestro parcial del archivo.</li>
                 </ul>
             </div>
         </div>
