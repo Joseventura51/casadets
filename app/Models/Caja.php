@@ -50,7 +50,7 @@ class Caja extends Model
 
     public function estaAbierta(): bool
     {
-        // Lee el booleano de la columna — sin consultar caja_sesiones
+        // Lee el booleano de la columna — sin consultar caja_sesiones OK
         return (bool) $this->esta_abierta;
     }
 
