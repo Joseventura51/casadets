@@ -1,0 +1,861 @@
+# IMPLEMENTACIÓN: SALIDAS ENTRE ALMACENES, DEVOLUCIONES Y ANULACIONES
+
+Necesito implementar en la aplicación un módulo de **Salidas entre Almacenes**.
+
+IMPORTANTE: antes de modificar código, analiza la arquitectura actual, la base de datos, los módulos de Inventario, Kardex, Productos, Almacenes y especialmente el módulo actual de Devoluciones.
+
+No reemplaces ni rompas funcionalidades existentes. La implementación debe integrarse con la arquitectura actual.
+
+---
+
+## 1. CONCEPTO CORRECTO DEL MÓDULO
+
+Las operaciones que vamos a registrar **YA OCURRIERON**.
+
+No son solicitudes pendientes.
+
+El Excel que se está utilizando contiene registros de productos que fueron retirados de un almacén de origen porque fueron enviados a otro almacén.
+
+Ejemplo:
+
+* Documento: `STR-0007-306`
+* Almacén origen: `ALM. IMPACTO`
+* Almacén destino: `ALMACEN PIMPON`
+* Producto: `M21208`
+* Cantidad: `0.24`
+
+Por lo tanto, el módulo debe llamarse:
+
+**Salidas de almacén**
+
+o
+
+**Salidas entre almacenes**
+
+NO debe llamarse "Solicitudes de almacén", porque la salida ya fue realizada.
+
+Al registrar una salida:
+
+**el stock del almacén origen debe disminuir inmediatamente.**
+
+El almacén destino debe guardarse como información de trazabilidad.
+
+---
+
+# 2. FLUJO PRINCIPAL
+
+El flujo esperado es:
+
+Excel / información histórica
+
+↓
+
+Registrar salida de almacén
+
+↓
+
+Descontar stock del almacén origen
+
+↓
+
+Generar movimiento de Kardex
+
+↓
+
+Guardar documento, origen, destino, fecha y usuario
+
+↓
+
+Posteriormente permitir:
+
+* Registrar devolución parcial o total
+* Anular la salida
+
+---
+
+# 3. ESTRUCTURA DE DATOS
+
+Analiza primero si ya existen tablas equivalentes.
+
+Si no existen, crear una estructura equivalente a:
+
+### `almacenes`
+
+Para administrar los almacenes.
+
+### `producto_almacen`
+
+Debe permitir conocer el stock de cada producto por almacén.
+
+### `salidas_almacen`
+
+Cabecera de cada salida.
+
+Campos conceptuales:
+
+* id
+* documento
+* fecha
+* almacen_origen_id
+* almacen_destino_id
+* estado
+* observaciones
+* usuario_id
+* archivo_referencia, si corresponde
+* created_at
+* updated_at
+
+### `salida_almacen_detalles`
+
+Detalle de productos.
+
+Campos conceptuales:
+
+* id
+* salida_almacen_id
+* producto_id
+* codigo_producto
+* descripcion_original
+* unidad_medida
+* cantidad
+* precio_unitario
+* monto
+* lote
+
+### `devoluciones_salida`
+
+Cabecera de devolución.
+
+### `devolucion_salida_detalles`
+
+Detalle de cantidades devueltas.
+
+### `stock_movimientos`
+
+Reutilizar el Kardex existente siempre que sea posible.
+
+No crear un segundo sistema de movimientos si ya existe uno funcional.
+
+---
+
+# 4. DOCUMENTO / SERIE
+
+NO vincular las devoluciones únicamente por la serie.
+
+Por ejemplo:
+
+`STR-0007-306`
+
+debe almacenarse como **documento completo**.
+
+La relación interna debe ser:
+
+`salida_almacen.id`
+
+El documento completo debe utilizarse para búsqueda y visualización.
+
+La serie puede almacenarse como información adicional, pero NO debe ser la llave principal.
+
+Además, no se debe forzar `STR-0007-306` dentro del sistema de series fiscales si actualmente las series están destinadas a boletas, facturas, notas de crédito, etc.
+
+Este documento corresponde a una operación interna de almacén.
+
+---
+
+# 5. REGISTRO DE UNA SALIDA
+
+La pantalla debe permitir crear una salida ya realizada.
+
+## Cabecera
+
+Mostrar:
+
+* Fecha de salida
+* Documento
+* Almacén origen
+* Almacén destino
+* Estado
+* Observaciones
+
+## Detalle
+
+Mostrar/agregar:
+
+* Producto
+* Código
+* Descripción
+* Unidad de medida
+* Cantidad
+* Precio unitario
+* Monto
+* Lote
+
+Al guardar:
+
+Ejemplo:
+
+Stock anterior del almacén origen:
+
+`10.00`
+
+Salida:
+
+`0.24`
+
+Nuevo stock:
+
+`9.76`
+
+Debe generarse automáticamente un movimiento de Kardex:
+
+* Tipo: `salida`
+* Referencia: `salida entre almacenes`
+* Documento: `STR-0007-306`
+* Almacén origen
+* Almacén destino
+* Producto
+* Cantidad
+* Saldo anterior
+* Saldo posterior
+* Usuario
+* Fecha/hora
+
+---
+
+# 6. MUY IMPORTANTE: NO AUMENTAR AUTOMÁTICAMENTE EL STOCK DEL DESTINO
+
+En esta primera versión, el sistema solamente debe descontar el stock del almacén origen.
+
+El almacén destino se conserva como referencia.
+
+NO generar automáticamente una entrada en el almacén destino.
+
+La razón es que los registros disponibles representan principalmente las salidas realizadas y todavía no estamos controlando la recepción física en el almacén destino.
+
+En una futura etapa podría existir:
+
+Salida:
+
+`ALM. IMPACTO → ALMACEN PIMPON`
+
+Entrada:
+
+`ALMACEN PIMPON ← ALM. IMPACTO`
+
+pero eso NO debe implementarse ahora como comportamiento automático.
+
+---
+
+# 7. ANULAR UNA SALIDA
+
+Debe existir una acción:
+
+**Anular salida**
+
+La anulación se utiliza cuando la salida fue registrada por error o debe quedar sin efecto.
+
+NO eliminar físicamente el registro.
+
+La salida debe permanecer visible con estado:
+
+`Anulada`
+
+Y debe generarse un movimiento inverso de Kardex para recuperar el stock del almacén origen.
+
+Ejemplo:
+
+Salida original:
+
+`ALM. IMPACTO - 10 unidades`
+
+Anulación:
+
+`ALM. IMPACTO + 10 unidades`
+
+El historial debe mostrar claramente ambos movimientos.
+
+---
+
+# 8. DEVOLUCIÓN DE UNA SALIDA
+
+También debe existir una acción:
+
+**Registrar devolución**
+
+Esto es diferente a anular.
+
+### Anulación
+
+La salida realmente debe quedar sin efecto.
+
+### Devolución
+
+La mercancía sí salió físicamente, pero posteriormente regresó.
+
+Por ejemplo:
+
+Salida original:
+
+`10 unidades`
+
+Después regresan:
+
+`3 unidades`
+
+Resultado:
+
+`7 unidades efectivamente salieron`
+
+La salida original debe permanecer registrada.
+
+La devolución debe generar una entrada de stock en el almacén de origen.
+
+---
+
+# 9. DEVOLUCIÓN PARCIAL Y TOTAL
+
+Al seleccionar:
+
+**Registrar devolución**
+
+mostrar las líneas de la salida original.
+
+Ejemplo:
+
+| Producto | Cantidad salida | Ya devuelto | Disponible para devolver |
+| -------- | --------------: | ----------: | -----------------------: |
+| M21208   |            0.24 |        0.00 |                     0.24 |
+
+El usuario debe poder indicar una cantidad menor o igual a la disponible.
+
+Ejemplo:
+
+Salida:
+
+`0.24`
+
+Devolución:
+
+`0.10`
+
+Disponible:
+
+`0.14`
+
+No permitir devolver más de lo que realmente salió.
+
+---
+
+# 10. RELACIÓN CON EL MÓDULO ACTUAL DE DEVOLUCIONES
+
+IMPORTANTE:
+
+Analiza cómo funciona actualmente el módulo **Devoluciones**.
+
+La conversación determinó que la devolución actual está relacionada con ventas, por ejemplo:
+
+`devoluciones.venta_id`
+
+y
+
+`devolucion_detalles.venta_detalle_id`
+
+Por lo tanto, NO reutilizar directamente esa devolución para las salidas de almacén si eso provoca efectos sobre:
+
+* Ventas
+* Caja
+* Saldos a favor
+* Stock asociado a ventas
+
+Una devolución de almacén es una operación diferente.
+
+La recomendación es mantener conceptualmente dos procesos:
+
+### Devolución de venta
+
+Cliente devuelve un producto vendido.
+
+### Devolución de salida de almacén
+
+Un almacén devuelve mercancía que previamente recibió.
+
+Sin embargo, se puede reutilizar la lógica común del Kardex y movimientos de inventario.
+
+---
+
+# 11. ESTRUCTURA DE DEVOLUCIÓN
+
+Conceptualmente:
+
+`salida_almacen`
+
+↓
+
+`salida_almacen_detalles`
+
+↓
+
+`devoluciones_salida`
+
+↓
+
+`devolucion_salida_detalles`
+
+Cada devolución debe guardar:
+
+* Salida original
+* Documento completo
+* Producto
+* Cantidad devuelta
+* Motivo
+* Fecha
+* Usuario
+* Almacén que recibe la devolución
+* Estado
+
+---
+
+# 12. ESTADOS
+
+## Salida
+
+Utilizar:
+
+* `Realizada`
+* `Parcialmente devuelta`
+* `Devuelta completamente`
+* `Anulada`
+
+El estado debe actualizarse automáticamente según las devoluciones realizadas.
+
+Ejemplo:
+
+Salida:
+
+`10`
+
+Devolución:
+
+`3`
+
+Estado:
+
+`Parcialmente devuelta`
+
+Si posteriormente se devuelven las otras `7`:
+
+Estado:
+
+`Devuelta completamente`
+
+---
+
+## Devolución
+
+Estados:
+
+* `Registrada`
+* `Anulada`
+
+No eliminar físicamente una devolución.
+
+---
+
+# 13. REGLAS DE SEGURIDAD
+
+El sistema debe impedir:
+
+1. Devolver más cantidad de la que salió.
+2. Devolver una línea que no pertenece a la salida.
+3. Registrar dos veces una misma devolución.
+4. Anular una salida sin advertir si ya tiene devoluciones.
+5. Eliminar físicamente salidas.
+6. Eliminar físicamente devoluciones.
+7. Generar movimientos de stock inconsistentes.
+8. Generar stock negativo sin respetar las reglas que ya tenga el sistema.
+9. Modificar silenciosamente movimientos históricos.
+
+Todas las modificaciones importantes deben quedar auditadas.
+
+---
+
+# 14. PANTALLA PRINCIPAL
+
+Crear una pantalla:
+
+**Salidas entre almacenes**
+
+Debe tener:
+
+### Encabezado
+
+* Título
+* Botón `Nueva salida`
+
+### Filtros
+
+* Documento
+* Fecha desde/hasta
+* Almacén origen
+* Almacén destino
+* Producto
+* Estado
+
+### Tabla
+
+Columnas recomendadas:
+
+* Documento
+* Fecha
+* Origen
+* Destino
+* Cantidad de productos/líneas
+* Monto
+* Estado
+* Usuario
+* Acciones
+
+Acciones:
+
+* Ver detalle
+* Registrar devolución
+* Anular salida
+
+---
+
+# 15. DETALLE DE LA SALIDA
+
+Al abrir una salida:
+
+## Información general
+
+Mostrar:
+
+* Documento
+* Fecha
+* Origen
+* Destino
+* Estado
+* Usuario
+* Observaciones
+
+## Productos
+
+Mostrar:
+
+* Código
+* Producto
+* Cantidad
+* Unidad
+* Precio
+* Monto
+* Lote
+
+## Historial
+
+Mostrar claramente:
+
+* Salida original
+* Devoluciones
+* Anulación, si existe
+* Movimientos de Kardex relacionados
+
+## Acciones
+
+Según el estado:
+
+* `Registrar devolución`
+* `Anular salida`
+
+Las acciones deben desaparecer o bloquearse cuando ya no sean válidas.
+
+---
+
+# 16. INVENTARIO POR ALMACÉN
+
+La conversación determinó que debemos preparar el sistema para manejar stock por almacén.
+
+La estructura conceptual es:
+
+`producto + almacén = stock`
+
+Por ejemplo:
+
+Producto M21208:
+
+| Almacén        | Stock |
+| -------------- | ----: |
+| ALM. IMPACTO   | 10.00 |
+| ALMACEN PIMPON |  5.00 |
+
+Pero en esta primera implementación:
+
+* La salida descuenta del origen.
+* El destino queda registrado.
+* No se genera entrada automática en destino.
+
+Preparar la arquitectura para que posteriormente pueda implementarse la recepción.
+
+---
+
+# 17. KARDEX
+
+Integrar completamente las salidas con el Kardex existente.
+
+Cada salida debe producir un movimiento identificable.
+
+Ejemplo:
+
+```text
+Tipo: SALIDA
+Referencia: SALIDA_ENTRE_ALMACENES
+Documento: STR-0007-306
+Origen: ALM. IMPACTO
+Destino: ALMACEN PIMPON
+Producto: M21208
+Cantidad: 0.24
+Saldo anterior: 10.00
+Saldo posterior: 9.76
+Usuario: ...
+Fecha: ...
+```
+
+Una devolución debe generar:
+
+```text
+Tipo: ENTRADA
+Referencia: DEVOLUCION_SALIDA
+Documento: STR-0007-306
+Origen: ALMACEN PIMPON
+Destino: ALM. IMPACTO
+Cantidad: 0.10
+```
+
+Una anulación debe generar el movimiento inverso correspondiente.
+
+---
+
+# 18. IMPORTACIÓN / REGISTRO DEL EXCEL
+
+El Excel contiene datos de salidas que ya ocurrieron.
+
+Los campos conceptuales son:
+
+* `emisor` → almacén origen
+* `receptor` → almacén destino
+* `documento` → documento de salida
+* `fecha` → fecha de salida
+* `estado` → estado del documento
+* `codigo_producto` → producto
+* `cantidad` → cantidad salida
+* `precio` → precio/costo unitario
+* `monto` → total
+* `lote` → lote
+
+No interpretar esos registros como solicitudes pendientes.
+
+La información representa operaciones realizadas.
+
+---
+
+# 19. EXPERIENCIA VISUAL
+
+La interfaz debe ser limpia y profesional y mantener el estilo visual actual de la aplicación.
+
+No crear una interfaz completamente diferente.
+
+Debe ser fácil distinguir:
+
+### Salida realizada
+
+de
+
+### Devolución
+
+de
+
+### Anulación
+
+El usuario debe entender rápidamente qué ocurrió con cada documento.
+
+En el detalle, sería ideal mostrar una línea temporal o historial:
+
+```text
+21/08/2026
+Salida realizada
+ALM. IMPACTO → ALMACEN PIMPON
+10.00 → 9.76
+
+22/08/2026
+Devolución parcial
+ALMACEN PIMPON → ALM. IMPACTO
++0.10
+```
+
+---
+
+# 20. NO ROMPER FUNCIONALIDADES EXISTENTES
+
+Antes de implementar:
+
+1. Revisar esquema actual de base de datos.
+2. Revisar productos.
+3. Revisar inventario.
+4. Revisar almacenes.
+5. Revisar Kardex.
+6. Revisar devoluciones.
+7. Revisar ventas.
+8. Revisar permisos/usuarios.
+9. Revisar cómo se calculan actualmente los stocks.
+10. Identificar si ya existe alguna estructura reutilizable.
+
+Reutilizar código y tablas existentes cuando sea seguro.
+
+NO duplicar lógica innecesariamente.
+
+NO modificar el comportamiento de las devoluciones de ventas.
+
+NO modificar el comportamiento de las ventas.
+
+NO modificar caja.
+
+---
+
+# 21. ORDEN DE IMPLEMENTACIÓN
+
+Implementar en este orden:
+
+### FASE 1
+
+1. Analizar arquitectura existente.
+2. Crear/adaptar estructura de almacenes.
+3. Crear stock por almacén.
+4. Crear salidas entre almacenes.
+5. Integrar Kardex.
+6. Crear listado.
+7. Crear detalle.
+
+### FASE 2
+
+8. Implementar anulación.
+9. Implementar devolución parcial.
+10. Implementar devolución total.
+11. Actualizar estados automáticamente.
+12. Integrar auditoría.
+
+### FASE 3
+
+13. Mejorar filtros.
+14. Mejorar historial.
+15. Preparar futura recepción en almacén destino.
+16. Preparar importación masiva desde Excel si la arquitectura lo permite.
+
+---
+
+# 22. RESULTADO ESPERADO
+
+Al finalizar, debe ser posible hacer esto:
+
+### Registrar salida
+
+```text
+STR-0007-306
+
+Origen:
+ALM. IMPACTO
+
+Destino:
+ALMACEN PIMPON
+
+Producto:
+M21208
+
+Cantidad:
+0.24
+```
+
+El sistema descuenta:
+
+```text
+ALM. IMPACTO
+10.00 → 9.76
+```
+
+Y genera Kardex.
+
+Después, si el producto regresa:
+
+```text
+Registrar devolución
+
+Cantidad:
+0.10
+```
+
+El sistema genera:
+
+```text
+ALM. IMPACTO
+9.76 → 9.86
+```
+
+La salida queda:
+
+```text
+Parcialmente devuelta
+```
+
+Si se devuelve todo:
+
+```text
+Devuelta completamente
+```
+
+Si la salida fue un error:
+
+```text
+Anular salida
+```
+
+El sistema revierte el movimiento y mantiene todo el historial.
+
+---
+
+# 23. REQUISITO CRÍTICO
+
+NO diseñes esto como un sistema de solicitudes.
+
+NO agregues estados como:
+
+* Pendiente
+* Por preparar
+* Esperando despacho
+* Solicitud aprobada
+* Solicitud enviada
+
+Esos estados NO corresponden al proceso actual.
+
+Estamos registrando **salidas que ya ocurrieron**.
+
+El objetivo principal es:
+
+**TENER TRAZABILIDAD DE QUÉ SALIÓ, DE QUÉ ALMACÉN, HACIA QUÉ ALMACÉN, CUÁNDO SALIÓ, CUÁNTO SALIÓ, Y PODER ANULAR O REGISTRAR DEVOLUCIONES POSTERIORMENTE SIN ALTERAR EL HISTORIAL.**
+
+---
+
+# 24. ANTES DE PROGRAMAR
+
+Primero analiza la aplicación actual y entrega un breve resumen de:
+
+* Tablas existentes que se pueden reutilizar.
+* Cómo funciona actualmente el stock.
+* Cómo funciona el Kardex.
+* Cómo funcionan actualmente las devoluciones.
+* Qué cambios de base de datos serían necesarios.
+* Qué archivos/componentes vas a modificar.
+
+Después de ese análisis, implementa la solución completa.
+
+No hagas cambios destructivos.
+
+Si encuentras una estructura existente que cumple una función equivalente, reutilízala en lugar de crear otra estructura duplicada.

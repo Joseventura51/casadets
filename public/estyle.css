@@ -13,14 +13,113 @@ body {
     padding-bottom: .5rem;
 }
 
-/* TABLAS: deslizables en móvil */
+/* ── MEJORAS MÓVIL ─────────────────────────────────────── */
 @media (max-width: 767px) {
     .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .content-area { padding: .75rem !important; }
+    .content-area { padding: .6rem !important; }
     .kpi-card { padding: 10px 12px; }
-    h3, h4 { font-size: 1.15rem; }
+    h3 { font-size: 1.05rem; }
+    h4 { font-size: 1rem; }
     .btn { font-size: 13px; }
-    .card-header { font-size: 13px; }
+
+    /* Botones táctiles — altura mínima cómoda para el dedo */
+    .btn-sm {
+        min-height: 34px;
+        padding-top: .28rem;
+        padding-bottom: .28rem;
+    }
+
+    /* Alertas más compactas */
+    .alert { padding: .55rem .75rem; font-size: .84rem; }
+    .card-header { font-size: .82rem; padding: .5rem .75rem; }
+
+    /* Select-estado más compacto en tablas */
+    .select-estado { min-width: 80px; font-size: .7rem; padding: .12rem .28rem; }
+
+    /* ── TABLA VENTAS (/ventas index) ─────────────────────
+       Ocultar: Fecha(2), Vendedor(3), Pago(5), Documento(6)
+       Visibles: Estado(1), Cliente(4), Total(7), Acciones(8)
+    ──────────────────────────────────────────────────── */
+    #tablaVentas thead tr:first-child th:nth-child(2),
+    #tablaVentas thead tr:first-child th:nth-child(3),
+    #tablaVentas thead tr:first-child th:nth-child(5),
+    #tablaVentas thead tr:first-child th:nth-child(6),
+    #tablaVentas .thead-filter       td:nth-child(2),
+    #tablaVentas .thead-filter       td:nth-child(3),
+    #tablaVentas .thead-filter       td:nth-child(5),
+    #tablaVentas .thead-filter       td:nth-child(6),
+    #tablaVentas tbody               td:nth-child(2),
+    #tablaVentas tbody               td:nth-child(3),
+    #tablaVentas tbody               td:nth-child(5),
+    #tablaVentas tbody               td:nth-child(6),
+    #tablaVentas tfoot               th:nth-child(2),
+    #tablaVentas tfoot               th:nth-child(3),
+    #tablaVentas tfoot               th:nth-child(5),
+    #tablaVentas tfoot               th:nth-child(6) {
+        display: none !important;
+    }
+
+    /* ── TABLA PENDIENTES ─────────────────────────────────
+       Ocultar: Días(3), Fecha(4), Vencimiento(5),
+                Vendedor(6), Productos(8), Documento(9)
+       Visibles: ☐(1), Estado(2), Cliente(7), Total(10), Acciones(11)
+    ──────────────────────────────────────────────────── */
+    #tablaPendientes thead tr:first-child th:nth-child(3),
+    #tablaPendientes thead tr:first-child th:nth-child(4),
+    #tablaPendientes thead tr:first-child th:nth-child(5),
+    #tablaPendientes thead tr:first-child th:nth-child(6),
+    #tablaPendientes thead tr:first-child th:nth-child(8),
+    #tablaPendientes thead tr:first-child th:nth-child(9),
+    #tablaPendientes .thead-filter       td:nth-child(3),
+    #tablaPendientes .thead-filter       td:nth-child(4),
+    #tablaPendientes .thead-filter       td:nth-child(5),
+    #tablaPendientes .thead-filter       td:nth-child(6),
+    #tablaPendientes .thead-filter       td:nth-child(8),
+    #tablaPendientes .thead-filter       td:nth-child(9),
+    #tablaPendientes tbody               td:nth-child(3),
+    #tablaPendientes tbody               td:nth-child(4),
+    #tablaPendientes tbody               td:nth-child(5),
+    #tablaPendientes tbody               td:nth-child(6),
+    #tablaPendientes tbody               td:nth-child(8),
+    #tablaPendientes tbody               td:nth-child(9),
+    #tablaPendientes tfoot               th:nth-child(3),
+    #tablaPendientes tfoot               th:nth-child(4),
+    #tablaPendientes tfoot               th:nth-child(5),
+    #tablaPendientes tfoot               th:nth-child(6),
+    #tablaPendientes tfoot               th:nth-child(8),
+    #tablaPendientes tfoot               th:nth-child(9) {
+        display: none !important;
+    }
+
+    /* ── BARRA MULTI-COBRO (pendientes sticky bottom) ─── */
+    #barraMultiple .card-body {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: .4rem !important;
+    }
+    #barraMultiple .ms-auto { margin-left: 0 !important; }
+    #barraMultiple #formMultiple {
+        width: 100%;
+        display: flex !important;
+        flex-wrap: wrap;
+        gap: .4rem;
+        align-items: center;
+    }
+    #barraMultiple #formMultiple .btn { flex: 1; justify-content: center; }
+
+    /* ── FILTRO FECHAS (ventas) ────────────────────────── */
+    .filtro-fechas-inner { flex-wrap: wrap !important; }
+    .filtro-sep { display: none !important; }       /* ocultar guión — entre fechas */
+    .filtro-fechas-inner .input-group { width: 100% !important; flex: 1 1 130px; }
+    .filtro-acciones { flex-wrap: wrap !important; padding-top: 0 !important; }
+
+    /* ── ACCIONES EN TABLA ─────────────────────────────── */
+    /* Ocultar texto de botones de acción, dejar solo icono */
+    .btn-accion .btn-label { display: none; }
+
+    /* ── FORMULARIO CREAR VENTA ────────────────────────── */
+    .form-footer-btns { flex-direction: column !important; }
+    .form-footer-btns .btn { width: 100%; justify-content: center; }
 }
 
 /* SIDEBAR */

@@ -36,23 +36,23 @@
 </div>
 @endif
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-start align-items-md-center mb-3 flex-wrap gap-2">
     <div>
         <h3 class="mb-0">Ventas</h3>
-        <p class="text-muted mb-0">Registro de ventas por vendedor.</p>
+        <p class="text-muted mb-0 small d-none d-sm-block">Registro de ventas por vendedor.</p>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
         @if(auth()->user()->puedeHacer('ventas.importar'))
-        <a href="/casadets/ventas/import" class="btn btn-outline-success">
-            <i class="bi bi-file-earmark-spreadsheet"></i> Importar Excel
+        <a href="/casadets/ventas/import" class="btn btn-outline-success btn-sm" title="Importar Excel">
+            <i class="bi bi-file-earmark-spreadsheet"></i><span class="d-none d-sm-inline"> Importar Excel</span>
         </a>
         @endif
-        <a id="btnExportar" href="/casadets/ventas/export" class="btn btn-outline-secondary" data-todas="{{ $todas ? '1' : '0' }}">
-            <i class="bi bi-download"></i> Exportar Excel
+        <a id="btnExportar" href="/casadets/ventas/export" class="btn btn-outline-secondary btn-sm" data-todas="{{ $todas ? '1' : '0' }}" title="Exportar Excel">
+            <i class="bi bi-download"></i><span class="d-none d-sm-inline"> Exportar Excel</span>
         </a>
         @if(auth()->user()->puedeHacer('ventas.crear'))
-        <a href="/casadets/ventas/create" class="btn btn-primary">
-            <i class="bi bi-plus-lg"></i> Nueva venta
+        <a href="/casadets/ventas/create" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> <span class="d-none d-sm-inline">Nueva venta</span><span class="d-sm-none">Nueva</span>
         </a>
         @endif
     </div>
