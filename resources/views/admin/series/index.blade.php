@@ -3,7 +3,7 @@
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h3 class="mb-0"><i class="bi bi-123 me-2"></i>Series de Documentos</h3>
+        <h3 class="mb-0"><i class="bi bi-123 me-2"></i>{{ $series->count() }} Series de Documentos</h3>
         <p class="text-muted small mb-0">Correlativos por tipo de documento y caja</p>
     </div>
     <a href="/admin/series/create" class="btn btn-primary btn-sm">
@@ -16,6 +16,60 @@
     {{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 @endif
+
+<div class="card mb-3">
+    <div class="card-body py-3">
+        <form method="GET" action="/admin/series" class="row g-2 align-items-end">
+            <div class="col-12 col-md-4">
+                <label for="buscar" class="form-label small fw-semibold mb-1">Buscar</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="search" id="buscar" name="buscar" value="{{ $busqueda }}"
+                           class="form-control" placeholder="Código o caja..." autocomplete="off">
+                </div>
+            </div>
+            <div class="col-12 col-sm-4 col-md-2">
+                <label for="tipo_documento" class="form-label small fw-semibold mb-1">Tipo</label>
+                <select id="tipo_documento" name="tipo_documento" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="boleta" @selected($tipoDocumento === 'boleta')>Boleta</option>
+                    <option value="factura" @selected($tipoDocumento === 'factura')>Factura</option>
+                    <option value="proforma" @selected($tipoDocumento === 'proforma')>Proforma</option>
+                    <option value="nota_credito" @selected($tipoDocumento === 'nota_credito')>Nota de crédito</option>
+                </select>
+            </div>
+            <div class="col-12 col-sm-4 col-md-2">
+                <label for="caja_id" class="form-label small fw-semibold mb-1">Caja</label>
+                <select id="caja_id" name="caja_id" class="form-select form-select-sm">
+                    <option value="">Todas</option>
+                    @foreach($cajas as $caja)
+                        <option value="{{ $caja->id }}" @selected((string) $cajaId === (string) $caja->id)>
+                            {{ $caja->codigo }} — {{ $caja->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-12 col-sm-4 col-md-2">
+                <label for="estado" class="form-label small fw-semibold mb-1">Estado</label>
+                <select id="estado" name="estado" class="form-select form-select-sm">
+                    <option value="">Todos</option>
+                    <option value="activa" @selected($estado === 'activa')>Activas</option>
+                    <option value="inactiva" @selected($estado === 'inactiva')>Inactivas</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                    <i class="bi bi-funnel me-1"></i>Filtrar
+                </button>
+                @if($busqueda !== '' || $tipoDocumento || $cajaId || $estado)
+                    <a href="/admin/series" class="btn btn-outline-secondary btn-sm" title="Limpiar filtros">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                @endif
+            </div>
+        </form>
+    </div>
+</div>
 
 <div class="card">
     <div class="table-responsive">

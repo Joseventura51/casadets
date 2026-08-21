@@ -5,6 +5,16 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-21 — Filtros de búsqueda en series
+
+### Mejora: búsqueda y filtros de series de documentos
+
+- Se agregó búsqueda por código y caja.
+- Se agregaron filtros por tipo de documento, caja y estado.
+- Se incorporó contador de resultados y botón para limpiar filtros.
+
+---
+
 ## 2026-07-03 — Restauración de saldo a favor al anular movimiento
 
 ### Corrección: anulación de movimiento saldo_favor_usado

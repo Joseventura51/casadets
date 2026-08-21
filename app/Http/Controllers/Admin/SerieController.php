@@ -9,10 +9,49 @@ use Illuminate\Http\Request;
 
 class SerieController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $series = Serie::with('caja')->orderBy('codigo')->get();
-        return view('admin.series.index', compact('series'));
+        $busqueda = trim((string) $request->input('buscar', ''));
+        $tipoDocumento = $request->input('tipo_documento');
+        $cajaId = $request->input('caja_id');
+        $estado = $request->input('estado');
+
+        $query = Serie::with('caja')->orderBy('codigo');
+
+        if ($busqueda !== '') {
+            $termino = mb_strtolower($busqueda, 'UTF-8');
+            $query->where(function ($q) use ($termino) {
+                $q->whereRaw('LOWER(series.codigo) LIKE ?', ["%{$termino}%"])
+                    ->orWhereHas('caja', function ($cajaQuery) use ($termino) {
+                        $cajaQuery->whereRaw('LOWER(codigo) LIKE ?', ["%{$termino}%"])
+                            ->orWhereRaw('LOWER(nombre) LIKE ?', ["%{$termino}%"]);
+                    });
+            });
+        }
+
+        if (in_array($tipoDocumento, ['boleta', 'factura', 'proforma', 'nota_credito'], true)) {
+            $query->where('tipo_documento', $tipoDocumento);
+        }
+
+        if ($cajaId !== null && $cajaId !== '') {
+            $query->where('caja_id', $cajaId);
+        }
+
+        if ($estado === 'activa' || $estado === 'inactiva') {
+            $query->where('activa', $estado === 'activa');
+        }
+
+        $series = $query->get();
+        $cajas = Caja::orderBy('codigo')->get();
+
+        return view('admin.series.index', compact(
+            'series',
+            'cajas',
+            'busqueda',
+            'tipoDocumento',
+            'cajaId',
+            'estado'
+        ));
     }
 
     public function create()
