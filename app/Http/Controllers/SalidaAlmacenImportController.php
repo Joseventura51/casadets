@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Almacen;
+use App\Models\Caja;
 use App\Models\Producto;
+use App\Models\Serie;
 use App\Models\SalidaAlmacen;
 use App\Services\InventarioAlmacenService;
 use Illuminate\Http\Request;
@@ -36,7 +38,11 @@ class SalidaAlmacenImportController extends Controller
 
         try {
             $filas = $this->leerArchivo($request->file('archivo')->getRealPath());
-            $resultado = $this->importar($filas, $request->file('archivo')->getClientOriginalName());
+            $caja = Caja::with('almacen')->find(session('caja_id'));
+            if (!$caja?->almacen) {
+                throw new RuntimeException('La caja activa no tiene un almacén asignado. Asígnelo en Administración → Cajas antes de importar.');
+            }
+            $resultado = $this->importar($filas, $request->file('archivo')->getClientOriginalName(), $caja);
         } catch (RuntimeException $e) {
             return back()->withInput()->with('error', $e->getMessage());
         } catch (\Throwable $e) {
@@ -47,6 +53,9 @@ class SalidaAlmacenImportController extends Controller
         $mensaje = "Importación completada: {$resultado['creadas']} salida(s), {$resultado['lineas']} línea(s).";
         if ($resultado['almacenesCreados'] > 0 || $resultado['productosCreados'] > 0) {
             $mensaje .= " Se crearon {$resultado['almacenesCreados']} almacén(es) y {$resultado['productosCreados']} producto(s).";
+        }
+        if ($resultado['omitidasFiltro'] > 0) {
+            $mensaje .= " {$resultado['omitidasFiltro']} fila(s) fueron ignoradas porque no pertenecen al almacén o series de la caja activa.";
         }
         if ($resultado['omitidas'] > 0) {
             $mensaje .= " {$resultado['omitidas']} salida(s) ya existían y fueron omitidas.";
@@ -93,11 +102,17 @@ class SalidaAlmacenImportController extends Controller
         return $filas;
     }
 
-    private function importar(array $filas, string $nombreArchivo): array
+    private function importar(array $filas, string $nombreArchivo, Caja $caja): array
     {
         $almacenes = Almacen::where('activo', true)->get();
         $productos = Producto::where('activo', true)->get();
         $grupos = [];
+        $omitidasFiltro = 0;
+        $seriesCaja = Serie::where('tipo_documento', 'salida_almacen')
+            ->where('almacen_id', $caja->almacen_id)
+            ->where('activa', true)
+            ->get()
+            ->keyBy(fn ($serie) => $this->normalizar($serie->codigo));
 
         foreach ($filas as $fila) {
             $documento = trim((string) $fila['documento']);
@@ -105,12 +120,21 @@ class SalidaAlmacenImportController extends Controller
             $emisor = trim((string) $fila['emisor']);
             $receptor = trim((string) $fila['receptor']);
             $cantidad = $this->numero($fila['cantidad']);
+            $serieCodigo = $this->serieDesdeDocumento($documento);
+            $serieConfigurada = $serieCodigo !== null
+                ? $seriesCaja->get($this->normalizar($serieCodigo))
+                : null;
+            $origenCoincide = $this->buscarAlmacen(collect([$caja->almacen]), $emisor) !== null;
 
             if ($documento === '' || $codigo === '' || $emisor === '' || $receptor === '') {
                 throw new RuntimeException("La fila {$fila['_fila_excel']} tiene documento, código u almacén vacío.");
             }
             if ($cantidad <= 0) {
                 throw new RuntimeException("La fila {$fila['_fila_excel']} tiene una cantidad inválida.");
+            }
+            if (!$origenCoincide && !$serieConfigurada) {
+                $omitidasFiltro++;
+                continue;
             }
 
             $origen = $this->buscarAlmacen($almacenes, $emisor);
@@ -127,6 +151,7 @@ class SalidaAlmacenImportController extends Controller
                 'fecha' => $this->fecha($fila['fecha'], $fila['_fila_excel']),
                 'origen_nombre' => $emisor,
                 'destino_nombre' => $receptor,
+                'serie_codigo' => $serieCodigo,
                 'filas' => [],
             ];
 
@@ -147,12 +172,17 @@ class SalidaAlmacenImportController extends Controller
             ];
         }
 
-        return DB::transaction(function () use ($grupos, $nombreArchivo) {
+        if (!$grupos) {
+            throw new RuntimeException('El Excel no contiene movimientos de la caja activa. Revise el almacén asignado y las series de salida.');
+        }
+
+        return DB::transaction(function () use ($grupos, $nombreArchivo, $caja, $omitidasFiltro) {
             $creadas = 0;
             $lineas = 0;
             $omitidas = 0;
             $almacenesCreados = 0;
             $productosCreados = 0;
+            $seriesCreadas = 0;
 
             foreach ($grupos as $grupo) {
                 if (SalidaAlmacen::where('documento', $grupo['documento'])->exists()) {
@@ -160,7 +190,7 @@ class SalidaAlmacenImportController extends Controller
                     continue;
                 }
 
-                $origen = $this->buscarAlmacen(Almacen::where('activo', true)->get(), $grupo['origen_nombre']);
+                $origen = $caja->almacen;
                 if (!$origen) {
                     $origen = $this->crearAlmacenImportado($grupo['origen_nombre']);
                     $almacenesCreados++;
@@ -172,6 +202,24 @@ class SalidaAlmacenImportController extends Controller
                 }
                 if ($origen->id === $destino->id) {
                     throw new RuntimeException("El documento {$grupo['documento']} tiene origen y destino iguales.");
+                }
+                $serie = null;
+                if ($grupo['serie_codigo']) {
+                    $serie = Serie::where('tipo_documento', 'salida_almacen')
+                        ->where('codigo', $grupo['serie_codigo'])
+                        ->where('almacen_id', $origen->id)
+                        ->first();
+                    if (!$serie) {
+                        $serie = Serie::create([
+                            'codigo' => strtoupper($grupo['serie_codigo']),
+                            'tipo_documento' => 'salida_almacen',
+                            'correlativo_actual' => 0,
+                            'activa' => true,
+                            'caja_id' => $caja->id,
+                            'almacen_id' => $origen->id,
+                        ]);
+                        $seriesCreadas++;
+                    }
                 }
 
                 $salida = SalidaAlmacen::create([
@@ -219,11 +267,33 @@ class SalidaAlmacenImportController extends Controller
                     );
                     $lineas++;
                 }
+                if ($serie) {
+                    $numero = $this->correlativoDesdeDocumento($grupo['documento']);
+                    if ($numero !== null && $numero > (int) $serie->correlativo_actual) {
+                        $serie->update(['correlativo_actual' => $numero]);
+                    }
+                }
                 $creadas++;
             }
 
-            return compact('creadas', 'lineas', 'omitidas', 'almacenesCreados', 'productosCreados');
+            return compact('creadas', 'lineas', 'omitidas', 'omitidasFiltro', 'almacenesCreados', 'productosCreados', 'seriesCreadas');
         });
+    }
+
+    private function serieDesdeDocumento(string $documento): ?string
+    {
+        $posicion = strrpos($documento, '-');
+        if ($posicion === false || !ctype_digit(substr($documento, $posicion + 1))) {
+            return null;
+        }
+        return trim(substr($documento, 0, $posicion));
+    }
+
+    private function correlativoDesdeDocumento(string $documento): ?int
+    {
+        $posicion = strrpos($documento, '-');
+        $numero = $posicion === false ? null : substr($documento, $posicion + 1);
+        return $numero !== null && ctype_digit($numero) ? (int) $numero : null;
     }
 
     private function crearAlmacenImportado(string $nombre): Almacen

@@ -13,6 +13,7 @@ class Caja extends Model
         'empresa',
         'activa',
         'esta_abierta',
+        'almacen_id',
     ];
 
     protected $casts = [
@@ -28,6 +29,11 @@ class Caja extends Model
     public function series(): HasMany
     {
         return $this->hasMany(Serie::class);
+    }
+
+    public function almacen(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Almacen::class);
     }
 
     public function usuarios(): HasMany

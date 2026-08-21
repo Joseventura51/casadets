@@ -40,7 +40,8 @@
                 <code class="d-block bg-light p-2 rounded">fecha, documento, emisor, estado, codigo_producto, descripcion_producto, medida, cantidad, precio, monto, lote, receptor</code>
                 <hr>
                 <ul class="mb-0 ps-3">
-                    <li>Si el emisor o receptor no existe, se crea automáticamente como almacén activo.</li>
+                    <li>Solo se importan movimientos del almacén asignado a la caja activa o de sus series de salida.</li>
+                    <li>Las series se detectan desde el documento: <code>STR-0015-30329</code> usa la serie <code>STR-0015</code>.</li>
                     <li>Si el código de producto no existe, se crea automáticamente con su descripción y precio.</li>
                     <li>Las transferencias importadas pueden dejar stock negativo temporalmente.</li>
                     <li>Si una fila falla, no se registra ninguna salida ni maestro parcial del archivo.</li>

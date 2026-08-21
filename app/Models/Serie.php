@@ -13,6 +13,7 @@ class Serie extends Model
         'correlativo_actual',
         'activa',
         'caja_id',
+        'almacen_id',
     ];
 
     protected $casts = [
@@ -23,6 +24,11 @@ class Serie extends Model
     public function caja(): BelongsTo
     {
         return $this->belongsTo(Caja::class);
+    }
+
+    public function almacen(): BelongsTo
+    {
+        return $this->belongsTo(Almacen::class);
     }
 
     /**

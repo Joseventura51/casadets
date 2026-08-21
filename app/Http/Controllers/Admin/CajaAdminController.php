@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Caja;
+use App\Models\Almacen;
 use Illuminate\Http\Request;
 
 class CajaAdminController extends Controller
@@ -16,7 +17,9 @@ class CajaAdminController extends Controller
 
     public function create()
     {
-        return view('admin.cajas.create');
+        return view('admin.cajas.create', [
+            'almacenes' => Almacen::where('activo', true)->orderBy('nombre')->get(),
+        ]);
     }
 
     public function store(Request $request)
@@ -26,6 +29,7 @@ class CajaAdminController extends Controller
             'nombre'  => 'required|string|max:100',
             'empresa' => 'required|in:casadets,zendy',
             'activa'  => 'boolean',
+            'almacen_id' => 'nullable|exists:almacenes,id',
         ]);
 
         $caja = Caja::create([
@@ -33,6 +37,7 @@ class CajaAdminController extends Controller
             'nombre'  => $data['nombre'],
             'empresa' => $data['empresa'],
             'activa'  => $request->boolean('activa', true),
+            'almacen_id' => $data['almacen_id'] ?? null,
         ]);
 
         return redirect('/admin/cajas')->with('success', "Caja {$caja->codigo} — {$caja->nombre} creada.");
@@ -41,7 +46,10 @@ class CajaAdminController extends Controller
     public function edit(Caja $caja)
     {
         $caja->load('series');
-        return view('admin.cajas.edit', compact('caja'));
+        return view('admin.cajas.edit', [
+            'caja' => $caja,
+            'almacenes' => Almacen::where('activo', true)->orderBy('nombre')->get(),
+        ]);
     }
 
     public function update(Request $request, Caja $caja)
@@ -51,6 +59,7 @@ class CajaAdminController extends Controller
             'nombre'  => 'required|string|max:100',
             'empresa' => 'required|in:casadets,zendy',
             'activa'  => 'boolean',
+            'almacen_id' => 'nullable|exists:almacenes,id',
         ]);
 
         $caja->update([
@@ -58,6 +67,7 @@ class CajaAdminController extends Controller
             'nombre'  => $data['nombre'],
             'empresa' => $data['empresa'],
             'activa'  => $request->boolean('activa'),
+            'almacen_id' => $data['almacen_id'] ?? null,
         ]);
 
         return redirect('/admin/cajas')->with('success', "Caja {$caja->codigo} actualizada.");

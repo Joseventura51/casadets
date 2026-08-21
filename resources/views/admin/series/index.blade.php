@@ -36,6 +36,7 @@
                     <option value="factura" @selected($tipoDocumento === 'factura')>Factura</option>
                     <option value="proforma" @selected($tipoDocumento === 'proforma')>Proforma</option>
                     <option value="nota_credito" @selected($tipoDocumento === 'nota_credito')>Nota de crédito</option>
+                    <option value="salida_almacen" @selected($tipoDocumento === 'salida_almacen')>Salida de almacén</option>
                 </select>
             </div>
             <div class="col-12 col-sm-4 col-md-2">
@@ -78,7 +79,7 @@
                 <tr>
                     <th>Código</th>
                     <th>Tipo de documento</th>
-                    <th>Caja</th>
+                    <th>Caja / Almacén</th>
                     <th class="text-end">Correlativo actual</th>
                     <th class="text-center">Activa</th>
                     <th></th>
@@ -95,6 +96,7 @@
                                 'factura'      => 'bi-file-earmark-text text-primary',
                                 'proforma'     => 'bi-file-earmark-minus text-warning',
                                 'nota_credito' => 'bi-arrow-counterclockwise text-danger',
+                                'salida_almacen' => 'bi-box-arrow-right text-warning',
                             ];
                         @endphp
                         <i class="bi {{ $iconos[$serie->tipo_documento] ?? 'bi-file' }} me-1"></i>
@@ -106,6 +108,9 @@
                             <span class="text-muted small ms-1">{{ $serie->caja->nombre }}</span>
                         @else
                             <span class="text-muted small">Sin asignar</span>
+                        @endif
+                        @if($serie->almacen)
+                            <div><span class="badge bg-info text-dark">{{ $serie->almacen->codigo }}</span> <span class="text-muted small">{{ $serie->almacen->nombre }}</span></div>
                         @endif
                     </td>
                     <td class="text-end font-monospace">{{ str_pad($serie->correlativo_actual, 8, '0', STR_PAD_LEFT) }}</td>

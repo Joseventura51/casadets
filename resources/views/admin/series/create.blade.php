@@ -31,6 +31,7 @@
                     <option value="factura"      {{ old('tipo_documento') === 'factura'      ? 'selected' : '' }}>Factura</option>
                     <option value="proforma"     {{ old('tipo_documento') === 'proforma'     ? 'selected' : '' }}>Proforma</option>
                     <option value="nota_credito" {{ old('tipo_documento') === 'nota_credito' ? 'selected' : '' }}>Nota de crédito</option>
+                    <option value="salida_almacen" {{ old('tipo_documento') === 'salida_almacen' ? 'selected' : '' }}>Salida de almacén</option>
                 </select>
             </div>
             <div class="mb-3">
@@ -38,6 +39,16 @@
                 <input type="number" name="correlativo_actual" value="{{ old('correlativo_actual', 0) }}"
                        class="form-control" min="0" required>
                 <div class="form-text">El próximo número emitido será este + 1.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Almacén asignado</label>
+                <select name="almacen_id" class="form-select">
+                    <option value="">— Sin asignar —</option>
+                    @foreach($almacenes as $almacen)
+                        <option value="{{ $almacen->id }}" @selected(old('almacen_id') == $almacen->id)>{{ $almacen->codigo }} — {{ $almacen->nombre }}</option>
+                    @endforeach
+                </select>
+                <div class="form-text">Obligatorio para series de salida de almacén.</div>
             </div>
             <div class="mb-3">
                 <label class="form-label fw-semibold">Caja asignada</label>

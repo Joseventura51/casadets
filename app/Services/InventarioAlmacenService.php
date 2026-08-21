@@ -56,7 +56,7 @@ class InventarioAlmacenService
             ? round($anterior + $cantidad, 2)
             : round($anterior - $cantidad, 2);
 
-        if ($posterior < 0 && !$permitirStockNegativo) {
+        if ($tipo === 'salida' && $posterior < 0 && !$permitirStockNegativo) {
             throw new RuntimeException(
                 "Stock insuficiente de {$producto->nombre} en {$almacen->nombre}. " .
                 "Disponible: " . number_format($anterior, 2) .

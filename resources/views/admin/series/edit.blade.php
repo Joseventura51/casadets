@@ -28,6 +28,7 @@
                     <option value="factura"      {{ $serie->tipo_documento === 'factura'      ? 'selected' : '' }}>Factura</option>
                     <option value="proforma"     {{ $serie->tipo_documento === 'proforma'     ? 'selected' : '' }}>Proforma</option>
                     <option value="nota_credito" {{ $serie->tipo_documento === 'nota_credito' ? 'selected' : '' }}>Nota de crédito</option>
+                    <option value="salida_almacen" {{ $serie->tipo_documento === 'salida_almacen' ? 'selected' : '' }}>Salida de almacén</option>
                 </select>
             </div>
             <div class="mb-3">
@@ -38,6 +39,15 @@
                     Número actual: <strong class="font-monospace">{{ str_pad($serie->correlativo_actual, 8, '0', STR_PAD_LEFT) }}</strong>.
                     El próximo será {{ str_pad($serie->correlativo_actual + 1, 8, '0', STR_PAD_LEFT) }}.
                 </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Almacén asignado</label>
+                <select name="almacen_id" class="form-select">
+                    <option value="">— Sin asignar —</option>
+                    @foreach($almacenes as $almacen)
+                        <option value="{{ $almacen->id }}" @selected($serie->almacen_id == $almacen->id)>{{ $almacen->codigo }} — {{ $almacen->nombre }}</option>
+                    @endforeach
+                </select>
             </div>
             <div class="mb-3">
                 <label class="form-label fw-semibold">Caja asignada</label>

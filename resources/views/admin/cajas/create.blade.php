@@ -29,6 +29,16 @@
                        class="form-control" placeholder="Ej: Caja Principal, Caja 02" required maxlength="100">
             </div>
             <div class="mb-3">
+                <label class="form-label fw-semibold">Almacén asignado</label>
+                <select name="almacen_id" class="form-select">
+                    <option value="">— Sin asignar —</option>
+                    @foreach($almacenes as $almacen)
+                        <option value="{{ $almacen->id }}" @selected(old('almacen_id') == $almacen->id)>{{ $almacen->codigo }} — {{ $almacen->nombre }}</option>
+                    @endforeach
+                </select>
+                <div class="form-text">La importación de salidas usará este almacén como origen.</div>
+            </div>
+            <div class="mb-3">
                 <label class="form-label fw-semibold">Empresa <span class="text-danger">*</span></label>
                 <select name="empresa" class="form-select" required>
                     <option value="casadets" {{ old('empresa') === 'casadets' ? 'selected' : '' }}>CASADETS</option>

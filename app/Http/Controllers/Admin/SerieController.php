@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Caja;
 use App\Models\Serie;
+use App\Models\Almacen;
 use Illuminate\Http\Request;
 
 class SerieController extends Controller
@@ -29,7 +30,7 @@ class SerieController extends Controller
             });
         }
 
-        if (in_array($tipoDocumento, ['boleta', 'factura', 'proforma', 'nota_credito'], true)) {
+        if (in_array($tipoDocumento, ['boleta', 'factura', 'proforma', 'nota_credito', 'salida_almacen'], true)) {
             $query->where('tipo_documento', $tipoDocumento);
         }
 
@@ -57,7 +58,8 @@ class SerieController extends Controller
     public function create()
     {
         $cajas = Caja::where('activa', true)->orderBy('codigo')->get();
-        return view('admin.series.create', compact('cajas'));
+        $almacenes = Almacen::where('activo', true)->orderBy('nombre')->get();
+        return view('admin.series.create', compact('cajas', 'almacenes'));
     }
 
     public function store(Request $request)
@@ -70,19 +72,24 @@ class SerieController extends Controller
                     fn ($q) => $q->where('tipo_documento', $tipo)
                 ),
             ],
-            'tipo_documento'      => 'required|in:boleta,factura,proforma,nota_credito',
+            'tipo_documento'      => 'required|in:boleta,factura,proforma,nota_credito,salida_almacen',
             'correlativo_actual'  => 'required|integer|min:0',
             'caja_id'             => 'nullable|exists:cajas,id',
+            'almacen_id'          => 'nullable|exists:almacenes,id',
             'activa'              => 'boolean',
         ], [
             'codigo.unique' => 'Ya existe una serie con ese código para el mismo tipo de documento.',
         ]);
+        if ($data['tipo_documento'] === 'salida_almacen' && empty($data['almacen_id'])) {
+            return back()->withInput()->withErrors(['almacen_id' => 'Las series de salida de almacén deben tener un almacén asignado.']);
+        }
 
         $serie = Serie::create([
             'codigo'             => strtoupper(trim($data['codigo'])),
             'tipo_documento'     => $data['tipo_documento'],
             'correlativo_actual' => $data['correlativo_actual'],
             'caja_id'            => $data['caja_id'] ?? null,
+            'almacen_id'         => $data['almacen_id'] ?? null,
             'activa'             => $request->boolean('activa', true),
         ]);
 
@@ -92,7 +99,8 @@ class SerieController extends Controller
     public function edit(Serie $serie)
     {
         $cajas = Caja::where('activa', true)->orderBy('codigo')->get();
-        return view('admin.series.edit', compact('serie', 'cajas'));
+        $almacenes = Almacen::where('activo', true)->orderBy('nombre')->get();
+        return view('admin.series.edit', compact('serie', 'cajas', 'almacenes'));
     }
 
     public function update(Request $request, Serie $serie)
@@ -105,19 +113,24 @@ class SerieController extends Controller
                     ->where(fn ($q) => $q->where('tipo_documento', $tipo))
                     ->ignore($serie->id),
             ],
-            'tipo_documento'     => 'required|in:boleta,factura,proforma,nota_credito',
+            'tipo_documento'     => 'required|in:boleta,factura,proforma,nota_credito,salida_almacen',
             'correlativo_actual' => 'required|integer|min:0',
             'caja_id'            => 'nullable|exists:cajas,id',
+            'almacen_id'         => 'nullable|exists:almacenes,id',
             'activa'             => 'boolean',
         ], [
             'codigo.unique' => 'Ya existe una serie con ese código para el mismo tipo de documento.',
         ]);
+        if ($data['tipo_documento'] === 'salida_almacen' && empty($data['almacen_id'])) {
+            return back()->withInput()->withErrors(['almacen_id' => 'Las series de salida de almacén deben tener un almacén asignado.']);
+        }
 
         $serie->update([
             'codigo'             => strtoupper(trim($data['codigo'])),
             'tipo_documento'     => $data['tipo_documento'],
             'correlativo_actual' => $data['correlativo_actual'],
             'caja_id'            => $data['caja_id'] ?? null,
+            'almacen_id'         => $data['almacen_id'] ?? null,
             'activa'             => $request->boolean('activa'),
         ]);
 

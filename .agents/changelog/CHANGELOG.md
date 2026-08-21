@@ -196,3 +196,5 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 - Se agregó una pantalla de importación para reportes `.xlsx` y `.xls`.
 - Las filas se agrupan por documento y se registran usando `InventarioAlmacenService`, descontando el stock del origen con bloqueo transaccional.
 - Se validan encabezados, fechas, productos, almacenes, cantidades y stock antes de confirmar; los documentos existentes se omiten para evitar duplicados.
+- Las cajas pueden vincularse a un almacén y las series de salida (`salida_almacen`) a un almacén; la importación filtra por la caja activa y actualiza automáticamente el correlativo de cada serie.
+- Las entradas de devolución ya no son rechazadas cuando parten de un saldo negativo; solo las salidas manuales mantienen el bloqueo de stock insuficiente.
