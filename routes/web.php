@@ -180,6 +180,10 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
     // Salidas ya realizadas entre almacenes. No es un flujo de solicitudes.
     Route::middleware('rol:salidas-almacen')->group(function () {
         Route::get('/casadets/salidas-almacen', [SalidaAlmacenController::class, 'index']);
+        Route::get('/casadets/salidas-almacen/importar', [\App\Http\Controllers\SalidaAlmacenImportController::class, 'create'])
+            ->middleware('permiso:salidas-almacen.crear');
+        Route::post('/casadets/salidas-almacen/importar', [\App\Http\Controllers\SalidaAlmacenImportController::class, 'store'])
+            ->middleware('permiso:salidas-almacen.crear');
         Route::get('/casadets/salidas-almacen/create', [SalidaAlmacenController::class, 'create'])
             ->middleware('permiso:salidas-almacen.crear');
         Route::post('/casadets/salidas-almacen', [SalidaAlmacenController::class, 'store'])

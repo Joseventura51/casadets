@@ -1,0 +1,68 @@
+Se inició el módulo de Salidas entre Almacenes sin modificar el funcionamiento de ventas, caja ni las devoluciones existentes de ventas.
+
+Inventario y almacenes
+Se creó la tabla de almacenes.
+Se creó el stock por producto y almacén mediante producto_almacen.
+Se creó automáticamente el almacén inicial PRINCIPAL.
+El stock actual existente se tomó como saldo inicial del almacén principal.
+Los movimientos antiguos sin almacén siguen funcionando y se imputan automáticamente a PRINCIPAL.
+Kardex
+Se amplió el Kardex para guardar:
+
+Almacén
+Usuario
+Saldo anterior
+Saldo posterior
+Referencia de la operación
+También se agregó un servicio central para registrar movimientos con:
+
+Transacciones
+Bloqueo de filas
+Validación de stock suficiente
+Prevención de stock negativo
+Salidas entre almacenes
+Se implementó:
+
+Registro de una salida ya realizada.
+Almacén origen y destino.
+Documento completo, como STR-0007-306.
+Fecha y observaciones.
+Detalle de productos, cantidades, precios y lotes.
+Descuento inmediato del stock del almacén origen.
+No se incrementa automáticamente el stock del destino.
+Anulación
+No se elimina físicamente la salida.
+Se marca como Anulada.
+Se genera un movimiento inverso para restaurar el stock del origen.
+Se impide anular una salida que ya tenga devoluciones registradas.
+Devoluciones de salidas
+Se creó un flujo independiente del módulo de devoluciones de ventas:
+
+Devolución parcial o total.
+Cantidad original.
+Cantidad ya devuelta.
+Cantidad disponible.
+Validación para no devolver más de lo que salió.
+Entrada automática al almacén origen.
+Estados automáticos:
+Realizada
+Parcialmente devuelta
+Devuelta completamente
+Anulada
+Interfaz y permisos
+Se agregaron:
+
+Listado de salidas.
+Filtros por documento, fecha, origen y estado.
+Vista detallada.
+Historial de Kardex.
+Administración básica de almacenes.
+Enlaces en el menú lateral.
+Permisos específicos para crear, devolver y anular salidas.
+Validaciones
+Migración ejecutada correctamente.
+Rutas registradas.
+Vistas Blade compiladas.
+Sintaxis PHP validada.
+Workflow reiniciado y funcionando correctamente.
+No se implementó todavía la importación del Excel ni la selección de almacén en compras y ventas.

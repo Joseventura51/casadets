@@ -7,6 +7,9 @@
         <p class="text-muted mb-0 small">Registro de salidas entre almacenes ya realizadas.</p>
     </div>
     @if(auth()->user()->puedeHacer('salidas-almacen.crear'))
+        <a href="/casadets/salidas-almacen/importar" class="btn btn-outline-primary">
+            <i class="bi bi-file-earmark-excel me-1"></i>Importar Excel
+        </a>
         <a href="/casadets/salidas-almacen/create" class="btn btn-primary">
             <i class="bi bi-plus-lg me-1"></i>Nueva salida
         </a>

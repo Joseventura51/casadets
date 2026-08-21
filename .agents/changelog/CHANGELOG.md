@@ -188,3 +188,11 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 - [ ] Excluir `es_referencia_fiscal` en CobranzaService y cálculo de deuda de clientes
 - [ ] Campo `vendedor_id` en el formulario de edición de movimientos
 - [ ] Aplicar NC desde interfaz (formulario + controller)
+
+---
+
+### Importación de salidas de almacén desde Excel
+
+- Se agregó una pantalla de importación para reportes `.xlsx` y `.xls`.
+- Las filas se agrupan por documento y se registran usando `InventarioAlmacenService`, descontando el stock del origen con bloqueo transaccional.
+- Se validan encabezados, fechas, productos, almacenes, cantidades y stock antes de confirmar; los documentos existentes se omiten para evitar duplicados.

@@ -1,4 +1,4 @@
-modules = ["php-8.2", "nodejs-20", "bash", "web"]
+modules = ["php-8.2", "nodejs-20", "bash", "web", "python-base-3.13"]
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
