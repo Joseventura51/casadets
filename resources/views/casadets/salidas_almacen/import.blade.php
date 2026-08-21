@@ -42,7 +42,7 @@
                 <ul class="mb-0 ps-3">
                     <li>Si el emisor o receptor no existe, se crea automáticamente como almacén activo.</li>
                     <li>Si el código de producto no existe, se crea automáticamente con su descripción y precio.</li>
-                    <li>Se valida el stock del almacén origen antes de confirmar.</li>
+                    <li>Las transferencias importadas pueden dejar stock negativo temporalmente.</li>
                     <li>Si una fila falla, no se registra ninguna salida ni maestro parcial del archivo.</li>
                 </ul>
             </div>

@@ -27,7 +27,8 @@ class InventarioAlmacenService
         ?string $referenciaTipo = null,
         ?int $referenciaId = null,
         ?string $observaciones = null,
-        ?float $precioUnitario = null
+        ?float $precioUnitario = null,
+        bool $permitirStockNegativo = false
     ): StockMovimiento {
         if (!in_array($tipo, ['entrada', 'salida'], true)) {
             throw new RuntimeException('El tipo de movimiento de almacén no es válido.');
@@ -55,7 +56,7 @@ class InventarioAlmacenService
             ? round($anterior + $cantidad, 2)
             : round($anterior - $cantidad, 2);
 
-        if ($posterior < 0) {
+        if ($posterior < 0 && !$permitirStockNegativo) {
             throw new RuntimeException(
                 "Stock insuficiente de {$producto->nombre} en {$almacen->nombre}. " .
                 "Disponible: " . number_format($anterior, 2) .

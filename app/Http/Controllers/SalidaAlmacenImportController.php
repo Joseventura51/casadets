@@ -215,7 +215,7 @@ class SalidaAlmacenImportController extends Controller
                     $this->inventario->mover(
                         $producto, $origen, 'salida', $fila['cantidad'],
                         'salida_almacen', $salida->id,
-                        'Importación de salida ' . $grupo['documento'], $precio
+                        'Importación de salida ' . $grupo['documento'], $precio, true
                     );
                     $lineas++;
                 }
