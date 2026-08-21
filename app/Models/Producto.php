@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Producto extends Model
 {
@@ -37,6 +38,18 @@ class Producto extends Model
     public function stockMovimientos(): HasMany
     {
         return $this->hasMany(StockMovimiento::class);
+    }
+
+    public function stocksPorAlmacen(): HasMany
+    {
+        return $this->hasMany(ProductoAlmacen::class);
+    }
+
+    public function almacenes(): BelongsToMany
+    {
+        return $this->belongsToMany(Almacen::class, 'producto_almacen')
+            ->withPivot('stock_actual')
+            ->withTimestamps();
     }
 
     /**

@@ -15,7 +15,7 @@
             $user->puedeVer('caja') || $user->puedeVer('ventas') || $user->puedeVer('pendientes') ||
             $user->puedeVer('compras') || $user->puedeVer('productos') || $user->puedeVer('clientes') ||
             $user->puedeVer('vendedores') || $user->puedeVer('saldos-favor') || $user->puedeVer('movimientos') ||
-            $user->puedeVer('devoluciones')
+            $user->puedeVer('devoluciones') || $user->puedeVer('salidas-almacen')
         );
     @endphp
 
@@ -108,6 +108,14 @@
                 </li>
                 @endif
 
+                @if($user->puedeVer('salidas-almacen'))
+                <li>
+                    <a href="/casadets/salidas-almacen" class="nav-link {{ request()->is('casadets/salidas-almacen*') ? 'active' : '' }}">
+                        <i class="bi bi-box-arrow-right me-2"></i>Salidas de almacén
+                    </a>
+                </li>
+                @endif
+
             </ul>
         </div>
     </li>
@@ -181,6 +189,13 @@
                 <li>
                     <a href="/admin/cajas" class="nav-link {{ request()->is('admin/cajas*') ? 'active' : '' }}">
                         <i class="bi bi-cash-register me-2"></i>Cajas
+                    </a>
+                </li>
+                @endif
+                @if($user->puedeVer('admin.cajas'))
+                <li>
+                    <a href="/admin/almacenes" class="nav-link {{ request()->is('admin/almacenes*') ? 'active' : '' }}">
+                        <i class="bi bi-building me-2"></i>Almacenes
                     </a>
                 </li>
                 @endif

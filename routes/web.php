@@ -19,6 +19,8 @@ use App\Http\Controllers\Admin\RolController;
 use App\Http\Controllers\Admin\CajaAdminController;
 use App\Http\Controllers\Admin\SerieController;
 use App\Http\Controllers\DevolucionController;
+use App\Http\Controllers\SalidaAlmacenController;
+use App\Http\Controllers\AlmacenController;
 
 // ── Autenticación (rutas públicas) ─────────────────────────────────────────
 Route::get('/login',  [AuthController::class, 'showLogin'])->name('login');
@@ -175,6 +177,22 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
             ->middleware('permiso:devoluciones.procesar');
     });
 
+    // Salidas ya realizadas entre almacenes. No es un flujo de solicitudes.
+    Route::middleware('rol:salidas-almacen')->group(function () {
+        Route::get('/casadets/salidas-almacen', [SalidaAlmacenController::class, 'index']);
+        Route::get('/casadets/salidas-almacen/create', [SalidaAlmacenController::class, 'create'])
+            ->middleware('permiso:salidas-almacen.crear');
+        Route::post('/casadets/salidas-almacen', [SalidaAlmacenController::class, 'store'])
+            ->middleware('permiso:salidas-almacen.crear');
+        Route::get('/casadets/salidas-almacen/{salida}', [SalidaAlmacenController::class, 'show']);
+        Route::get('/casadets/salidas-almacen/{salida}/devolucion', [SalidaAlmacenController::class, 'devolucionForm'])
+            ->middleware('permiso:salidas-almacen.devolver');
+        Route::post('/casadets/salidas-almacen/{salida}/devolucion', [SalidaAlmacenController::class, 'devolucion'])
+            ->middleware('permiso:salidas-almacen.devolver');
+        Route::post('/casadets/salidas-almacen/{salida}/anular', [SalidaAlmacenController::class, 'anular'])
+            ->middleware('permiso:salidas-almacen.anular');
+    });
+
     // Saldos a favor
     Route::middleware('rol:saldos-favor')->group(function () {
         Route::get('/casadets/saldos-favor',                                 [SaldoFavorController::class, 'index']);
@@ -262,6 +280,12 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
             Route::get('/cajas/{caja}/edit',     [CajaAdminController::class, 'edit']);
             Route::put('/cajas/{caja}',          [CajaAdminController::class, 'update']);
             Route::patch('/cajas/{caja}/toggle', [CajaAdminController::class, 'toggleActiva']);
+            Route::get('/almacenes',                 [AlmacenController::class, 'index']);
+            Route::get('/almacenes/create',          [AlmacenController::class, 'create']);
+            Route::post('/almacenes',                [AlmacenController::class, 'store']);
+            Route::get('/almacenes/{almacen}/edit',  [AlmacenController::class, 'edit']);
+            Route::put('/almacenes/{almacen}',       [AlmacenController::class, 'update']);
+            Route::patch('/almacenes/{almacen}/toggle', [AlmacenController::class, 'toggle']);
         });
 
         // Nubefact / Facturación electrónica

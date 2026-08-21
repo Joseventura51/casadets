@@ -16,6 +16,7 @@ class PermisoCatalog
         'saldos-favor'   => ['label' => 'Saldos a favor',            'grupo' => 'CASADETS'],
         'movimientos'    => ['label' => 'Movimientos',                'grupo' => 'CASADETS'],
         'devoluciones'   => ['label' => 'Devoluciones / Anulados',   'grupo' => 'CASADETS'],
+        'salidas-almacen'=> ['label' => 'Salidas entre almacenes',  'grupo' => 'INVENTARIO'],
         'zendy'          => ['label' => 'Zendy',                      'grupo' => 'ZENDY'],
         'reportes'       => ['label' => 'Reportes',                   'grupo' => 'General'],
         'reportes-caja'  => ['label' => 'Reportes de Caja',           'grupo' => 'General'],
@@ -71,6 +72,12 @@ class PermisoCatalog
         'Devoluciones' => [
             'devoluciones.procesar' => 'Procesar devoluciones / anulaciones',
         ],
+        'Salidas entre almacenes' => [
+            'salidas-almacen.crear'      => 'Registrar salidas de almacén',
+            'salidas-almacen.devolver'   => 'Registrar devoluciones de salidas',
+            'salidas-almacen.anular'     => 'Anular salidas de almacén',
+            'salidas-almacen.importar'   => 'Importar salidas de almacén',
+        ],
     ];
 
     const DEFAULTS = [
@@ -78,7 +85,7 @@ class PermisoCatalog
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
                 'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy',
-                'reportes','reportes-caja','admin.usuarios','admin.roles','admin.cajas','admin.series',
+                'reportes','reportes-caja','salidas-almacen','admin.usuarios','admin.roles','admin.cajas','admin.series',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',
@@ -91,12 +98,13 @@ class PermisoCatalog
                 'pendientes.ver_todos',
                 'saldos.crear','saldos.aplicar','saldos.ver_todos',
                 'devoluciones.procesar',
+                'salidas-almacen.crear','salidas-almacen.devolver','salidas-almacen.anular','salidas-almacen.importar',
             ],
         ],
         'Supervisor' => [
             'modulos' => [
                 'dashboard','caja','ventas','pendientes','compras','productos',
-                'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy','reportes','reportes-caja',
+                'clientes','vendedores','saldos-favor','movimientos','devoluciones','salidas-almacen','zendy','reportes','reportes-caja',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',
@@ -109,11 +117,12 @@ class PermisoCatalog
                 'pendientes.ver_todos',
                 'saldos.crear','saldos.aplicar','saldos.ver_todos',
                 'devoluciones.procesar',
+                'salidas-almacen.crear','salidas-almacen.devolver','salidas-almacen.anular',
             ],
         ],
         'Cajero' => [
             'modulos' => [
-                'dashboard','caja','ventas','pendientes','productos','clientes','saldos-favor','devoluciones',
+                'dashboard','caja','ventas','pendientes','productos','clientes','saldos-favor','devoluciones','salidas-almacen',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.pago','ventas.importar',
@@ -122,6 +131,7 @@ class PermisoCatalog
                 'pendientes.ver_todos',
                 'saldos.aplicar',
                 'devoluciones.procesar',
+                'salidas-almacen.crear','salidas-almacen.devolver',
             ],
         ],
         'Vendedor' => [

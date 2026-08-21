@@ -5,6 +5,24 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-21 — Salidas entre almacenes
+
+### Nueva base de inventario por almacén
+
+- Se agregaron almacenes y saldos `producto_almacen`, inicializando el stock existente en `PRINCIPAL`.
+- Se ampliaron los movimientos de Kardex con almacén, usuario y saldos anterior/posterior.
+- Los movimientos históricos/globales se sincronizan con el almacén principal sin alterar su comportamiento actual.
+- Se creó `InventarioAlmacenService` con transacciones, bloqueo de filas y rechazo de stock negativo.
+- Se agregó el módulo de salidas realizadas entre almacenes: registro, listado, detalle, Kardex, anulación con movimiento inverso y devolución parcial/total con estados automáticos.
+- Se agregaron permisos y administración básica de almacenes.
+
+### Alcance pendiente
+
+- Importación masiva del Excel de salidas.
+- Selección explícita de almacén en compras y ventas para completar trazabilidad de todas las operaciones.
+
+---
+
 ## 2026-08-21 — Filtros de búsqueda en series
 
 ### Mejora: búsqueda y filtros de series de documentos

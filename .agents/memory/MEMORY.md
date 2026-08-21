@@ -12,3 +12,4 @@
 - [SaldoFavor anulación reversa](saldo-favor-anulacion.md) — annulling a saldo_favor_usado movimiento must restore SaldoFavor.monto_disponible and reverse only the saldo portion of venta.pagado; contrapartida must be tipo=contable not ingreso.
 - [Referencia fiscal exclusion](referencia-fiscal.md) — es_referencia_fiscal=true forces estado='pagado', saldo_pendiente=0, hides pago button, excluded from qVentas/qDetalles in ReporteController; Venta scope noFiscal() for ORM queries.
 - [Changelog location](.agents/changelog/CHANGELOG.md) — full session-by-session change log at .agents/changelog/CHANGELOG.md; update each session.
+- [Almacenes e inventario](almacenes-inventario.md) — stock por almacén convive con el Kardex global; movimientos sin almacén se imputan a PRINCIPAL.
