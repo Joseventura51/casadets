@@ -5,6 +5,13 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-22 — Display de detalle de cuentas por pagar
+
+- Se reorganizó el detalle de cada factura en pestañas de Pagos y letras y Documentos.
+- Los indicadores principales permanecen visibles arriba y se evitó apilar todo el expediente en una sola columna.
+
+---
+
 ## 2026-08-22 — Retención y expediente documental de cuentas por pagar
 
 - Los pagos a proveedores pueden aplicar retención fija del 3%; la deuda baja por el bruto y la salida de caja por el neto.
