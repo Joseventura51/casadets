@@ -10,6 +10,7 @@ use App\Models\PagoProveedor;
 use App\Models\ProveedorCxp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class CuentasPorPagarController extends Controller
@@ -131,7 +132,7 @@ class CuentasPorPagarController extends Controller
 
     public function show(CuentaPorPagar $cuenta)
     {
-        $cuenta->load(['proveedor', 'letras', 'aplicaciones.pago']);
+        $cuenta->load(['proveedor', 'letras', 'aplicaciones.pago.documentos', 'documentos']);
         return view('zendy.letra_show', compact('cuenta'));
     }
 
@@ -153,15 +154,24 @@ class CuentasPorPagarController extends Controller
             'fecha' => 'required|date', 'monto' => 'required|numeric|min:.01',
             'metodo_pago' => 'required|string|max:50', 'referencia' => 'nullable|string|max:120',
             'observaciones' => 'nullable|string|max:500', 'letra_id' => 'nullable|exists:letras_proveedor,id',
+            'pago_imagen' => 'nullable|file|max:10240',
         ]);
+        $retencion = $request->boolean('retencion_aplicada');
+        $data['retencion_aplicada'] = $retencion;
+        $data['retencion_porcentaje'] = $retencion ? 3 : 0;
+        $data['retencion_monto'] = $retencion ? round((float) $data['monto'] * .03, 2) : 0;
+        $data['monto_neto'] = round((float) $data['monto'] - $data['retencion_monto'], 2);
         if ((float) $data['monto'] > $cuenta->saldo + .01) return back()->with('error', 'El pago supera el saldo pendiente de la factura.');
         if (!empty($data['letra_id']) && !$cuenta->letras()->whereKey($data['letra_id'])->exists()) {
             return back()->with('error', 'La letra seleccionada no pertenece a esta factura.');
         }
-        DB::transaction(function () use ($data, $cuenta) {
+        $pagoImagen = $request->file('pago_imagen');
+        DB::transaction(function () use ($data, $cuenta, $pagoImagen) {
             $pago = PagoProveedor::create([
                 'proveedor_id' => $cuenta->proveedor_id, 'caja_id' => session('caja_id'),
                 'user_id' => auth()->id(), 'fecha' => $data['fecha'], 'monto' => $data['monto'],
+                'retencion_aplicada' => $data['retencion_aplicada'], 'retencion_porcentaje' => $data['retencion_porcentaje'],
+                'retencion_monto' => $data['retencion_monto'], 'monto_neto' => $data['monto_neto'],
                 'moneda' => $cuenta->moneda, 'metodo_pago' => $data['metodo_pago'],
                 'referencia' => $data['referencia'] ?? null, 'observaciones' => $data['observaciones'] ?? null,
             ]);
@@ -183,12 +193,45 @@ class CuentasPorPagarController extends Controller
                 'user_id' => auth()->id(),
                 'documento_tipo' => $cuenta->tipo_documento,
                 'documento_numero' => $cuenta->documento_numero,
-                'monto' => $data['monto'],
+                'monto' => $data['monto_neto'],
                 'fecha' => $data['fecha'],
-                'observaciones' => 'Pago de ' . $cuenta->documento_numero . ' a ' . $cuenta->proveedor->razon_social,
+                'observaciones' => 'Pago de ' . $cuenta->documento_numero . ' a ' . $cuenta->proveedor->razon_social
+                    . ($data['retencion_aplicada'] ? ' — Retención 3%: S/ ' . number_format($data['retencion_monto'], 2) : ''),
             ]);
+            if ($pagoImagen) {
+                app(\App\Services\DocumentoCxpService::class)->guardar(
+                    $pagoImagen, $cuenta, 'pago_imagen', $pago, auth()->id()
+                );
+            }
         });
         return back()->with('success', 'Pago registrado correctamente.');
+    }
+
+    public function subirDocumentos(Request $request, CuentaPorPagar $cuenta)
+    {
+        $tipos = ['factura_xml', 'factura_pdf', 'retencion_xml', 'retencion_pdf'];
+        $guardados = 0;
+        foreach ($tipos as $tipo) {
+            if (!$request->hasFile($tipo)) continue;
+            $archivo = $request->file($tipo);
+            if (!$archivo->isValid() || $archivo->getSize() > 10240 * 1024) {
+                return back()->with('error', 'El archivo ' . $tipo . ' no es válido o supera 10 MB.');
+            }
+            $extension = strtolower($archivo->getClientOriginalExtension());
+            $permitidas = str_contains($tipo, 'xml') ? ['xml'] : ['pdf'];
+            if (!in_array($extension, $permitidas, true)) return back()->with('error', "El archivo {$tipo} debe ser ." . $permitidas[0] . '.');
+            app(\App\Services\DocumentoCxpService::class)->guardar($archivo, $cuenta, $tipo, null, auth()->id());
+            $guardados++;
+        }
+        return back()->with('success', $guardados . ' documento(s) guardado(s).');
+    }
+
+    public function verDocumento(\App\Models\DocumentoCxp $documento)
+    {
+        abort_unless($documento->existeArchivo(), 404, 'Archivo no encontrado.');
+        return Storage::disk('public')->download($documento->ruta, $documento->nombre_original, [
+            'Content-Type' => $documento->mime_type,
+        ]);
     }
 
     public function vaciar(Request $request)

@@ -23,6 +23,7 @@ class CuentaPorPagar extends Model
     public function proveedor(): BelongsTo { return $this->belongsTo(ProveedorCxp::class, 'proveedor_id'); }
     public function letras(): HasMany { return $this->hasMany(LetraProveedor::class, 'cuenta_por_pagar_id'); }
     public function aplicaciones(): HasMany { return $this->hasMany(AplicacionPagoProveedor::class, 'cuenta_por_pagar_id'); }
+    public function documentos(): HasMany { return $this->hasMany(DocumentoCxp::class, 'cuenta_por_pagar_id'); }
 
     public function getPagadoAttribute(): float
     {

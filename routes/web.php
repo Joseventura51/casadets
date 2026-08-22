@@ -42,6 +42,8 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::get('/zendy/letras/{cuenta}', [\App\Http\Controllers\CuentasPorPagarController::class, 'show']);
         Route::post('/zendy/letras/{cuenta}/letra', [\App\Http\Controllers\CuentasPorPagarController::class, 'crearLetra']);
         Route::post('/zendy/letras/{cuenta}/pago', [\App\Http\Controllers\CuentasPorPagarController::class, 'registrarPago']);
+        Route::post('/zendy/letras/{cuenta}/documentos', [\App\Http\Controllers\CuentasPorPagarController::class, 'subirDocumentos']);
+        Route::get('/zendy/documentos-cxp/{documento}/ver', [\App\Http\Controllers\CuentasPorPagarController::class, 'verDocumento']);
         Route::delete('/zendy/letras', [\App\Http\Controllers\CuentasPorPagarController::class, 'vaciar']);
     });
 

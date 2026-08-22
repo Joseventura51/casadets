@@ -5,6 +5,14 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-22 — Retención y expediente documental de cuentas por pagar
+
+- Los pagos a proveedores pueden aplicar retención fija del 3%; la deuda baja por el bruto y la salida de caja por el neto.
+- Se agregaron documentos XML/PDF de factura, XML/PDF de retención e imagen del comprobante de pago.
+- Los archivos quedan vinculados a la cuenta o al pago y se pueden abrir desde el detalle.
+
+---
+
 ## 2026-08-22 — Análisis y selección por empresa al importar
 
 - La importación del Excel ahora muestra primero un análisis agrupado por empresa.
