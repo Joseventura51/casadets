@@ -254,6 +254,7 @@ class VentaImportController extends Controller
             $grupos[] = array_merge($base, [
                 'vendedor_id' => $vendedorId,
                 'pagos'       => array_values($pagos),
+                'retencion_aplicada' => !empty($item['retencion_aplicada']),
                 'detalles'    => $detalles,
             ]);
         }
@@ -439,7 +440,14 @@ class VentaImportController extends Controller
                         ->toArray();
 
                     if (!empty($pagosParaService)) {
-                        $cobranza->registrarPago($venta, $pagosParaService);
+                        $cobranza->registrarPago(
+                            $venta,
+                            $pagosParaService,
+                            null,
+                            null,
+                            'casadets',
+                            (bool) ($g['retencion_aplicada'] ?? false)
+                        );
                     }
                 }
 

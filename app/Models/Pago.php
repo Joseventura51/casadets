@@ -15,6 +15,10 @@ class Pago extends Model
     protected $fillable = [
         'cliente_id',
         'monto_total',
+        'retencion_aplicada',
+        'retencion_porcentaje',
+        'retencion_monto',
+        'monto_neto',
         'metodo_pago',
         'estado',
         'fecha',
@@ -24,6 +28,10 @@ class Pago extends Model
     protected $casts = [
         'fecha'       => 'date',
         'monto_total' => 'decimal:2',
+        'retencion_aplicada'  => 'boolean',
+        'retencion_porcentaje'=> 'decimal:2',
+        'retencion_monto'     => 'decimal:2',
+        'monto_neto'          => 'decimal:2',
     ];
 
     public function cliente(): BelongsTo

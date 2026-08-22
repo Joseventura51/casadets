@@ -542,6 +542,7 @@ class VentaController extends Controller
             'pagos.*.metodo'      => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
             'pagos.*.monto'       => 'required|numeric|min:0',
             'pagos.*.descripcion' => 'nullable|string|max:200',
+            'retencion_aplicada' => 'nullable|boolean',
             'estado_manual'       => 'nullable|in:pendiente,pagado,anulado',
             'evidencias'          => 'nullable|array|max:10',
             'evidencias.*'        => 'file|mimes:jpg,jpeg,png,webp|max:5120',
@@ -604,6 +605,9 @@ class VentaController extends Controller
             $venta,
             $data['pagos'],
             $data['estado_manual'] ?? null
+            , null
+            , 'casadets'
+            , $request->boolean('retencion_aplicada')
         );
 
         // ── Guardar evidencias de pago si se subieron archivos ──────────

@@ -204,6 +204,14 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+### Retención del 3% en importación de ventas
+
+- La vista previa de importación incluye una casilla global para aplicar retención del 3% a los pagos.
+- Se guardan bruto, porcentaje, retención y neto en cada pago; el historial de pagos muestra la retención.
+- La deuda se reduce por el bruto y el movimiento de caja registra el neto.
+
+---
+
 ## Pendiente por implementar
 
 - [ ] **P4**: Proteger botones en compras, productos, vendedores, movimientos

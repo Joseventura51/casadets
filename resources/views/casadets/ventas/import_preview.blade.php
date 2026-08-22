@@ -37,6 +37,8 @@
 .btn-add-pago:hover { background: #e8f0fe; }
 .total-cobrado-display { font-size: 1.15rem; font-weight: 700; color: #0d6efd; }
 .diferencia-pill { font-size: .8rem; padding: .2rem .55rem; border-radius: 20px; display: inline-block; }
+.retencion-box { border:1px solid #f0ad4e; background:#fffaf0; border-radius:8px; }
+.retencion-resumen { font-size:.76rem; }
 .doc-badge { font-size: .78rem; padding: .25rem .55rem; border-radius: 20px; letter-spacing: .02em; }
 .venta-num { font-size: .8rem; color: #6c757d; font-weight: 500; }
 </style>
@@ -77,6 +79,18 @@
     <i class="bi bi-info-circle text-primary me-1"></i>
     Selecciona el <strong>método de pago</strong> y el <strong>monto cobrado</strong> por cada venta.
     Si aún no se cobró, deja <strong>Ninguno</strong> y quedará como <em>pendiente</em>.
+</div>
+<div class="retencion-box p-3 mb-3">
+    <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="retencionImportacion">
+        <label class="form-check-label fw-semibold" for="retencionImportacion">
+            Aplicar retención del 3% a los pagos importados
+        </label>
+    </div>
+    <div class="text-muted small ms-4 mt-1">
+        La deuda se aplica por el monto bruto; la caja registra el monto neto.
+        El detalle quedará visible en el historial de pagos.
+    </div>
 </div>
 @php
     $cntCanjeadas    = count(array_filter($grupos, fn($g) => !empty($g['canjeada'])));
@@ -336,6 +350,11 @@
                                 <div class="diferencia-pill bg-light text-muted w-100">—</div>
                             </div>
                         </div>
+                        <div class="retencion-resumen mt-2 text-warning-emphasis d-none">
+                            <i class="bi bi-percent me-1"></i>
+                            Retención 3%: <strong class="retencion-monto">S/ 0.00</strong>
+                            · Neto en caja: <strong class="retencion-neto">S/ 0.00</strong>
+                        </div>
                     </div>
                 </div>
 
@@ -372,6 +391,14 @@ function recalcPagos(card) {
     const realRaw = parseFloat(card.dataset.totalReal) || 0;
 
     card.querySelector('.total-cobrado-display').textContent = 'S/ ' + totalCob.toFixed(2);
+    const retencion = document.getElementById('retencionImportacion')?.checked;
+    const retencionMonto = retencion ? totalCob * 0.03 : 0;
+    const retencionResumen = card.querySelector('.retencion-resumen');
+    if (retencionResumen) {
+        retencionResumen.classList.toggle('d-none', !retencion || totalCob <= 0);
+        retencionResumen.querySelector('.retencion-monto').textContent = 'S/ ' + retencionMonto.toFixed(2);
+        retencionResumen.querySelector('.retencion-neto').textContent = 'S/ ' + (totalCob - retencionMonto).toFixed(2);
+    }
 
     const d = totalCob - realRaw;
     const pill = card.querySelector('.diferencia-pill');
@@ -436,7 +463,14 @@ function serializarTodo() {
 
         const totalCobrado = pagos.reduce((s, p) => s + p.monto, 0);
 
-        ventas.push({ session_idx: idx, vendedor_id: vendedorId, detalles, pagos, total_cobrado: totalCobrado });
+        ventas.push({
+            session_idx: idx,
+            vendedor_id: vendedorId,
+            detalles,
+            pagos,
+            total_cobrado: totalCobrado,
+            retencion_aplicada: document.getElementById('retencionImportacion')?.checked === true,
+        });
     });
     return ventas;
 }
@@ -480,6 +514,10 @@ document.querySelectorAll('.venta-card').forEach(card => {
             actualizarContador();
         }
     });
+});
+
+document.getElementById('retencionImportacion')?.addEventListener('change', () => {
+    document.querySelectorAll('.venta-card').forEach(recalcPagos);
 });
 
 function actualizarContador() {

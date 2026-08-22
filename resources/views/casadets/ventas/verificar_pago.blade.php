@@ -469,6 +469,21 @@
                         <i class="bi bi-plus-lg me-1"></i> Agregar método de pago
                     </button>
 
+                    <div class="form-check mt-3 p-2 rounded border border-warning-subtle bg-warning-subtle bg-opacity-25">
+                        <input class="form-check-input" type="checkbox" name="retencion_aplicada"
+                               value="1" id="retencionAplicada">
+                        <label class="form-check-label small fw-semibold" for="retencionAplicada">
+                            Aplicar retención del 3%
+                        </label>
+                        <div class="text-muted" style="font-size:.72rem;">
+                            La deuda baja por el bruto; caja registra el neto.
+                            <span id="retencionPagoResumen" class="d-none">
+                                · Retención: <strong id="retencionPagoMonto">S/ 0.00</strong>
+                                · Neto: <strong id="retencionPagoNeto">S/ 0.00</strong>
+                            </span>
+                        </div>
+                    </div>
+
                     {{-- ── Evidencia de pago (solo métodos no-efectivo) ──────── --}}
                     <div id="seccionEvidencia" style="display:none;" class="mt-3">
                         <div class="border rounded p-2" style="border-style:dashed !important; border-color:#0d6efd !important; background:#f8f9ff;">
@@ -542,6 +557,7 @@
                         <tr>
                             <th>Fecha</th>
                             <th>Método / Destino</th>
+                            <th>Retención</th>
                             <th class="text-end">Aplicado</th>
                         </tr>
                     </thead>
@@ -562,13 +578,20 @@
                                     @endforeach
                                 @endif
                             </td>
+                            <td>
+                                @if($h->pago->retencion_aplicada)
+                                    <span class="badge bg-warning text-dark">3% · S/ {{ number_format($h->pago->retencion_monto, 2) }}</span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
                             <td class="text-end fw-semibold text-success">S/ {{ number_format($h->monto_aplicado, 2) }}</td>
                         </tr>
                         @endforeach
                     </tbody>
                     <tfoot class="table-light">
                         <tr>
-                            <th colspan="2" class="text-end">Total cobrado</th>
+                            <th colspan="3" class="text-end">Total cobrado</th>
                             <th class="text-end">S/ {{ number_format($historial->sum('monto_aplicado'), 2) }}</th>
                         </tr>
                     </tfoot>
@@ -1002,6 +1025,20 @@ document.querySelectorAll('.btn-aplicar-saldo').forEach(btn => {
 });
 
 recalc();
+
+function actualizarResumenRetencion() {
+    const activa = document.getElementById('retencionAplicada')?.checked;
+    const bruto = [...document.querySelectorAll('.monto-pago')]
+        .reduce((sum, input) => sum + (parseFloat(input.value) || 0), 0);
+    const monto = activa ? bruto * 0.03 : 0;
+    document.getElementById('retencionPagoResumen')?.classList.toggle('d-none', !activa);
+    const retMonto = document.getElementById('retencionPagoMonto');
+    const retNeto = document.getElementById('retencionPagoNeto');
+    if (retMonto) retMonto.textContent = 'S/ ' + monto.toFixed(2);
+    if (retNeto) retNeto.textContent = 'S/ ' + (bruto - monto).toFixed(2);
+}
+document.getElementById('retencionAplicada')?.addEventListener('change', actualizarResumenRetencion);
+document.getElementById('pagosContainer')?.addEventListener('input', actualizarResumenRetencion);
 
 // ── Reducción de sobrante ──────────────────────────────────────
 @if(!$ventaPagada && $saldoPendiente > 0)

@@ -20,13 +20,15 @@ class CobranzaService
      * @param  string|null  $estadoManual
      * @param  int|null     $userId
      * @param  string       $empresa
+     * @param  bool         $retencionAplicada
      */
     public function registrarPago(
         Venta $venta,
         array $pagosInput,
         ?string $estadoManual = null,
         ?int $userId = null,
-        string $empresa = 'casadets'
+        string $empresa = 'casadets',
+        bool $retencionAplicada = false
     ): array {
         // Derivar empresa desde la caja real de la venta o la sesión activa,
         // ignorar el parámetro por defecto 'casadets' si hay información más precisa.
@@ -38,7 +40,7 @@ class CobranzaService
             $empresa = $cajaReal->empresa;
         }
 
-        return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId, $empresa) {
+        return DB::transaction(function () use ($venta, $pagosInput, $estadoManual, $userId, $empresa, $retencionAplicada) {
 
             $pagosReales = collect($pagosInput)
                 ->filter(fn ($p) => ($p['metodo'] ?? 'ninguno') !== 'ninguno' && ($p['monto'] ?? 0) > 0)
@@ -52,6 +54,8 @@ class CobranzaService
                 fn ($carry, $p) => bcadd($carry, (string) $p['monto'], 2),
                 '0'
             );
+            $retencionMonto = $retencionAplicada ? round($montoNuevo * 0.03, 2) : 0.0;
+            $montoNeto = round($montoNuevo - $retencionMonto, 2);
 
             $metodoStr = $pagosReales->pluck('metodo')->unique()->implode(',') ?: null;
 
@@ -71,6 +75,10 @@ class CobranzaService
                 'cliente_id'  => $venta->cliente_id,
                 'user_id'     => $userId,
                 'monto_total' => $montoNuevo,
+                'retencion_aplicada'   => $retencionAplicada,
+                'retencion_porcentaje' => $retencionAplicada ? 3 : 0,
+                'retencion_monto'      => $retencionMonto,
+                'monto_neto'           => $montoNeto,
                 'metodo_pago' => $metodoStr,
                 'estado'      => 'aplicado',
                 'fecha'       => now()->toDateString(),
@@ -154,9 +162,10 @@ class CobranzaService
                 'user_id'          => $userId,
                 'documento_tipo'   => $venta->documento_tipo,
                 'documento_numero' => $venta->documento_numero ?? (string) $venta->id,
-                'monto'            => $montoNuevo,
+                'monto'            => $montoNeto,
                 'fecha'            => now()->toDateString(),
-                'observaciones'    => "Pago venta #{$venta->id}" . ($docStr ? " — {$docStr}" : ''),
+                'observaciones'    => "Pago venta #{$venta->id}" . ($docStr ? " — {$docStr}" : '')
+                    . ($retencionAplicada ? " — Retención 3%: S/ " . number_format($retencionMonto, 2) : ''),
             ]);
 
             $venta->refresh();
