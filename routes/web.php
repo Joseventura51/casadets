@@ -37,7 +37,8 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
     Route::middleware('rol:zendy')->group(function () {
         Route::get('/zendy/letras', [\App\Http\Controllers\CuentasPorPagarController::class, 'index']);
         Route::get('/zendy/letras/importar', [\App\Http\Controllers\CuentasPorPagarController::class, 'importForm']);
-        Route::post('/zendy/letras/importar', [\App\Http\Controllers\CuentasPorPagarController::class, 'importar']);
+        Route::post('/zendy/letras/importar', [\App\Http\Controllers\CuentasPorPagarController::class, 'analizar']);
+        Route::post('/zendy/letras/importar/confirmar', [\App\Http\Controllers\CuentasPorPagarController::class, 'importar']);
         Route::get('/zendy/letras/{cuenta}', [\App\Http\Controllers\CuentasPorPagarController::class, 'show']);
         Route::post('/zendy/letras/{cuenta}/letra', [\App\Http\Controllers\CuentasPorPagarController::class, 'crearLetra']);
         Route::post('/zendy/letras/{cuenta}/pago', [\App\Http\Controllers\CuentasPorPagarController::class, 'registrarPago']);

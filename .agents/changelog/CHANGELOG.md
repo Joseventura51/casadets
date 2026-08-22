@@ -5,6 +5,14 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-22 — Análisis y selección por empresa al importar
+
+- La importación del Excel ahora muestra primero un análisis agrupado por empresa.
+- Se puede seleccionar una o varias empresas antes de confirmar la carga.
+- El análisis muestra documentos, F001 y total por empresa; se mantiene control de duplicados.
+
+---
+
 ## 2026-08-22 — Limpieza de datos de prueba de cuentas por pagar
 
 - Se agregó una acción protegida para vaciar cuentas por pagar, proveedores, letras, pagos y movimientos automáticos del módulo.

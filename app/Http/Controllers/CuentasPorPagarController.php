@@ -45,37 +45,66 @@ class CuentasPorPagarController extends Controller
         return view('zendy.letras_import');
     }
 
-    public function importar(Request $request)
+    public function analizar(Request $request)
     {
         $request->validate(['archivo' => 'required|file|max:20480']);
-        if (!in_array(strtolower($request->file('archivo')->getClientOriginalExtension()), ['xlsx', 'xls', 'csv'], true)) {
+        $archivo = $request->file('archivo');
+        if (!in_array(strtolower($archivo->getClientOriginalExtension()), ['xlsx', 'xls', 'csv'], true)) {
             return back()->with('error', 'El archivo debe tener formato XLSX, XLS o CSV.');
         }
-        $spreadsheet = IOFactory::load($request->file('archivo')->getRealPath());
-        $rows = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
-        $headers = array_map(fn ($v) => mb_strtolower(trim((string) $v)), $rows[1] ?? []);
-        $find = function (string $name) use ($headers) {
-            foreach ($headers as $col => $header) if (str_contains($header, $name)) return $col;
-            return null;
-        };
-        $cols = [
-            'razon' => $find('razón social') ?: $find('razon social'),
-            'ruc' => $find('ruc'), 'tipo' => $find('tipo doc'),
-            'numero' => $find('comprobante'), 'emision' => $find('emisión') ?: $find('emision'),
-            'vencimiento' => $find('vencimiento'), 'moneda' => $find('moneda'),
-            'total' => $find('total en soles') ?: $find('total'), 'condicion' => $find('tipo de pago'),
-        ];
+        $dir = storage_path('app/cxp-imports');
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        $path = $dir . '/reporte-' . bin2hex(random_bytes(8)) . '.' . strtolower($archivo->getClientOriginalExtension());
+        $archivo->move($dir, basename($path));
+        [$rows, $cols] = $this->leerReporte($path);
+        if (!$cols['razon'] || !$cols['numero'] || !$cols['total']) {
+            @unlink($path);
+            return back()->with('error', 'El archivo no tiene las columnas requeridas: Razón Social, N° Comprobante y Total.');
+        }
+
+        $empresas = [];
+        foreach (array_slice($rows, 1) as $row) {
+            $razon = trim((string) ($row[$cols['razon']] ?? ''));
+            $ruc = preg_replace('/\D+/', '', (string) ($cols['ruc'] ? ($row[$cols['ruc']] ?? '') : '')) ?: null;
+            $numero = $this->normalizarDocumento($row[$cols['numero']] ?? '');
+            $total = $this->numero($row[$cols['total']] ?? null);
+            if (!$razon || !$numero || $total <= 0) continue;
+            $key = $this->claveEmpresa($razon, $ruc);
+            if (!isset($empresas[$key])) {
+                $empresas[$key] = ['clave' => $key, 'razon_social' => $razon, 'ruc' => $ruc, 'documentos' => 0, 'f001' => 0, 'total' => 0];
+            }
+            $empresas[$key]['documentos']++;
+            $empresas[$key]['f001'] += str_starts_with($numero, 'F001-') ? 1 : 0;
+            $empresas[$key]['total'] += $total;
+        }
+        session(['cxp_import_path' => $path]);
+        return view('zendy.letras_preview', ['empresas' => collect($empresas)->sortByDesc('total')->values()]);
+    }
+
+    public function importar(Request $request)
+    {
+        $archivo = $request->file('archivo');
+        if ($archivo) {
+            $request->validate(['archivo' => 'required|file|max:20480']);
+            $path = $archivo->getRealPath();
+        } else {
+            $path = session('cxp_import_path');
+            if (!$path || !is_file($path)) return redirect('/zendy/letras/importar')->with('error', 'La vista previa expiró. Sube nuevamente el archivo.');
+        }
+        [$rows, $cols] = $this->leerReporte($path);
+        $seleccionadas = array_filter((array) $request->input('empresas', []));
         if (!$cols['razon'] || !$cols['numero'] || !$cols['total']) {
             return back()->with('error', 'El archivo no tiene las columnas requeridas: Razón Social, N° Comprobante y Total.');
         }
         $creadas = $duplicadas = $invalidas = 0;
-        DB::transaction(function () use ($rows, $cols, &$creadas, &$duplicadas, &$invalidas) {
+        DB::transaction(function () use ($rows, $cols, $seleccionadas, &$creadas, &$duplicadas, &$invalidas) {
             foreach (array_slice($rows, 1) as $row) {
                 $razon = trim((string) ($row[$cols['razon']] ?? ''));
                 $numero = $this->normalizarDocumento($row[$cols['numero']] ?? '');
                 $total = $this->numero($row[$cols['total']] ?? null);
                 if (!$razon || !$numero || $total <= 0) { $invalidas++; continue; }
                 $ruc = preg_replace('/\D+/', '', (string) ($cols['ruc'] ? ($row[$cols['ruc']] ?? '') : '')) ?: null;
+                if ($seleccionadas && !in_array($this->claveEmpresa($razon, $ruc), $seleccionadas, true)) continue;
                 $proveedor = $ruc
                     ? ProveedorCxp::firstOrCreate(['ruc' => $ruc], ['razon_social' => $razon])
                     : ProveedorCxp::firstOrCreate(['razon_social' => $razon, 'ruc' => null], ['activo' => true]);
@@ -95,6 +124,8 @@ class CuentasPorPagarController extends Controller
                 $cuenta->wasRecentlyCreated ? $creadas++ : $duplicadas++;
             }
         });
+        if (!$archivo && is_file($path)) @unlink($path);
+        session()->forget('cxp_import_path');
         return redirect('/zendy/letras')->with('success', "Importación completada: {$creadas} nuevas, {$duplicadas} duplicadas omitidas y {$invalidas} filas inválidas.");
     }
 
@@ -188,6 +219,26 @@ class CuentasPorPagarController extends Controller
         $v = preg_replace('/\s+/', '', $v);
         if (preg_match('/^([A-Z0-9]+)-0*(\d+)$/', $v, $m)) return $m[1] . '-' . str_pad($m[2], 8, '0', STR_PAD_LEFT);
         return $v;
+    }
+    private function claveEmpresa(string $razon, ?string $ruc): string
+    {
+        return $ruc ? 'ruc:' . $ruc : 'nombre:' . sha1(mb_strtoupper(trim($razon)));
+    }
+    private function leerReporte(string $path): array
+    {
+        $rows = IOFactory::load($path)->getActiveSheet()->toArray(null, true, true, true);
+        $headers = array_map(fn ($v) => mb_strtolower(trim((string) $v)), $rows[1] ?? []);
+        $find = function (string $name) use ($headers) {
+            foreach ($headers as $col => $header) if (str_contains($header, $name)) return $col;
+            return null;
+        };
+        return [$rows, [
+            'razon' => $find('razón social') ?: $find('razon social'),
+            'ruc' => $find('ruc'), 'tipo' => $find('tipo doc'),
+            'numero' => $find('comprobante'), 'emision' => $find('emisión') ?: $find('emision'),
+            'vencimiento' => $find('vencimiento'), 'moneda' => $find('moneda'),
+            'total' => $find('total en soles') ?: $find('total'), 'condicion' => $find('tipo de pago'),
+        ]];
     }
     private function numero($value): float
     {

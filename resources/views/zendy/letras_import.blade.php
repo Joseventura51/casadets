@@ -13,7 +13,7 @@
             <label class="form-label fw-semibold">Archivo Excel</label>
             <input type="file" name="archivo" class="form-control" accept=".xlsx,.xls,.csv" required>
             <div class="form-text">Se aceptan las columnas Razón Social, RUC, N° Comprobante, F. Emisión, F. Vencimiento, Moneda, Total y Tipo de Pago.</div>
-            <button class="btn btn-primary mt-4"><i class="bi bi-cloud-upload me-1"></i>Procesar e importar</button>
+            <button class="btn btn-primary mt-4"><i class="bi bi-search me-1"></i>Analizar archivo</button>
         </form>
     </div>
 </div>
