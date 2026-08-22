@@ -160,6 +160,28 @@ class CuentasPorPagarController extends Controller
         return back()->with('success', 'Pago registrado correctamente.');
     }
 
+    public function vaciar(Request $request)
+    {
+        abort_if(app()->environment('production'), 403, 'La limpieza masiva está deshabilitada en producción.');
+        $request->validate(['confirmacion' => 'required|in:BORRAR TODO']);
+
+        DB::transaction(function () {
+            $pagoIds = PagoProveedor::query()->pluck('id');
+            if ($pagoIds->isNotEmpty()) {
+                Movimiento::where('referencia_tipo', 'pago_proveedor')
+                    ->whereIn('referencia_id', $pagoIds)
+                    ->delete();
+            }
+            AplicacionPagoProveedor::query()->delete();
+            PagoProveedor::query()->delete();
+            LetraProveedor::query()->delete();
+            CuentaPorPagar::query()->delete();
+            ProveedorCxp::query()->delete();
+        });
+
+        return redirect('/zendy/letras')->with('success', 'Se eliminaron todas las cuentas por pagar de prueba.');
+    }
+
     private function normalizarDocumento($value): string
     {
         $v = strtoupper(trim((string) $value));

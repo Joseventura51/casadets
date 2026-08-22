@@ -8,6 +8,24 @@
     </div>
     <a href="/zendy/letras/importar" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Importar reporte Excel</a>
 </div>
+@if(app()->environment('production') === false)
+<div class="card border-danger mb-3">
+    <div class="card-body py-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <div class="fw-semibold text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Herramientas de prueba</div>
+                <small class="text-muted">Elimina cuentas, proveedores, letras, pagos y movimientos automáticos de este módulo.</small>
+            </div>
+            <form action="/zendy/letras" method="POST" class="d-flex gap-2 align-items-center"
+                  onsubmit="return confirm('Esta acción no se puede deshacer. ¿Deseas borrar todas las cuentas por pagar de prueba?')">
+                @csrf @method('DELETE')
+                <input name="confirmacion" class="form-control form-control-sm" placeholder="Escribe BORRAR TODO" required style="min-width:180px">
+                <button class="btn btn-sm btn-outline-danger">Borrar todo</button>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 
 <div class="row g-3 mb-3">
     <div class="col-md-4"><div class="card border-0 shadow-sm"><div class="card-body"><small class="text-muted">Documentos importados</small><div class="fs-3 fw-bold">{{ number_format($totales['documentos']) }}</div></div></div></div>

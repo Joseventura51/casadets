@@ -5,6 +5,13 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-22 — Limpieza de datos de prueba de cuentas por pagar
+
+- Se agregó una acción protegida para vaciar cuentas por pagar, proveedores, letras, pagos y movimientos automáticos del módulo.
+- La acción exige escribir `BORRAR TODO` y está bloqueada cuando el entorno es producción.
+
+---
+
 ## 2026-08-22 — Cuentas por pagar y letras
 
 ### Módulo de pagos a proveedores
