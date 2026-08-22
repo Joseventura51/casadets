@@ -124,7 +124,7 @@
             <ul class="nav flex-column ms-3 mt-1">
                 <li>
                     <a href="/zendy/letras" class="nav-link {{ request()->is('zendy/letras*') ? 'active' : '' }}">
-                        <i class="bi bi-file-earmark-text me-2"></i>Pago de letras
+                        <i class="bi bi-file-earmark-text me-2"></i>Cuentas por pagar
                     </a>
                 </li>
             </ul>

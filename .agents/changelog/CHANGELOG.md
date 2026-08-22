@@ -5,6 +5,17 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-08-22 — Cuentas por pagar y letras
+
+### Módulo de pagos a proveedores
+
+- Se creó el módulo ZENDY de cuentas por pagar con importación del reporte de comprobantes recibidos.
+- Las facturas se normalizan por proveedor, tipo, serie y correlativo; las F001 quedan identificadas como documentos origen.
+- Se agregaron letras asociadas, pagos parciales, historial de aplicaciones y salida automática en movimientos.
+- Se importó el reporte adjunto: 2,828 cuentas únicas, 2,406 F001 y S/ 71,197,160.43 registrados.
+
+---
+
 ## 2026-08-21 — Filtros de búsqueda en series
 
 ### Mejora: búsqueda y filtros de series de documentos
