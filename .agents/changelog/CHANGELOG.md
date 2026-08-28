@@ -212,6 +212,14 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+### Listado de movimientos: filtros de fecha y caja
+
+- El listado de movimientos permite consultar explícitamente todas las cajas disponibles para el usuario.
+- Cuando el resultado está vacío, muestra accesos directos para ampliar a todas las fechas o cajas.
+- La caja seleccionada en el filtro se aplica realmente a la consulta, sin eliminar la restricción de cajas asignadas.
+
+---
+
 ## Pendiente por implementar
 
 - [ ] **P4**: Proteger botones en compras, productos, vendedores, movimientos

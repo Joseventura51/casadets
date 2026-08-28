@@ -93,6 +93,17 @@
                 </select>
             </div>
             <div>
+                <label class="mov-filter-label">Caja</label>
+                <select name="caja_id" class="form-select form-select-sm mov-filter-control js-auto-filter">
+                    <option value="todas" {{ (string) $cajaFiltro === 'todas' ? 'selected' : '' }}>Todas las cajas</option>
+                    @foreach($cajasDisponibles as $caja)
+                        <option value="{{ $caja->id }}" {{ (string) $cajaFiltro === (string) $caja->id ? 'selected' : '' }}>
+                            {{ $caja->codigo }} — {{ $caja->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
                 <label class="mov-filter-label">Método</label>
                 <select name="metodo_pago" class="form-select form-select-sm mov-filter-control js-auto-filter">
                     <option value="">Todos</option>
@@ -550,7 +561,21 @@
                 @empty
                 <tr>
                     <td colspan="10" class="text-center text-muted py-5">
-                        No hay movimientos registrados.
+                        <div class="mb-2">No hay movimientos con estos filtros.</div>
+                        <div class="d-flex justify-content-center gap-2 flex-wrap">
+                            @if($periodo !== 'todo')
+                                <a href="{{ request()->fullUrlWithQuery(['periodo' => 'todo']) }}"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-calendar3 me-1"></i>Ver todas las fechas
+                                </a>
+                            @endif
+                            @if((string) $cajaFiltro !== 'todas')
+                                <a href="{{ request()->fullUrlWithQuery(['caja_id' => 'todas']) }}"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-shop me-1"></i>Ver todas las cajas
+                                </a>
+                            @endif
+                        </div>
                     </td>
                 </tr>
                 @endforelse

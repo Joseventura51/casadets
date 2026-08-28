@@ -8,6 +8,7 @@ use App\Models\Movimiento;
 use App\Models\Pago;
 use App\Models\SaldoFavor;
 use App\Models\Vendedor;
+use App\Services\CajaService;
 use App\Services\VendedorScope;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,10 @@ class MovimientoController extends Controller
         // Restricción por vendedor asignado al usuario
         VendedorScope::aplicarMovimientos($query);
 
-        if (session('caja_id')) {
-            $query->where('caja_id', session('caja_id'));
+        $cajasDisponibles = CajaService::cajasUsuario()->values();
+        $cajaFiltro = $request->input('caja_id', session('caja_id'));
+        if ($cajaFiltro && $cajaFiltro !== 'todas') {
+            $query->where('caja_id', (int) $cajaFiltro);
         }
 
         if ($request->filled('tipo'))        $query->where('tipo', $request->tipo);
@@ -90,7 +93,16 @@ class MovimientoController extends Controller
             ->orderBy('categoria')
             ->pluck('categoria');
 
-        return view('movimientos.index', compact('movimientos', 'totales', 'desde', 'hasta', 'periodo', 'categorias'));
+        return view('movimientos.index', compact(
+            'movimientos',
+            'totales',
+            'desde',
+            'hasta',
+            'periodo',
+            'categorias',
+            'cajasDisponibles',
+            'cajaFiltro'
+        ));
     }
 
     private function rangoPeriodo(string $periodo, Request $request): array
