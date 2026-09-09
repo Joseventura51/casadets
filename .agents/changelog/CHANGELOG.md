@@ -5,6 +5,13 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-09-09 — Acceso al módulo de inventarios en BETA
+
+- Se sincronizaron los permisos del rol Administrador para mostrar `Salidas de almacén` y permitir administrar inventario.
+- Se conservaron las rutas existentes de almacenes, salidas, importación, devoluciones y anulaciones.
+
+---
+
 ## 2026-08-21 — Salidas entre almacenes
 
 ### Nueva base de inventario por almacén

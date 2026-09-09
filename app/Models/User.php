@@ -120,6 +120,8 @@ class User extends Authenticatable
             'reportes'       => ['Administrador', 'Supervisor', 'Vendedor'],
             'admin.usuarios' => ['Administrador'],
             'admin.roles'    => ['Administrador'],
+            'admin.cajas'    => ['Administrador'],
+            'admin.series'   => ['Administrador'],
         ];
 
         return in_array($rol?->nombre, $mapa[$modulo] ?? []);
