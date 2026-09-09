@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     public function up(): void
-    {
+    {   
         Schema::create('cobranza_archivos', function (Blueprint $table) {
             $table->id();
             $table->foreignId('pago_id')->constrained('pagos')->cascadeOnDelete();
