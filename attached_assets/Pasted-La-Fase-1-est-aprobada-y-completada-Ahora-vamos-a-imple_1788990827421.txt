@@ -1,0 +1,340 @@
+La Fase 1 está aprobada y completada.
+
+Ahora vamos a implementar únicamente la FASE 2: establecer correctamente el stock físico por almacén ZENDY y preparar el Kardex.
+
+NO avances todavía con ventas, compras, vales, transferencias ni devoluciones.
+
+## MODELO DEFINITIVO
+
+ZENDY posee físicamente el inventario.
+
+Los únicos almacenes físicos son:
+
+* PIMPON
+* CASA
+* IMPACTO
+* ZAPALLAL
+* LUNA
+* PIZARRO
+
+CASADETS no tiene almacén ni stock físico propio.
+
+Por lo tanto, el inventario físico debe representarse como:
+
+producto + almacén ZENDY + cantidad
+
+La tabla:
+
+producto_almacen
+
+debe ser la estructura principal para representar el stock físico por almacén.
+
+---
+
+# 1. AUDITAR ANTES DE MODIFICAR
+
+Revisa nuevamente:
+
+* app/Models/Producto.php
+* app/Models/StockMovimiento.php
+* app/Models/Almacen.php
+* app/Services/InventarioAlmacenService.php
+* migraciones relacionadas con producto_almacen y stock_movimientos
+
+Determina exactamente:
+
+* cómo se calcula actualmente productos.stock_actual
+* qué código modifica productos.stock_actual directamente
+* qué código crea StockMovimiento directamente
+* qué código utiliza InventarioAlmacenService
+* si existen otros lugares que modifiquen stock
+* si existen métodos que puedan generar movimientos sin almacen_id
+
+NO corrijas todavía esos lugares automáticamente.
+
+Primero identifica todos los puntos de escritura de stock.
+
+---
+
+# 2. FUENTE DEL STOCK FÍSICO
+
+Queremos establecer como regla:
+
+producto_almacen.stock_actual = stock físico de ese producto en ese almacén ZENDY.
+
+Ejemplo:
+
+Producto X:
+
+Pimpon = 100
+Casa = 50
+Impacto = 0
+Zapallal = 20
+Luna = 10
+Pizarro = 5
+
+El stock físico total de ZENDY sería la suma de los seis almacenes.
+
+No debe existir un séptimo almacén para representar CASADETS.
+
+---
+
+# 3. InventarioAlmacenService
+
+Revisa y adapta:
+
+app/Services/InventarioAlmacenService.php
+
+Debe convertirse en el punto central para modificar stock físico.
+
+Toda operación física futura deberá pasar por este servicio.
+
+El servicio debe:
+
+* trabajar siempre con un almacén ZENDY válido
+* obtener/buscar producto_almacen correctamente
+* utilizar lockForUpdate() cuando corresponda
+* impedir stock negativo salvo que explícitamente se defina una excepción
+* registrar saldo_anterior
+* registrar saldo_posterior
+* registrar almacen_id
+* registrar producto_id
+* registrar usuario_id
+* mantener la operación dentro de una transacción
+* registrar una referencia de la operación
+
+NO crear otro Kardex.
+NO crear otro servicio paralelo.
+
+---
+
+# 4. StockMovimiento
+
+Revisa:
+
+app/Models/StockMovimiento.php
+
+La eliminación del fallback a PRINCIPAL de la Fase 1 es correcta y debe mantenerse.
+
+Para NUEVOS movimientos físicos:
+
+* almacen_id debe ser obligatorio a nivel de lógica de negocio.
+* No debe existir ningún fallback automático.
+* Si una operación física no proporciona almacén, debe rechazarse.
+
+IMPORTANTE:
+
+No necesariamente conviertas todavía la columna SQL en NOT NULL si eso puede afectar compatibilidad con datos antiguos.
+
+Primero analiza si existen registros sin almacen_id.
+
+En la base actual sabemos que no existen movimientos reales, pero quiero que verifiques la estructura antes de decidir una modificación de esquema.
+
+---
+
+# 5. producto_almacen
+
+Revisa la estructura existente:
+
+producto_almacen
+
+Debe conservar:
+
+* producto_id
+* almacen_id
+* stock_actual
+
+Y su restricción única:
+
+producto_id + almacen_id
+
+No crees otra tabla para stock.
+
+No dupliques el inventario en otra estructura.
+
+No generes registros de stock automáticamente para todos los productos en los seis almacenes.
+
+Un producto debe tener una fila en producto_almacen cuando corresponda a una operación/stock de ese almacén.
+
+---
+
+# 6. productos.stock_actual
+
+Existe actualmente:
+
+productos.stock_actual
+
+NO lo elimines todavía.
+
+NO hagas una migración destructiva.
+
+Analiza todos los usos actuales.
+
+Queremos mantenerlo temporalmente por compatibilidad con las partes antiguas del sistema, pero debe quedar claro que:
+
+productos.stock_actual
+
+NO representa el stock de un almacén específico.
+
+El stock físico por almacén debe estar en:
+
+producto_almacen.stock_actual
+
+Si se considera útil mantener productos.stock_actual como total global de ZENDY, propón cómo sincronizarlo sin crear una segunda fuente independiente de verdad.
+
+NO implementes esa sincronización sin explicarme primero el diseño.
+
+---
+
+# 7. Kardex
+
+Revisa que stock_movimientos pueda representar correctamente:
+
+ENTRADA:
+almacén + producto + cantidad
+
+SALIDA:
+almacén + producto + cantidad
+
+Cada movimiento debe permitir conocer:
+
+saldo_anterior
+cantidad
+saldo_posterior
+
+Ejemplo:
+
+Pimpon tenía 100.
+
+Entrada de 20:
+
+saldo_anterior = 100
+cantidad = 20
+saldo_posterior = 120
+
+Salida de 30:
+
+saldo_anterior = 120
+cantidad = 30
+saldo_posterior = 90
+
+No borres movimientos para corregir stock.
+
+No implementes todavía edición/anulación de operaciones comerciales.
+
+---
+
+# 8. Validación de almacenes
+
+Las operaciones físicas deben aceptar únicamente los seis almacenes ZENDY oficiales.
+
+No aceptar:
+
+* CASADETS
+* PRINCIPAL
+* almacenes arbitrarios
+* almacenes inactivos
+* IDs inexistentes
+
+La validación debe hacerse en backend.
+
+---
+
+# 9. No tocar todavía
+
+En esta fase NO modificar la lógica funcional de:
+
+* VentaController
+* VentaImportController
+* CompraController
+* DevolucionController
+* SalidaAlmacenController
+* importaciones Excel
+
+Aunque hayas identificado problemas allí, solo documenta esos puntos para fases posteriores.
+
+---
+
+# 10. Pruebas de esta fase
+
+Como todavía no hay productos ni stock real, puedes crear pruebas automatizadas o usar una estrategia controlada de prueba que NO contamine la base de datos de desarrollo.
+
+Quiero comprobar conceptualmente y mediante tests que:
+
+### Caso A — Entrada
+
+Producto X + Pimpon + 100
+
+Entrada 20:
+
+Pimpon = 120
+
+Kardex:
+
+100 → +20 → 120
+
+### Caso B — Salida
+
+Desde Pimpon:
+
+120 → -30 → 90
+
+Kardex:
+
+120 → -30 → 90
+
+### Caso C — Stock negativo
+
+Intentar:
+
+90 → -100
+
+Debe rechazarse.
+
+### Caso D — Almacén inválido
+
+Intentar movimiento hacia CASADETS.
+
+Debe rechazarse.
+
+### Caso E — Almacén inexistente
+
+Debe rechazarse.
+
+### Caso F — Concurrencia
+
+Dos operaciones simultáneas sobre el mismo producto y almacén no deben producir stock incorrecto.
+
+Verifica que lockForUpdate() y la transacción funcionen correctamente.
+
+---
+
+# 11. IMPORTANTE SOBRE DATOS
+
+La base de desarrollo actualmente no tiene datos reales.
+
+NO cargues productos reales.
+NO inventes stock inicial.
+NO dejes datos de prueba permanentes.
+
+Si necesitas datos temporales para pruebas automatizadas, utiliza factories/tests/transacciones y asegúrate de que no contaminen la base de desarrollo.
+
+---
+
+# 12. AL FINAL
+
+Entrégame:
+
+1. Archivos modificados.
+2. Archivos solamente auditados pero NO modificados.
+3. Cómo quedó definido el stock por almacén.
+4. Cómo quedó definido el Kardex.
+5. Cómo quedó `InventarioAlmacenService`.
+6. Qué ocurre actualmente con `productos.stock_actual`.
+7. Qué puntos de escritura de stock encontraste.
+8. Pruebas ejecutadas y resultados.
+9. Cualquier decisión arquitectónica que necesite aprobación.
+
+NO continúes automáticamente con la Fase 3.
+
+Primero quiero revisar el resultado de esta fase.
