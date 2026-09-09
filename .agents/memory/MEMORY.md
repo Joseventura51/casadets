@@ -11,4 +11,5 @@
 - [anulado_nc estado](anulado-nc-estado.md) — vales voided via NC get estado=anulado_nc; immutable (guard in recalcularEstado); excluded from all financial queries; static badge in ventas/index; no pago button.
 - [SaldoFavor anulación reversa](saldo-favor-anulacion.md) — annulling a saldo_favor_usado movimiento must restore SaldoFavor.monto_disponible and reverse only the saldo portion of venta.pagado; contrapartida must be tipo=contable not ingreso.
 - [Referencia fiscal exclusion](referencia-fiscal.md) — es_referencia_fiscal=true forces estado='pagado', saldo_pendiente=0, hides pago button, excluded from qVentas/qDetalles in ReporteController; Venta scope noFiscal() for ORM queries.
+- [Inventario ZENDY/CASADETS](inventario-zendy-casadets.md) — proformas are ZENDY→CASADETS vales; non-proforma sales never move physical stock; warehouse is required for physical movements.
 - [Changelog location](.agents/changelog/CHANGELOG.md) — full session-by-session change log at .agents/changelog/CHANGELOG.md; update each session.

@@ -17,9 +17,11 @@
         </p>
     </div>
     <div class="d-flex gap-2">
+        @if(auth()->user()->puedeHacer('productos.editar'))
         <a href="/casadets/productos/{{ $producto->id }}/edit" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-pencil me-1"></i>Editar
         </a>
+        @endif
         <a href="/casadets/productos" class="btn btn-sm btn-outline-secondary">← Productos</a>
     </div>
 </div>
@@ -68,6 +70,7 @@
 
 <div class="row g-3 mb-4">
     {{-- Ajuste de stock --}}
+    @if(auth()->user()->puedeHacer('productos.ajuste'))
     <div class="col-md-5" id="ajuste">
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">
@@ -81,6 +84,17 @@
                 <form action="/casadets/productos/{{ $producto->id }}/ajuste" method="POST" class="row g-2">
                     @csrf
 
+                    <div class="col-12">
+                        <label class="form-label small">Almacén ZENDY <span class="text-danger">*</span></label>
+                        <select name="almacen_id" class="form-select form-select-sm" required>
+                            <option value="">Seleccionar almacén</option>
+                            @foreach($almacenes as $almacen)
+                                <option value="{{ $almacen->id }}" {{ old('almacen_id') == $almacen->id ? 'selected' : '' }}>
+                                    {{ $almacen->codigo }} — {{ $almacen->nombre }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                     <div class="col-12">
                         <label class="form-label small">Tipo de ajuste <span class="text-danger">*</span></label>
                         <select name="tipo" class="form-select form-select-sm" required>
@@ -111,6 +125,13 @@
             </div>
         </div>
     </div>
+    @else
+    <div class="col-md-5">
+        <div class="alert alert-light border small">
+            No tienes permiso para ajustar el inventario.
+        </div>
+    </div>
+    @endif
 
     {{-- Resumen ventas y compras --}}
     <div class="col-md-7">
@@ -225,6 +246,7 @@
                     <th class="text-end">Cantidad</th>
                     <th class="text-end">Precio unit.</th>
                     <th class="text-end">Saldo</th>
+                    <th>Almacén</th>
                     <th>Observación</th>
                 </tr>
             </thead>
@@ -266,11 +288,14 @@
                     <td class="text-end fw-bold {{ $k->saldo_acumulado < 0 ? 'text-danger' : '' }}">
                         {{ number_format($k->saldo_acumulado, 2) }}
                     </td>
+                    <td class="small text-muted">
+                        {{ $k->almacen ? $k->almacen->codigo . ' — ' . $k->almacen->nombre : 'Histórico / sin almacén' }}
+                    </td>
                     <td class="small text-muted">{{ $k->observaciones ?? '' }}</td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">
+                    <td colspan="8" class="text-center text-muted py-4">
                         Sin movimientos de stock.
                         <a href="#ajuste">Ingresa el stock inicial →</a>
                     </td>

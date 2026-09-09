@@ -225,6 +225,19 @@
                         </div>
 
                         <div class="row g-2 mb-3">
+                            @if($venta->afectaInventario())
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold">Almacén de ingreso ZENDY <span class="text-danger">*</span></label>
+                                <select name="almacen_id" class="form-select form-select-sm" required>
+                                    <option value="">Seleccionar almacén</option>
+                                    @foreach($almacenes as $almacen)
+                                        <option value="{{ $almacen->id }}" {{ old('almacen_id') == $almacen->id ? 'selected' : '' }}>
+                                            {{ $almacen->codigo }} — {{ $almacen->nombre }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            @endif
                             <div class="col-12">
                                 <label class="form-label small fw-semibold">Motivo (opcional)</label>
                                 <input type="text"
@@ -253,7 +266,7 @@
                 </div>
                 <div class="card-body">
                     <p class="text-muted small mb-3">
-                        Al anular el vale se devolverá <strong>todo el stock</strong> al inventario y los movimientos financieros quedarán marcados como anulados.
+                         Al anular físicamente el vale se devolverá <strong>todo el stock</strong> al almacén indicado y los movimientos financieros quedarán marcados como anulados.
                         @if((float)$venta->pagado > 0)
                             Como este vale tiene <strong class="text-success">S/ {{ number_format($venta->pagado, 2) }} cobrado</strong>,
                             se generará un <strong>saldo a favor</strong> para el cliente.
@@ -328,6 +341,17 @@
                     </div>
                     @endif
                     <div class="mb-3">
+                        @if($venta->afectaInventario())
+                        <label class="form-label small fw-semibold">Almacén de ingreso ZENDY <span class="text-danger">*</span></label>
+                        <select name="almacen_id" class="form-select form-select-sm" required>
+                            <option value="">Seleccionar almacén</option>
+                            @foreach($almacenes as $almacen)
+                                <option value="{{ $almacen->id }}">{{ $almacen->codigo }} — {{ $almacen->nombre }}</option>
+                            @endforeach
+                        </select>
+                        @endif
+                     </div>
+                     <div class="mb-3">
                         <label class="form-label small fw-semibold">Motivo de anulación (opcional)</label>
                         <input type="text" name="motivo" class="form-control form-control-sm"
                                placeholder="Ej: Error en el pedido, duplicado...">

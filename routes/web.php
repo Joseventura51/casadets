@@ -109,8 +109,8 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
     Route::middleware('rol:ventas')->group(function () {
 
         // ── Sólo lectura ───────────────────────────────────────────────────
-        Route::get('/casadets/ventas',        [VentaController::class, 'index']);
-        Route::get('/casadets/ventas/export', [VentaController::class, 'export']);
+        Route::get('/casadets/ventas',        [VentaController::class, 'index'])->middleware('permiso:ventas.ver');
+        Route::get('/casadets/ventas/export', [VentaController::class, 'export'])->middleware('permiso:ventas.ver');
 
         // ── SUNAT: consulta de RUC / DNI ──────────────────────────────────
         Route::get('/casadets/sunat/consultar',        [\App\Http\Controllers\SunatController::class, 'consultar']);
@@ -137,7 +137,7 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
             ->middleware(['permiso:ventas.importar', 'caja.abierta']);
 
         // ── Wildcard {venta} — sólo lectura ───────────────────────────────
-        Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show']);
+        Route::get('/casadets/ventas/{venta}', [VentaController::class, 'show'])->middleware('permiso:ventas.ver');
 
         // ── Editar venta ───────────────────────────────────────────────────
         Route::get('/casadets/ventas/{venta}/edit',    [VentaController::class, 'edit'])
@@ -145,7 +145,7 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
         Route::put('/casadets/ventas/{venta}',         [VentaController::class, 'update'])
             ->middleware(['permiso:ventas.editar', 'caja.abierta']);
         Route::post('/casadets/ventas/{venta}/estado', [VentaController::class, 'updateEstado'])
-            ->middleware(['permiso:ventas.editar', 'caja.abierta']);
+            ->middleware(['permiso:ventas.anular', 'caja.abierta']);
 
         // ── Eliminar venta ─────────────────────────────────────────────────
         Route::delete('/casadets/ventas/{venta}', [VentaController::class, 'destroy'])
@@ -167,12 +167,12 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
 
     // Devoluciones y Anulaciones
     Route::middleware('rol:devoluciones')->group(function () {
-        Route::get('/casadets/devoluciones',                         [DevolucionController::class, 'index']);
-        Route::get('/casadets/devoluciones/{venta}',                 [DevolucionController::class, 'show']);
+        Route::get('/casadets/devoluciones',                         [DevolucionController::class, 'index'])->middleware('permiso:devoluciones.ver');
+        Route::get('/casadets/devoluciones/{venta}',                 [DevolucionController::class, 'show'])->middleware('permiso:devoluciones.ver');
         Route::post('/casadets/devoluciones/{venta}',                [DevolucionController::class, 'store'])
-            ->middleware('permiso:devoluciones.procesar');
+            ->middleware('permiso:devoluciones.crear');
         Route::post('/casadets/devoluciones/{venta}/anular',         [DevolucionController::class, 'anular'])
-            ->middleware('permiso:devoluciones.procesar');
+            ->middleware('permiso:devoluciones.crear');
     });
 
     // Saldos a favor
@@ -204,13 +204,13 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
 
     // Productos
     Route::middleware('rol:productos')->group(function () {
-        Route::get('/casadets/productos',                    [ProductoController::class, 'index']);
-        Route::get('/casadets/productos/create',             [ProductoController::class, 'create']);
-        Route::post('/casadets/productos',                   [ProductoController::class, 'store']);
-        Route::get('/casadets/productos/{producto}',         [ProductoController::class, 'show']);
-        Route::get('/casadets/productos/{producto}/edit',    [ProductoController::class, 'edit']);
-        Route::put('/casadets/productos/{producto}',         [ProductoController::class, 'update']);
-        Route::post('/casadets/productos/{producto}/ajuste', [ProductoController::class, 'storeAjuste']);
+        Route::get('/casadets/productos',                    [ProductoController::class, 'index'])->middleware('permiso:productos.ver');
+        Route::get('/casadets/productos/create',             [ProductoController::class, 'create'])->middleware('permiso:productos.crear');
+        Route::post('/casadets/productos',                   [ProductoController::class, 'store'])->middleware('permiso:productos.crear');
+        Route::get('/casadets/productos/{producto}',         [ProductoController::class, 'show'])->middleware('permiso:productos.ver');
+        Route::get('/casadets/productos/{producto}/edit',    [ProductoController::class, 'edit'])->middleware('permiso:productos.editar');
+        Route::put('/casadets/productos/{producto}',         [ProductoController::class, 'update'])->middleware('permiso:productos.editar');
+        Route::post('/casadets/productos/{producto}/ajuste', [ProductoController::class, 'storeAjuste'])->middleware('permiso:productos.ajuste');
     });
 
     // Compras

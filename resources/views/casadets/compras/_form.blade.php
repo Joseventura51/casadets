@@ -67,6 +67,18 @@
                     <option value="transferencia" {{ old('metodo_pago', $compra->metodo_pago ?? '') === 'transferencia' ? 'selected' : '' }}>Transferencia</option>
                 </select>
             </div>
+            <div class="col-md-6">
+                <label class="form-label">Almacén ZENDY <span class="text-danger">*</span></label>
+                <select name="almacen_id" id="almacenCompra" class="form-select">
+                    <option value="">Seleccionar almacén</option>
+                    @foreach($almacenes as $almacen)
+                        <option value="{{ $almacen->id }}" {{ old('almacen_id', $compra->almacen_id ?? '') == $almacen->id ? 'selected' : '' }}>
+                            {{ $almacen->codigo }} — {{ $almacen->nombre }}
+                        </option>
+                    @endforeach
+                </select>
+                <div class="form-text">Las compras normales ingresan al inventario de ZENDY. Los gastos operativos no requieren almacén.</div>
+            </div>
             <div class="col-12" id="ventaAsignadaRow" style="display:none;">
                 @php
                     $ventaAsignadaActual = null;

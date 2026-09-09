@@ -14,6 +14,7 @@ class Venta extends Model
     protected $fillable = [
         'vendedor_id',
         'caja_id',
+        'almacen_id',
         'cliente_id',
         'total',
         'ajuste',
@@ -56,6 +57,20 @@ class Venta extends Model
     public function caja(): BelongsTo
     {
         return $this->belongsTo(Caja::class);
+    }
+
+    public function almacen(): BelongsTo
+    {
+        return $this->belongsTo(Almacen::class);
+    }
+
+    /**
+     * En el modelo actual, las proformas representan los vales ZENDY → CASADETS.
+     * Las boletas, facturas y ventas sin tipo son operaciones comerciales de CASADETS.
+     */
+    public function afectaInventario(): bool
+    {
+        return $this->documento_tipo === 'proforma';
     }
 
     public function detalles(): HasMany

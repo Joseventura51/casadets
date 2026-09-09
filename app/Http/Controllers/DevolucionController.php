@@ -11,8 +11,10 @@ use App\Models\SaldoFavor;
 use App\Models\Serie;
 use App\Models\StockMovimiento;
 use App\Models\Venta;
+use App\Models\Almacen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class DevolucionController extends Controller
 {
@@ -106,8 +108,9 @@ class DevolucionController extends Controller
             ->where('venta_id', $venta->id)
             ->orderByDesc('created_at')
             ->get();
+        $almacenes = Almacen::where('empresa', 'zendy')->where('activo', true)->orderBy('id')->get();
 
-        return view('casadets.devoluciones.show', compact('venta', 'yaDevuelto', 'devoluciones'));
+        return view('casadets.devoluciones.show', compact('venta', 'yaDevuelto', 'devoluciones', 'almacenes'));
     }
 
     /* ─── Procesar devolución parcial ────────────────────────────── */
@@ -122,6 +125,12 @@ class DevolucionController extends Controller
             'cantidades'      => 'required|array',
             'cantidades.*'    => 'nullable|numeric|min:0',
             'motivo'          => 'nullable|string|max:255',
+            'almacen_id'      => [
+                'nullable',
+                'integer',
+                Rule::exists('almacenes', 'id')->where(fn ($q) => $q->where('empresa', 'zendy')->where('activo', true)),
+                Rule::requiredIf($venta->afectaInventario()),
+            ],
         ]);
 
         $cantidades = $request->input('cantidades', []);
@@ -168,6 +177,7 @@ class DevolucionController extends Controller
         DB::transaction(function () use ($venta, $lineas, $montoDevuelto, $request) {
             $cajaId  = session('caja_id');
             $empresa = $venta->caja?->empresa ?? session('empresa', 'casadets');
+            $almacenId = $request->input('almacen_id');
 
             // 1. Crear registro de devolución
             $devolucion = Devolucion::create([
@@ -180,6 +190,7 @@ class DevolucionController extends Controller
                 'fecha'          => today(),
                 'empresa'        => $empresa,
                 'caja_id'        => $cajaId,
+                'almacen_id'     => $almacenId,
             ]);
 
             // 2. Detalle de la devolución + stock
@@ -193,10 +204,13 @@ class DevolucionController extends Controller
                     'subtotal'          => $linea['subtotal'],
                 ]);
 
-                // Retornar stock al inventario
-                if ($linea['detalle']->producto_id) {
+                // Solo un vale proforma representa mercadería que salió de
+                // ZENDY. La devolución física debe indicar el almacén de
+                // ingreso; una venta comercial de CASADETS no toca stock.
+                if ($venta->afectaInventario() && $linea['detalle']->producto_id && $almacenId) {
                     StockMovimiento::create([
                         'producto_id'     => $linea['detalle']->producto_id,
+                        'almacen_id'      => $almacenId,
                         'tipo'            => 'entrada',
                         'cantidad'        => $linea['cantidad_devuelta'],
                         'precio_unitario' => $linea['precio_unitario'],
@@ -273,6 +287,12 @@ class DevolucionController extends Controller
 
         $request->validate([
             'motivo' => 'nullable|string|max:255',
+            'almacen_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('almacenes', 'id')->where(fn ($q) => $q->where('empresa', 'zendy')->where('activo', true)),
+                Rule::requiredIf($venta->afectaInventario()),
+            ],
         ]);
 
         DB::transaction(function () use ($venta, $request) {
@@ -280,6 +300,7 @@ class DevolucionController extends Controller
             $venta->load(['detalles', 'caja']);
             $empresa = $venta->caja?->empresa ?? session('empresa', 'casadets');
             $docRef  = $venta->documento_numero ?: '#' . $venta->id;
+            $almacenId = $request->input('almacen_id');
 
             // 1. Crear registro de devolución total
             $devolucion = Devolucion::create([
@@ -292,6 +313,7 @@ class DevolucionController extends Controller
                 'fecha'          => today(),
                 'empresa'        => $empresa,
                 'caja_id'        => $cajaId,
+                'almacen_id'     => $almacenId,
             ]);
 
             // 2. Registrar todos los detalles y retornar stock de los que tienen producto vinculado
@@ -305,9 +327,10 @@ class DevolucionController extends Controller
                     'subtotal'          => (float) $detalle->subtotal,
                 ]);
 
-                if ($detalle->producto_id) {
+                if ($venta->afectaInventario() && $detalle->producto_id && $almacenId) {
                     StockMovimiento::create([
                         'producto_id'     => $detalle->producto_id,
+                        'almacen_id'      => $almacenId,
                         'tipo'            => 'entrada',
                         'cantidad'        => (float) $detalle->cantidad,
                         'precio_unitario' => (float) $detalle->precio_unitario,

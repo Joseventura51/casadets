@@ -10,8 +10,10 @@ use App\Models\Producto;
 use App\Models\StockMovimiento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
+use App\Models\Almacen;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 use App\Services\CajaService;
 use App\Services\ConciliacionService;
 use App\Services\VendedorScope;
@@ -91,7 +93,8 @@ class CompraController extends Controller
         $compra   = new Compra();
         $detallesSeleccionados = [];
         $tiposGasto = Compra::TIPOS_GASTO;
-        return view('casadets.compras.create', compact('facturas', 'compra', 'detallesSeleccionados', 'tiposGasto'));
+        $almacenes = Almacen::where('empresa', 'zendy')->where('activo', true)->orderBy('id')->get();
+        return view('casadets.compras.create', compact('facturas', 'compra', 'detallesSeleccionados', 'tiposGasto', 'almacenes'));
     }
 
     public function store(Request $request)
@@ -111,6 +114,7 @@ class CompraController extends Controller
                 [
                     'monto_total'       => $total,
                     'caja_id'           => session('caja_id'),
+                    'almacen_id'        => $esGastoOperativo ? null : ($data['almacen_id'] ?? null),
                     'es_supuesto'       => $esGastoOperativo ? false : (bool) $request->boolean('es_supuesto'),
                     'tipo_gasto'        => $tipoGasto,
                     'venta_asignada_id' => $ventaAsignadaId,
@@ -132,6 +136,7 @@ class CompraController extends Controller
                 if ($producto) {
                     StockMovimiento::create([
                         'producto_id'    => $producto->id,
+                        'almacen_id'     => $compra->almacen_id,
                         'tipo'           => 'entrada',
                         'cantidad'       => $l['cantidad'],
                         'costo_unitario' => $l['monto_unitario'],
@@ -201,7 +206,8 @@ class CompraController extends Controller
         }
 
         $tiposGasto = Compra::TIPOS_GASTO;
-        return view('casadets.compras.edit', compact('compra', 'facturas', 'detallesSeleccionados', 'tiposGasto'));
+        $almacenes = Almacen::where('empresa', 'zendy')->where('activo', true)->orderBy('id')->get();
+        return view('casadets.compras.edit', compact('compra', 'facturas', 'detallesSeleccionados', 'tiposGasto', 'almacenes'));
     }
 
     public function update(Request $request, Compra $compra)
@@ -220,6 +226,7 @@ class CompraController extends Controller
                 collect($data)->except('lineas')->toArray(),
                 [
                     'monto_total'       => $total,
+                    'almacen_id'        => $esGastoOperativo ? null : ($data['almacen_id'] ?? null),
                     'es_supuesto'       => $esSupuesto,
                     'tipo_gasto'        => $tipoGasto,
                     'venta_asignada_id' => $ventaAsignadaId,
@@ -228,9 +235,23 @@ class CompraController extends Controller
 
             $productoIdsAntes = $compra->lineas()->pluck('producto_id')->filter()->unique();
 
-            StockMovimiento::where('referencia_tipo', 'compra')
+            $movimientosAnteriores = StockMovimiento::where('referencia_tipo', 'compra')
                 ->where('referencia_id', $compra->id)
-                ->delete();
+                ->get();
+            foreach ($movimientosAnteriores as $movimiento) {
+                StockMovimiento::create([
+                    'producto_id'     => $movimiento->producto_id,
+                    'almacen_id'      => $movimiento->almacen_id,
+                    'tipo'            => $movimiento->tipo === 'entrada' ? 'salida' : 'entrada',
+                    'cantidad'        => $movimiento->cantidad,
+                    'costo_unitario'  => $movimiento->costo_unitario,
+                    'precio_unitario' => $movimiento->precio_unitario,
+                    'referencia_tipo' => 'compra_edicion_reversa',
+                    'referencia_id'   => $compra->id,
+                    'fecha'           => today(),
+                    'observaciones'   => 'Compensación por edición de compra #' . $compra->id,
+                ]);
+            }
 
             $compra->lineas()->delete();
 
@@ -248,6 +269,7 @@ class CompraController extends Controller
                 if ($producto) {
                     StockMovimiento::create([
                         'producto_id'    => $producto->id,
+                        'almacen_id'     => $compra->almacen_id,
                         'tipo'           => 'entrada',
                         'cantidad'       => $l['cantidad'],
                         'costo_unitario' => $l['monto_unitario'],
@@ -381,6 +403,7 @@ class CompraController extends Controller
                 'metodo_pago'      => $request->metodo_pago,
                 'observaciones'    => $request->observaciones,
                 'es_supuesto'      => false,
+                'almacen_id'       => $compra->almacen_id,
             ]);
 
             foreach ($compra->lineas as $linea) {
@@ -440,9 +463,23 @@ class CompraController extends Controller
         DB::transaction(function () use ($compra) {
             $productoIds = $compra->lineas()->pluck('producto_id')->filter()->unique();
 
-            StockMovimiento::where('referencia_tipo', 'compra')
+            $movimientosStock = StockMovimiento::where('referencia_tipo', 'compra')
                 ->where('referencia_id', $compra->id)
-                ->delete();
+                ->get();
+            foreach ($movimientosStock as $movimiento) {
+                StockMovimiento::create([
+                    'producto_id'     => $movimiento->producto_id,
+                    'almacen_id'      => $movimiento->almacen_id,
+                    'tipo'            => $movimiento->tipo === 'entrada' ? 'salida' : 'entrada',
+                    'cantidad'        => $movimiento->cantidad,
+                    'costo_unitario'  => $movimiento->costo_unitario,
+                    'precio_unitario' => $movimiento->precio_unitario,
+                    'referencia_tipo' => 'compra_eliminacion_reversa',
+                    'referencia_id'   => $compra->id,
+                    'fecha'           => today(),
+                    'observaciones'   => 'Compensación por eliminación de compra #' . $compra->id,
+                ]);
+            }
 
             // Anular movimiento del ledger (NO borrar — ledger inmutable)
             Movimiento::where('referencia_tipo', 'compra')
@@ -564,7 +601,7 @@ class CompraController extends Controller
             return null;
         }
         return Producto::firstOrCreate(
-            ['nombre' => trim($nombre)],
+            ['nombre' => trim($nombre), 'empresa' => 'zendy'],
             ['precio_costo' => $costoUnitario]
         );
     }
@@ -579,6 +616,12 @@ class CompraController extends Controller
             'metodo_pago'             => 'nullable|string|in:efectivo,transferencia',
             'observaciones'           => 'nullable|string',
             'lineas'                  => 'required|array|min:1',
+            'almacen_id'              => [
+                'nullable',
+                'integer',
+                Rule::exists('almacenes', 'id')->where(fn ($q) => $q->where('empresa', 'zendy')->where('activo', true)),
+                Rule::requiredIf(fn () => !$request->filled('tipo_gasto')),
+            ],
             'lineas.*.producto'       => 'nullable|string|max:255',
             'lineas.*.cantidad'       => 'required|numeric|min:0',
             'lineas.*.monto_unitario' => 'required|numeric|min:0',

@@ -116,6 +116,20 @@
 <form action="/casadets/ventas/import/confirm" method="POST" id="formImport">
     @csrf
     <input type="hidden" name="ventas_json" id="ventasJson">
+    <div class="card border-primary mb-3">
+        <div class="card-body py-3">
+            <label class="form-label fw-semibold mb-1">Almacén ZENDY para las proformas</label>
+            <select name="almacen_id" class="form-select form-select-sm" style="max-width:420px;">
+                <option value="">Seleccionar solo si el archivo contiene proformas</option>
+                @foreach($almacenes as $almacen)
+                    <option value="{{ $almacen->id }}">
+                        {{ $almacen->codigo }} — {{ $almacen->nombre }}
+                    </option>
+                @endforeach
+            </select>
+            <div class="form-text">Las boletas, facturas y notas de crédito importadas no mueven inventario.</div>
+        </div>
+    </div>
 
     <div class="d-flex justify-content-end mb-3">
         <button type="submit" class="btn btn-success px-4">

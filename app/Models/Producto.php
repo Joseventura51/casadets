@@ -50,6 +50,18 @@ class Producto extends Model
             ->value('total') ?? 0.0);
     }
 
+    public function stockEnAlmacen(?int $almacenId): float
+    {
+        if (!$almacenId) {
+            return 0.0;
+        }
+
+        return (float) ($this->stockMovimientos()
+            ->where('almacen_id', $almacenId)
+            ->selectRaw("SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE -cantidad END) as total")
+            ->value('total') ?? 0.0);
+    }
+
     /**
      * Recalcula y persiste stock_actual desde el kardex.
      */

@@ -5,6 +5,28 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-09-09 — FASE 1 de inventario ZENDY/CASADETS
+
+### Corrección: propiedad física, almacenes y trazabilidad del kardex
+
+- Se creó `almacenes` con seis almacenes iniciales de ZENDY y se añadió `almacen_id` a compras, ventas, devoluciones y movimientos de stock.
+- Las proformas representan vales ZENDY → CASADETS y son las únicas ventas que generan salidas de inventario; boletas, facturas y notas de crédito no mueven stock.
+- Compras normales ingresan al almacén ZENDY seleccionado; los gastos operativos no requieren almacén.
+- Las devoluciones físicas solicitan el almacén de ingreso y generan entradas solo para vales proforma. La anulación financiera de una venta no devuelve stock.
+- Se separó la resolución automática de productos por empresa para evitar mezclar productos CASADETS y ZENDY con el mismo nombre.
+- Los ajustes absolutos calculan la diferencia contra el kardex del almacén seleccionado, no contra el caché global.
+- Se aplicaron permisos granulares de consulta, creación, edición, ajuste, vales, almacenes y devoluciones en rutas y vistas de productos.
+- Las ediciones y eliminaciones de compras y ventas conservan el kardex mediante movimientos compensatorios.
+
+### Verificación
+
+- Migración ejecutada correctamente.
+- Vistas Blade compiladas y workflow levantado.
+- La pantalla de login responde correctamente.
+- La prueba unitaria pasa; la prueba Feature base existente sigue fallando porque su caso no migra el esquema SQLite en memoria y busca la tabla `sessions`.
+
+---
+
 ## 2026-08-21 — Filtros de búsqueda en series
 
 ### Mejora: búsqueda y filtros de series de documentos

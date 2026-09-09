@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Producto;
 use App\Models\StockMovimiento;
+use App\Models\Almacen;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ProductoController extends Controller
 {
@@ -32,7 +34,10 @@ class ProductoController extends Controller
 
         $productos = $query->orderBy('nombre')->paginate(50)->withQueryString();
 
-        $stockBajoCount = Producto::where('activo', true)->where('stock_actual', '<=', 0)->count();
+        $stockBajoCount = Producto::where('activo', true)
+            ->where('empresa', 'zendy')
+            ->where('stock_actual', '<=', 0)
+            ->count();
         $totalActivos   = Producto::where('activo', true)->count();
 
         return view('casadets.productos.index', compact('productos', 'stockBajoCount', 'totalActivos'));
@@ -54,9 +59,11 @@ class ProductoController extends Controller
         ]);
 
         // Verificar duplicado por nombre (case-insensitive)
-        $existe = Producto::whereRaw('LOWER(nombre) = ?', [strtolower($data['nombre'])])->exists();
+        $existe = Producto::whereRaw('LOWER(nombre) = ?', [strtolower($data['nombre'])])
+            ->where('empresa', $data['empresa'])
+            ->exists();
         if ($existe) {
-            return back()->withErrors(['nombre' => 'Ya existe un producto con ese nombre.'])->withInput();
+            return back()->withErrors(['nombre' => 'Ya existe un producto con ese nombre en la misma empresa.'])->withInput();
         }
 
         $producto = Producto::create(array_merge($data, [
@@ -73,6 +80,7 @@ class ProductoController extends Controller
     {
         // Kardex ordenado cronológicamente para calcular saldo acumulado
         $kardexRaw = $producto->stockMovimientos()
+            ->with('almacen:id,codigo,nombre')
             ->orderBy('fecha', 'asc')
             ->orderBy('id', 'asc')
             ->get();
@@ -99,8 +107,13 @@ class ProductoController extends Controller
             ->limit(10)
             ->get();
 
+        $almacenes = Almacen::where('empresa', 'zendy')
+            ->where('activo', true)
+            ->orderBy('id')
+            ->get();
+
         return view('casadets.productos.show', compact(
-            'producto', 'kardex', 'ultimasVentas', 'ultimasCompras'
+            'producto', 'kardex', 'ultimasVentas', 'ultimasCompras', 'almacenes'
         ));
     }
 
@@ -122,10 +135,11 @@ class ProductoController extends Controller
 
         // Verificar nombre único (excluyendo este producto)
         $existe = Producto::whereRaw('LOWER(nombre) = ?', [strtolower($data['nombre'])])
+            ->where('empresa', $data['empresa'])
             ->where('id', '!=', $producto->id)
             ->exists();
         if ($existe) {
-            return back()->withErrors(['nombre' => 'Ya existe otro producto con ese nombre.'])->withInput();
+            return back()->withErrors(['nombre' => 'Ya existe otro producto con ese nombre en la misma empresa.'])->withInput();
         }
 
         $producto->update([
@@ -150,13 +164,33 @@ class ProductoController extends Controller
         $data = $request->validate([
             'tipo'         => 'required|in:entrada,salida,ajuste_absoluto',
             'cantidad'     => 'required|numeric|min:0.01',
+            'almacen_id'   => 'required|integer|exists:almacenes,id',
             'observaciones'=> 'nullable|string|max:500',
         ]);
+
+        if ($producto->empresa !== 'zendy') {
+            throw ValidationException::withMessages([
+                'tipo' => 'CASADETS no administra inventario físico. Los ajustes solo aplican a productos de ZENDY.',
+            ]);
+        }
+
+        $almacen = Almacen::where('id', $data['almacen_id'])
+            ->where('empresa', 'zendy')
+            ->where('activo', true)
+            ->first();
+        if (!$almacen) {
+            throw ValidationException::withMessages([
+                'almacen_id' => 'Selecciona un almacén activo de ZENDY.',
+            ]);
+        }
 
         DB::transaction(function () use ($data, $producto) {
             if ($data['tipo'] === 'ajuste_absoluto') {
                 // Ajuste a valor exacto: crear entrada/salida de diferencia
-                $diferencia = round((float) $data['cantidad'] - (float) $producto->stock_actual, 2);
+                $diferencia = round(
+                    (float) $data['cantidad'] - $producto->stockEnAlmacen((int) $data['almacen_id']),
+                    2
+                );
                 if (abs($diferencia) < 0.01) return;
                 $tipo     = $diferencia > 0 ? 'entrada' : 'salida';
                 $cantidad = abs($diferencia);
@@ -167,6 +201,7 @@ class ProductoController extends Controller
 
             StockMovimiento::create([
                 'producto_id'     => $producto->id,
+                'almacen_id'      => $data['almacen_id'],
                 'tipo'            => $tipo,
                 'cantidad'        => $cantidad,
                 'precio_unitario' => $producto->precio_costo ?? 0,

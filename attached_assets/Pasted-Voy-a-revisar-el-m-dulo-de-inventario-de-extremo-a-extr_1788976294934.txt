@@ -1,0 +1,1020 @@
+Voy a revisar el módulo de inventario de extremo a extremo: rutas, controladores, modelos, movimientos de stock, vistas y permisos. Primero localizaré sus puntos de entrada y después seguiré el flujo de existencias, compras y ventas para detectar inconsistencias.
+
+
+
+5 actions
+Ya ubiqué el módulo: “Inventario” está implementado principalmente como Productos + kardex de stock_movimientos, y el stock se modifica desde ajustes, compras, ventas, importaciones y devoluciones. Ahora seguiré esos flujos para comprobar si todos actualizan el kardex de forma consistente y si las restricciones de permisos coinciden con la interfaz.
+
+
+
+16 actions
+La revisión ya muestra un punto importante: el inventario se recalcula desde el kardex, pero hay que distinguir entre eliminar una venta, anularla y devolverla. Voy a comprobar esos estados y también si el control de stock permite vender por debajo de cero o si solo lo alerta visualmente.
+
+
+
+26 actions
+Revisé la sección de inventario y su flujo completo. Actualmente funciona así:
+
+Cómo funciona
+1. Catálogo de productos
+La tabla productos guarda:
+
+Nombre.
+Código.
+Empresa: CASADETS o ZENDY.
+Precio de venta.
+Precio de costo.
+stock_actual.
+Estado activo/inactivo.
+La pantalla /casadets/productos permite buscar y filtrar por empresa, estado y stock bajo.
+
+2. Kardex
+El inventario real se basa en stock_movimientos.
+
+Cada movimiento tiene:
+
+Producto.
+Tipo: entrada o salida.
+Cantidad positiva.
+Costo o precio unitario.
+Referencia: compra, venta, devolución o ajuste.
+Fecha.
+Observación.
+El stock se calcula así:
+
+Entradas - Salidas
+
+El campo productos.stock_actual es un valor cacheado que se recalcula después de las operaciones.
+
+3. Operaciones que afectan stock
+Compra: genera una entrada.
+Venta manual: genera una salida.
+Edición de venta: elimina y vuelve a crear los movimientos de esa venta.
+Importación de ventas: genera salidas, excepto documentos de referencia fiscal.
+Nota de crédito importada: genera una entrada.
+Devolución parcial: genera una entrada.
+Anulación desde devoluciones: genera entradas por todos los productos.
+Ajuste manual: genera entrada, salida o diferencia hasta un stock absoluto.
+Eliminación de venta o compra: elimina sus movimientos de stock y recalcula.
+La pantalla del producto muestra el stock actual, últimas ventas, últimas compras y el kardex completo.
+
+Problemas encontrados
+1. Anular una venta desde el listado no devuelve el stock
+Este es el problema más importante.
+
+La venta se puede marcar como anulado desde:
+
+/casadets/ventas/{venta}/estado
+
+Ese flujo está en VentaController::updateEstado() y solo:
+
+Cambia el estado de la venta.
+Anula los movimientos financieros relacionados.
+No crea ningún movimiento de entrada de inventario.
+
+Además, después de marcarla como anulado, el flujo correcto de devoluciones ya no permite anularla nuevamente para devolver el stock.
+
+Resultado: una venta anulada desde el listado puede dejar el inventario reducido permanentemente.
+
+La anulación desde la sección de devoluciones sí devuelve correctamente el stock, pero existen dos caminos diferentes para anular.
+
+Prioridad: alta.
+
+2. Los productos pueden mezclarse entre CASADETS y ZENDY
+Aunque el producto tiene campo empresa, las operaciones automáticas buscan productos solamente por nombre:
+
+Producto::firstOrCreate(['nombre' => $nombre])
+
+Esto ocurre en:
+
+Ventas manuales.
+Importación de ventas.
+Compras.
+Consecuencias:
+
+Un producto con el mismo nombre en CASADETS y ZENDY se comparte.
+Una compra o venta de ZENDY puede usar un producto creado como CASADETS.
+El inventario queda mezclado entre empresas.
+El campo de filtro por empresa no corrige la mezcla original.
+También la validación manual de productos considera único el nombre globalmente, no por empresa.
+
+Prioridad: alta si ambas empresas manejan inventario separado.
+
+3. El ajuste absoluto usa el stock cacheado
+En ProductoController::storeAjuste(), el ajuste absoluto calcula la diferencia usando:
+
+$producto->stock_actual
+
+Pero la fuente de verdad declarada es el kardex.
+
+Si stock_actual está desactualizado, el ajuste puede quedar incorrecto. Debería calcularse desde:
+
+$producto->stockDesdeKardex()
+
+y luego recalcular el cache.
+
+Prioridad: media.
+
+4. El inventario permite vender con stock negativo
+No encontré validación que impida vender más unidades que las disponibles.
+
+El sistema permite:
+
+Stock actual: 2
+Venta: 5
+Resultado: stock -3
+
+La interfaz solamente marca el producto como stock bajo cuando el valor es menor o igual a cero.
+
+Esto puede ser correcto si se permiten ventas contra inventario futuro, pero actualmente no existe una configuración o advertencia fuerte que diferencie ambos comportamientos.
+
+Prioridad: decisión de negocio.
+
+5. El kardex no conserva movimientos históricos al eliminar
+Al eliminar una venta o compra, se borran físicamente sus movimientos de stock_movimientos.
+
+Eso mantiene el stock numéricamente correcto, pero el kardex pierde el registro histórico de la operación.
+
+Para un inventario auditable sería mejor conservar el movimiento original y crear un movimiento compensatorio de entrada o salida.
+
+Prioridad: media, dependiendo del nivel de auditoría requerido.
+
+6. Los permisos específicos de productos no están aplicados en las rutas
+Existe un catálogo de permisos para:
+
+productos.crear
+productos.editar
+productos.ajuste
+Pero las rutas solamente tienen:
+
+Route::middleware('rol:productos')
+
+No usan permisos específicos para proteger:
+
+Crear producto.
+Editar producto.
+Ajustar stock.
+El rol Cajero tiene acceso al módulo de productos, pero no tiene esos permisos específicos en la configuración predeterminada. Sin embargo, por las rutas actuales podría acceder a esas acciones.
+
+Además, los botones de crear, editar y ajustar aparecen directamente en las vistas sin verificar permisos individuales.
+
+Prioridad: alta en seguridad operativa.
+
+7. El stock es global, no separado por caja
+El kardex no tiene caja_id.
+
+Por tanto, todas las cajas comparten el mismo inventario de cada producto. La caja activa no afecta al stock.
+
+Esto está bien si el inventario es centralizado, pero no si cada caja representa un almacén físico independiente.
+
+Estado actual de los datos
+La base de desarrollo actualmente no tiene datos de inventario:
+
+Productos: 0.
+Movimientos de stock: 0.
+Ventas: 0.
+Compras: 0.
+Diferencias entre stock_actual y el kardex: ninguna.
+Por eso la revisión funcional se basó principalmente en el código y flujo de rutas/controladores, no en datos reales existentes.
+
+Orden recomendado para corregir
+Unificar la anulación de ventas para que siempre revierta el stock.
+Separar la resolución de productos por empresa.
+Aplicar los permisos específicos de productos en rutas y botones.
+Hacer que el ajuste absoluto use el kardex como fuente.
+Decidir si se permiten stocks negativos.
+Definir si el kardex debe ser histórico e inmutable.
+
+Exactamente. Ahora sí queda claro el modelo de negocio. CASADETS no necesita tener inventario ni almacenes. ZENDY es quien maneja físicamente los productos y le entrega mercadería a CASADETS mediante vales de venta.
+
+La relación sería:
+
+                    ZENDY
+             ┌─────────────────┐
+             │ Inventario      │
+             │ 6 almacenes     │
+             └────────┬────────┘
+                      │
+               Vale de venta
+                      │
+                      ▼
+                  CASADETS
+             ┌─────────────────┐
+             │ Ventas          │
+             │ a clientes      │
+             └─────────────────┘
+Ejemplo real
+
+ZENDY tiene:
+
+Almacén 1
+├── Coca Cola: 100
+├── Arroz: 50
+└── Azúcar: 30
+
+ZENDY hace un vale a CASADETS:
+
+VALE DE VENTA #V-00125
+
+Coca Cola    20
+Arroz        10
+Azúcar        5
+
+Origen:
+ZENDY - Almacén 1
+
+Destino:
+CASADETS
+
+Entonces el inventario de ZENDY queda:
+
+Coca Cola   100 → 80
+Arroz        50 → 40
+Azúcar       30 → 25
+
+CASADETS no aumenta su stock.
+
+CASADETS simplemente tiene disponible la mercadería que ZENDY le entregó para realizar sus ventas.
+
+¿Qué pasa cuando CASADETS vende?
+
+Por ejemplo:
+
+CASADETS
+Venta #1635
+
+Coca Cola × 3
+
+Esa venta no debería descontar nuevamente el inventario de ZENDY, porque esas unidades ya salieron del almacén mediante el vale.
+
+Es decir:
+
+ZENDY
+100 Coca Cola
+      │
+      │ Vale: 20
+      ▼
+80 Coca Cola
+      │
+      │ CASADETS vende 3
+      ▼
+ZENDY sigue teniendo 80
+
+CASADETS registra su venta, pero no toca el stock de ZENDY.
+
+Esto cambia una cosa fundamental de la Fase 1
+
+El problema que encontramos originalmente:
+
+"La anulación de una venta debe devolver stock"
+
+ya no necesariamente aplica a las ventas de CASADETS.
+
+Si CASADETS vende 3 unidades que recibió mediante un vale, anular esa venta no debe devolver automáticamente 3 unidades al almacén de ZENDY, porque físicamente esas unidades ya estaban entregadas a CASADETS.
+
+La devolución tendría que ser otro proceso:
+
+CASADETS
+Venta anulada
+     │
+     ▼
+¿Mercadería devuelta?
+     │
+     ├── NO → No modifica inventario ZENDY
+     │
+     └── SÍ → Devolución a ZENDY
+                  │
+                  ▼
+             Almacén correspondiente
+                  │
+                  ▼
+                +3
+
+Esto es mucho más coherente con tu negocio.
+
+Entonces el sistema debería tener 3 conceptos separados
+1. Inventario de ZENDY
+Producto
+   ↓
+Almacén
+   ↓
+Stock
+
+Los 6 almacenes pertenecen a ZENDY.
+
+2. Vales ZENDY → CASADETS
+
+Representan la salida de mercadería de ZENDY hacia CASADETS.
+
+ZENDY Almacén 2
+       │
+       │ Vale
+       ▼
+   CASADETS
+
+El vale descuenta inventario de ZENDY.
+
+3. Ventas de CASADETS
+
+Representan las ventas que CASADETS realiza a sus clientes.
+
+CASADETS
+   │
+   ├── Venta cliente A
+   ├── Venta cliente B
+   └── Venta cliente C
+
+Estas ventas no deben descontar nuevamente el inventario de ZENDY.
+
+Por eso yo modificaría nuestra Fase 1
+🔴 1. Productos por empresa
+
+Sí hay que corregirlo.
+
+Pero ahora la regla es:
+
+ZENDY → productos + inventario
+CASADETS → productos para vender, pero SIN inventario propio
+🔴 2. Permisos
+
+También.
+
+Podríamos tener:
+
+ZENDY
+├── inventario.ver
+├── inventario.ajuste
+├── almacenes.ver
+├── almacenes.entrada
+├── almacenes.salida
+└── vales.crear
+
+CASADETS
+├── ventas.ver
+├── ventas.crear
+├── ventas.editar
+└── ventas.anular
+🔴 3. Anulación
+
+Aquí no debemos modificar todavía el código de anulación hasta revisar cómo están implementados actualmente los vales de venta.
+
+Porque necesitamos determinar:
+
+Vale creado
+    ↓
+¿Descuenta ZENDY?
+    ↓
+¿CASADETS recibe formalmente la mercadería?
+    ↓
+Venta CASADETS
+    ↓
+¿La venta está relacionada con el vale?
+
+Si los vales ya existen en tu proyecto, podemos hacer que sean la verdadera frontera del inventario.
+
+Regla principal:
+
+El inventario termina en ZENDY. El vale mueve mercadería de ZENDY hacia CASADETS. Las ventas de CASADETS no vuelven a afectar el inventario de ZENDY.
+
+Eso evita precisamente el problema de descontar dos veces el mismo producto.
+
+Si quieres que hagamos la Fase 1 correctamente, lo siguiente que revisaría es el código de los vales de venta y cómo están relacionados con ventas, productos y almacenes. Puedes subir el proyecto para que lo revise directamente.
+
+Subir un archivo
+pidele a replit que lo haga
+
+Claro. Te dejo un prompt completo para pegar directamente en Replit Agent, dejando muy claro el funcionamiento de CASADETS, ZENDY, los 6 almacenes y los vales.
+
+Quiero que implementes la FASE 1 de corrección del módulo de inventario de mi sistema Laravel.
+
+IMPORTANTE: antes de modificar código, analiza primero la estructura actual del proyecto, especialmente:
+
+Productos
+Inventario
+stock_movimientos / kardex
+Almacenes
+Vales de venta
+Ventas
+Compras
+Devoluciones
+Usuarios
+Roles y permisos
+Rutas
+Controladores
+Modelos
+Migraciones
+Vistas
+
+NO cambies la arquitectura sin comprobar primero cómo está implementado actualmente.
+
+REGLAS DEL NEGOCIO
+
+El sistema tiene DOS empresas:
+
+1. ZENDY
+
+ZENDY es la empresa que posee y administra el inventario físico.
+
+ZENDY tiene exactamente 6 almacenes.
+
+Todo el stock físico pertenece a ZENDY y está distribuido entre esos 6 almacenes.
+
+2. CASADETS
+
+CASADETS NO tiene almacenes propios y NO debe
+
+pidele a replit que lo haga pero antes ten en cuenta que la empresas es de porcelanatos
+
+Sí. Ese detalle es importante porque no estamos hablando de un inventario genérico, sino de una empresa comercializadora de porcelanatos, donde normalmente importan mucho las unidades, cajas, formatos, modelos, colores, lotes y cantidades.
+
+Para Replit, conviene dejar claro que ZENDY maneja el inventario de porcelanatos en sus 6 almacenes, mientras que CASADETS recibe mercadería mediante vales y realiza las ventas.
+
+Pégale este prompt completo a Replit:
+
+Quiero que implementes la FASE 1 de corrección y mejora del módulo de inventario de mi sistema Laravel.
+
+IMPORTANTE:
+Antes de modificar cualquier código, analiza completamente la implementación actual del proyecto y determina cómo están funcionando actualmente:
+
+Productos
+Inventario
+Kardex / stock_movimientos
+Almacenes
+Vales de venta
+Ventas
+Compras
+Devoluciones
+Usuarios
+Roles
+Permisos
+Rutas
+Controladores
+Modelos
+Migraciones
+Vistas
+
+No quiero que inventes una arquitectura nueva si ya existe una implementación funcional. Primero adapta las correcciones a la estructura existente.
+
+==================================================
+
+CONTEXTO DEL NEGOCIO
+
+==================================================
+
+El negocio se dedica a la comercialización de PORCELANATOS.
+
+Por lo tanto, el sistema debe manejar correctamente productos de porcelanato y su inventario físico.
+
+Existen DOS empresas:
+
+ZENDY
+
+ZENDY es la empresa que posee y administra el inventario físico.
+
+ZENDY tiene exactamente 6 almacenes.
+
+Los productos físicos están almacenados en esos 6 almacenes.
+
+Por lo tanto:
+
+ZENDY
+├── Almacén 1
+├── Almacén 2
+├── Almacén 3
+├── Almacén 4
+├── Almacén 5
+└── Almacén 6
+
+El inventario físico pertenece a ZENDY.
+
+CASADETS
+
+CASADETS NO tiene almacenes propios.
+
+CASADETS se encarga principalmente de realizar ventas a clientes.
+
+ZENDY le entrega mercadería a CASADETS mediante VALES DE VENTA.
+
+Por lo tanto, CASADETS NO debe tener un inventario físico independiente que se descuente directamente con cada venta.
+
+==================================================
+
+FLUJO CORRECTO DEL NEGOCIO
+
+==================================================
+
+El flujo debe entenderse de esta manera:
+
+ZENDY
+↓
+Almacén de ZENDY
+↓
+Vale de venta
+↓
+CASADETS
+↓
+Venta al cliente
+
+El VALE es el movimiento que representa la salida física de mercadería del inventario de ZENDY hacia CASADETS.
+
+Una vez que ZENDY entrega la mercadería mediante el vale, esa mercadería ya salió del inventario de ZENDY.
+
+La venta posterior de CASADETS NO debe volver a descontar ese mismo producto del inventario de ZENDY.
+
+Esto es MUY IMPORTANTE para evitar doble descuento de inventario.
+
+==================================================
+
+EJEMPLO
+
+==================================================
+
+Supongamos:
+
+ZENDY - Almacén 2
+
+Porcelanato modelo "Mármol Blanco"
+Stock: 100 cajas
+
+ZENDY genera un vale para CASADETS:
+
+Vale #V-001
+
+Mármol Blanco: 20 cajas
+
+Entonces:
+
+Stock ZENDY Almacén 2:
+100 → 80
+
+CASADETS recibe esas 20 cajas mediante el vale.
+
+Después CASADETS vende:
+
+Venta #1635
+Mármol Blanco: 5 cajas
+
+Esta venta NO debe hacer:
+
+80 → 75
+
+porque las 20 cajas ya fueron descontadas cuando ZENDY generó el vale.
+
+La venta de CASADETS solamente registra la venta comercial al cliente.
+
+==================================================
+
+FASE 1
+
+==================================================
+
+Necesito que implementes estas tres correcciones principales:
+
+CORREGIR ANULACIÓN DE VENTAS
+CORREGIR PRODUCTOS POR EMPRESA
+CORREGIR PERMISOS
+
+Pero debes hacerlo respetando el flujo de negocio explicado anteriormente.
+
+==================================================
+
+1. ANULACIÓN DE VENTAS
+
+==================================================
+
+Actualmente existe un problema donde una venta puede marcarse como anulada desde:
+
+/casadets/ventas/{venta}/estado
+
+y el flujo puede no coincidir correctamente con la lógica del inventario.
+
+IMPORTANTE:
+
+NO hagas que automáticamente una venta de CASADETS devuelva productos al inventario de ZENDY.
+
+Primero determina si la venta corresponde a mercadería que ya salió de ZENDY mediante un vale.
+
+La anulación de una venta de CASADETS debe afectar el inventario de ZENDY SOLAMENTE si existe una devolución física de mercadería hacia ZENDY.
+
+Es decir:
+
+Venta CASADETS anulada
+↓
+¿La mercadería fue devuelta?
+↓
+NO → No modificar inventario ZENDY
+
+SÍ → Registrar devolución
+↓
+Seleccionar almacén de ZENDY
+↓
+Entrada al inventario
+
+No debe existir un flujo que descuente dos veces o devuelva automáticamente productos que físicamente no regresaron a ZENDY.
+
+Revisa también el flujo existente de devoluciones y unifica los estados para evitar tener dos mecanismos diferentes de anulación.
+
+==================================================
+
+2. PRODUCTOS POR EMPRESA
+
+==================================================
+
+Actualmente se encontró lógica similar a:
+
+Producto::firstOrCreate([
+'nombre' => $nombre
+]);
+
+Esto puede provocar que un producto con el mismo nombre se comparta incorrectamente entre CASADETS y ZENDY.
+
+Corrige la identificación del producto respetando la empresa.
+
+Pero primero analiza cómo está estructurado actualmente el modelo Producto.
+
+La regla debe ser:
+
+Un producto de ZENDY pertenece a ZENDY.
+
+Un producto de CASADETS pertenece a CASADETS si realmente existen productos registrados para esa empresa.
+
+NO mezcles automáticamente productos de ambas empresas solamente porque tienen el mismo nombre.
+
+Ejemplo:
+
+ZENDY:
+Porcelanato Mármol Blanco
+Empresa: ZENDY
+
+CASADETS:
+Porcelanato Mármol Blanco
+Empresa: CASADETS
+
+No deben confundirse si el sistema realmente necesita mantenerlos separados.
+
+Sin embargo, recuerda que CASADETS NO posee inventario físico.
+
+Por lo tanto, NO crees inventario de CASADETS solamente para resolver este problema.
+
+Analiza primero cómo se utilizan actualmente los productos en:
+
+Compras
+Vales
+Ventas
+Importaciones
+Devoluciones
+Kardex
+
+y aplica la corrección sin romper los flujos existentes.
+
+==================================================
+
+3. INVENTARIO Y ALMACENES
+
+==================================================
+
+ZENDY tiene 6 almacenes.
+
+El inventario físico debe poder distinguir:
+
+Producto + Almacén
+
+Ejemplo:
+
+Porcelanato Mármol Blanco
+
+Almacén 1 → 100 cajas
+Almacén 2 → 50 cajas
+Almacén 3 → 80 cajas
+Almacén 4 → 0 cajas
+Almacén 5 → 30 cajas
+Almacén 6 → 120 cajas
+
+NO mezcles los stocks de los seis almacenes.
+
+Antes de modificar esto, verifica si actualmente stock_movimientos ya tiene almacen_id o si existe otra relación con almacenes.
+
+Si actualmente no existe almacen_id en los movimientos, analiza primero las migraciones y relaciones existentes y determina la forma menos invasiva de implementar la trazabilidad por almacén.
+
+NO elimines datos existentes.
+
+==================================================
+
+4. KARDEX
+
+==================================================
+
+El kardex debe permitir determinar de dónde salió o a dónde entró cada producto.
+
+Idealmente cada movimiento debe identificar:
+
+producto
+almacén
+tipo de movimiento
+cantidad
+costo/precio unitario cuando corresponda
+referencia
+referencia_id
+fecha
+observación
+
+Ejemplo:
+
+10/09/2026
+ZENDY - Almacén 2
+Porcelanato Mármol Blanco
+SALIDA
+20 cajas
+Referencia: Vale V-001
+
+Posteriormente:
+
+15/09/2026
+ZENDY - Almacén 2
+Porcelanato Mármol Blanco
+ENTRADA
+5 cajas
+Referencia: Devolución de CASADETS
+
+==================================================
+
+5. PERMISOS
+
+==================================================
+
+Actualmente existen permisos relacionados con productos, por ejemplo:
+
+productos.crear
+productos.editar
+productos.ajuste
+
+Pero las rutas aparentemente utilizan solamente algo similar a:
+
+Route::middleware('rol')
+
+Esto debe corregirse.
+
+Los permisos deben comprobarse realmente en las rutas/controladores correspondientes.
+
+Como mínimo revisar:
+
+productos.ver
+productos.crear
+productos.editar
+productos.ajuste
+
+Y los permisos relacionados con:
+
+inventario.ver
+inventario.ajuste
+almacenes.ver
+almacenes.entrada
+almacenes.salida
+vales.ver
+vales.crear
+vales.editar
+vales.anular
+ventas.ver
+ventas.crear
+ventas.editar
+ventas.anular
+devoluciones.ver
+devoluciones.crear
+
+NO agregues permisos innecesarios si el sistema actual ya tiene una estructura diferente.
+
+Adapta los permisos a la estructura existente.
+
+Además, los botones de las vistas deben respetar los permisos.
+
+Por ejemplo:
+
+Si el usuario no tiene:
+
+productos.crear
+
+no debe aparecer el botón "Nuevo producto".
+
+Si no tiene:
+
+productos.editar
+
+no debe aparecer el botón "Editar".
+
+Si no tiene:
+
+productos.ajuste
+
+no debe aparecer el botón para realizar ajustes.
+
+Pero recuerda que ocultar botones NO es suficiente.
+
+El backend también debe impedir el acceso directo mediante URL.
+
+==================================================
+
+6. CASADETS NO DEBE TENER STOCK
+
+==================================================
+
+Este punto es obligatorio.
+
+NO crees un sistema de stock independiente para CASADETS.
+
+CASADETS:
+
+realiza ventas
+recibe mercadería mediante vales de ZENDY
+no tiene almacenes propios
+no debe descontar nuevamente el inventario de ZENDY al realizar una venta
+
+ZENDY:
+
+tiene los 6 almacenes
+administra el inventario
+recibe compras
+realiza salidas mediante vales
+recibe devoluciones físicas cuando corresponda
+
+==================================================
+
+7. PORCELANATOS
+
+==================================================
+
+Ten en cuenta que los productos son principalmente porcelanatos.
+
+No rompas campos existentes que puedan utilizarse para identificar correctamente los productos.
+
+Revisa especialmente si actualmente existen campos como:
+
+código
+nombre
+descripción
+marca
+modelo
+formato
+color
+acabado
+precio de costo
+precio de venta
+unidad de medida
+cajas
+piezas
+metros cuadrados
+
+NO agregues campos solamente por suponer que son necesarios.
+
+Primero revisa el modelo actual y conserva la estructura existente cuando sea posible.
+
+==================================================
+
+8. STOCK NEGATIVO
+
+==================================================
+
+Durante esta fase NO cambies arbitrariamente la política de stock negativo.
+
+Primero identifica cómo funciona actualmente.
+
+Si actualmente se permiten ventas por encima del stock, documenta el comportamiento.
+
+No cambies esta regla sin analizar primero cómo afectan los vales y las ventas de CASADETS.
+
+==================================================
+
+9. HISTORIAL DEL KARDEX
+
+==================================================
+
+No elimines movimientos históricos sin analizar las consecuencias.
+
+Si actualmente una venta o compra elimina físicamente sus movimientos del kardex, identifica el comportamiento.
+
+Para movimientos que representan operaciones reales de inventario, prioriza mantener trazabilidad mediante movimientos compensatorios cuando sea compatible con la arquitectura actual.
+
+No hagas una migración destructiva.
+
+==================================================
+
+10. PRUEBAS OBLIGATORIAS
+
+==================================================
+
+Después de realizar los cambios, prueba como mínimo estos escenarios:
+
+Prueba 1
+
+Compra de porcelanato para ZENDY.
+
+Debe aumentar el stock del almacén correspondiente.
+
+Prueba 2
+
+Vale de ZENDY hacia CASADETS.
+
+Debe disminuir el stock del almacén de ZENDY.
+
+Prueba 3
+
+Venta de CASADETS.
+
+NO debe volver a descontar el stock de ZENDY.
+
+Prueba 4
+
+Anulación de venta de CASADETS sin devolución física.
+
+NO debe aumentar el stock de ZENDY.
+
+Prueba 5
+
+Devolución física de mercadería de CASADETS hacia ZENDY.
+
+Debe registrar una entrada en el almacén correspondiente.
+
+Prueba 6
+
+Producto con el mismo nombre en ZENDY y CASADETS.
+
+Debe comprobarse que no se mezclen incorrectamente.
+
+Prueba 7
+
+Producto almacenado en dos almacenes diferentes.
+
+Debe mantener stocks independientes.
+
+Prueba 8
+
+Usuario sin permiso de crear productos.
+
+No debe poder crear productos aunque acceda directamente a la URL.
+
+Prueba 9
+
+Usuario sin permiso de ajuste.
+
+No debe poder ejecutar ajustes mediante una petición directa.
+
+Prueba 10
+
+Usuario con permisos completos.
+
+Debe poder realizar las operaciones correspondientes.
+
+==================================================
+
+REGLA PRINCIPAL
+
+==================================================
+
+La lógica final debe respetar siempre:
+
+ZENDY = INVENTARIO + 6 ALMACENES
+
+CASADETS = VENTAS
+
+VALE ZENDY → CASADETS = SALIDA FÍSICA DEL INVENTARIO DE ZENDY
+
+VENTA CASADETS = OPERACIÓN COMERCIAL, NO UNA NUEVA SALIDA DEL INVENTARIO DE ZENDY
+
+DEVOLUCIÓN FÍSICA CASADETS → ZENDY = ENTRADA AL INVENTARIO DE ZENDY
+
+NO quiero doble descuento de inventario.
+
+NO quiero que CASADETS tenga inventario ficticio.
+
+NO quiero que los productos de las dos empresas se mezclen.
+
+NO quiero permisos solamente visuales; deben validarse también en backend.
+
+==================================================
+
+FORMA DE TRABAJO
+
+==================================================
+
+Analiza primero el código existente.
+Identifica exactamente dónde están los problemas.
+Explica brevemente qué archivos vas a modificar y por qué.
+Implementa los cambios.
+Crea o modifica migraciones solamente cuando sea necesario.
+No elimines información existente.
+Mantén compatibilidad con los datos actuales.
+Ejecuta las pruebas disponibles.
+Comprueba rutas y permisos.
+Comprueba los flujos de inventario.
+Al finalizar, dame un resumen de:
+archivos modificados
+migraciones creadas
+cambios realizados
+pruebas ejecutadas
+problemas que todavía queden pendientes
+
+NO avances a una Fase 2.
+
+Concéntrate exclusivamente en esta FASE 1.
+
+Aclara la propiedad de los productos
+Define el flujo completo de entrega

@@ -20,6 +20,7 @@ class Devolucion extends Model
         'fecha',
         'empresa',
         'caja_id',
+        'almacen_id',
     ];
 
     protected $casts = [
@@ -41,6 +42,11 @@ class Devolucion extends Model
     public function caja(): BelongsTo
     {
         return $this->belongsTo(Caja::class);
+    }
+
+    public function almacen(): BelongsTo
+    {
+        return $this->belongsTo(Almacen::class);
     }
 
     public function detalles(): HasMany

@@ -11,6 +11,8 @@ class PermisoCatalog
         'pendientes'     => ['label' => 'Pendientes',                 'grupo' => 'CASADETS'],
         'compras'        => ['label' => 'Compras',                    'grupo' => 'CASADETS'],
         'productos'      => ['label' => 'Productos',                  'grupo' => 'CASADETS'],
+        'inventario'     => ['label' => 'Inventario ZENDY',           'grupo' => 'ZENDY'],
+        'almacenes'      => ['label' => 'Almacenes ZENDY',             'grupo' => 'ZENDY'],
         'clientes'       => ['label' => 'Clientes',                   'grupo' => 'CASADETS'],
         'vendedores'     => ['label' => 'Vendedores',                 'grupo' => 'CASADETS'],
         'saldos-favor'   => ['label' => 'Saldos a favor',            'grupo' => 'CASADETS'],
@@ -44,9 +46,25 @@ class PermisoCatalog
             'clientes.eliminar' => 'Eliminar clientes',
         ],
         'Productos' => [
+            'productos.ver'    => 'Ver productos',
             'productos.crear'  => 'Crear productos',
             'productos.editar' => 'Editar productos',
             'productos.ajuste' => 'Ajustar stock',
+        ],
+        'Inventario ZENDY' => [
+            'inventario.ver'    => 'Ver inventario',
+            'inventario.ajuste' => 'Ajustar inventario',
+        ],
+        'Almacenes ZENDY' => [
+            'almacenes.ver'    => 'Ver almacenes',
+            'almacenes.entrada'=> 'Registrar entradas',
+            'almacenes.salida' => 'Registrar salidas',
+        ],
+        'Vales' => [
+            'vales.ver'    => 'Ver vales',
+            'vales.crear'  => 'Crear vales',
+            'vales.editar' => 'Editar vales',
+            'vales.anular' => 'Anular vales',
         ],
         'Vendedores' => [
             'vendedores.crear'    => 'Crear vendedores',
@@ -69,6 +87,8 @@ class PermisoCatalog
             'saldos.ver_todos' => 'Ver todos los saldos (sin filtro de caja)',
         ],
         'Devoluciones' => [
+            'devoluciones.ver'      => 'Ver devoluciones',
+            'devoluciones.crear'    => 'Registrar devoluciones',
             'devoluciones.procesar' => 'Procesar devoluciones / anulaciones',
         ],
     ];
@@ -76,7 +96,7 @@ class PermisoCatalog
     const DEFAULTS = [
         'Administrador' => [
             'modulos' => [
-                'dashboard','caja','ventas','pendientes','compras','productos',
+                'dashboard','caja','ventas','pendientes','compras','productos','inventario','almacenes',
                 'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy',
                 'reportes','reportes-caja','admin.usuarios','admin.roles','admin.cajas','admin.series',
             ],
@@ -84,31 +104,37 @@ class PermisoCatalog
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',
                 'compras.crear','compras.editar','compras.eliminar',
                 'clientes.crear','clientes.editar','clientes.eliminar',
-                'productos.crear','productos.editar','productos.ajuste',
+                'productos.ver','productos.crear','productos.editar','productos.ajuste',
+                'inventario.ver','inventario.ajuste',
+                'almacenes.ver','almacenes.entrada','almacenes.salida',
+                'vales.ver','vales.crear','vales.editar','vales.anular',
                 'vendedores.crear','vendedores.editar','vendedores.eliminar',
                 'caja.abrir','caja.cerrar',
                 'movimientos.crear',
                 'pendientes.ver_todos',
                 'saldos.crear','saldos.aplicar','saldos.ver_todos',
-                'devoluciones.procesar',
+                'devoluciones.ver','devoluciones.crear','devoluciones.procesar',
             ],
         ],
         'Supervisor' => [
             'modulos' => [
-                'dashboard','caja','ventas','pendientes','compras','productos',
+                'dashboard','caja','ventas','pendientes','compras','productos','inventario','almacenes',
                 'clientes','vendedores','saldos-favor','movimientos','devoluciones','zendy','reportes','reportes-caja',
             ],
             'permisos' => [
                 'ventas.crear','ventas.editar','ventas.eliminar','ventas.importar','ventas.pago',
                 'compras.crear','compras.editar','compras.eliminar',
                 'clientes.crear','clientes.editar','clientes.eliminar',
-                'productos.crear','productos.editar','productos.ajuste',
+                'productos.ver','productos.crear','productos.editar','productos.ajuste',
+                'inventario.ver','inventario.ajuste',
+                'almacenes.ver','almacenes.entrada','almacenes.salida',
+                'vales.ver','vales.crear','vales.editar','vales.anular',
                 'vendedores.crear','vendedores.editar','vendedores.eliminar',
                 'caja.abrir','caja.cerrar',
                 'movimientos.crear',
                 'pendientes.ver_todos',
                 'saldos.crear','saldos.aplicar','saldos.ver_todos',
-                'devoluciones.procesar',
+                'devoluciones.ver','devoluciones.crear','devoluciones.procesar',
             ],
         ],
         'Cajero' => [
@@ -116,12 +142,12 @@ class PermisoCatalog
                 'dashboard','caja','ventas','pendientes','productos','clientes','saldos-favor','devoluciones',
             ],
             'permisos' => [
-                'ventas.crear','ventas.editar','ventas.pago','ventas.importar',
+                'ventas.ver','ventas.crear','ventas.editar','ventas.anular','ventas.pago','ventas.importar',
                 'clientes.crear','clientes.editar',
                 'caja.abrir','caja.cerrar',
                 'pendientes.ver_todos',
                 'saldos.aplicar',
-                'devoluciones.procesar',
+                'devoluciones.ver','devoluciones.crear','devoluciones.procesar',
             ],
         ],
         'Vendedor' => [

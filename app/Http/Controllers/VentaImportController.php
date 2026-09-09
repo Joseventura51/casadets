@@ -6,9 +6,11 @@ use App\Models\Producto;
 use App\Models\StockMovimiento;
 use App\Models\Vendedor;
 use App\Models\Venta;
+use App\Models\Almacen;
 use App\Services\CobranzaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use Carbon\Carbon;
@@ -35,7 +37,9 @@ class VentaImportController extends Controller
         $vendedorDefault = $vendedores->first(fn ($v) => stripos($v->nombre, 'jovi') !== false)
             ?? $vendedores->first();
 
-        return view('casadets.ventas.import', compact('vendedores', 'vendedorDefault'));
+        $almacenes = Almacen::where('empresa', 'zendy')->where('activo', true)->orderBy('id')->get();
+
+        return view('casadets.ventas.import', compact('vendedores', 'vendedorDefault', 'almacenes'));
     }
 
     public function preview(Request $request)
@@ -203,6 +207,7 @@ class VentaImportController extends Controller
         $vendedoresMap = $vendedores->mapWithKeys(fn ($v) => [
             $this->normalizarTexto($v->nombre) => $v->id,
         ])->toArray();
+        $almacenes = Almacen::where('empresa', 'zendy')->where('activo', true)->orderBy('id')->get();
 
         return view('casadets.ventas.import_preview', [
             'grupos'               => $gruposNuevos,
@@ -213,6 +218,7 @@ class VentaImportController extends Controller
             'duplicadosExistentes' => [],
             'omitidos'             => $omitidos,
             'columnasInfo'         => $columnasInfo,
+            'almacenes'            => $almacenes,
         ]);
     }
 
@@ -262,6 +268,21 @@ class VentaImportController extends Controller
             return back()->with('error', 'No hay ventas válidas para importar.');
         }
 
+        $tieneVales = collect($grupos)->contains(function ($g) {
+            $doc = strtoupper(trim($g['doc'] ?? ''));
+            return in_array($doc, ['P', 'PR', 'PROFORMA'], true);
+        });
+
+        $request->validate([
+            'almacen_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('almacenes', 'id')->where(fn ($q) => $q->where('empresa', 'zendy')->where('activo', true)),
+                Rule::requiredIf($tieneVales),
+            ],
+        ]);
+        $almacenIdImportacion = $request->input('almacen_id');
+
         $errores = $this->validarFacturasUnicas($grupos);
         if (!empty($errores)) {
             return back()->with('error', 'No se importó nada. ' . implode(' ', $errores));
@@ -272,7 +293,7 @@ class VentaImportController extends Controller
         $totalCanjeadas     = 0;
         $totalNotasCredito  = 0;
 
-        DB::transaction(function () use ($grupos, &$totalCreadas, &$totalDetalles, &$totalCanjeadas, &$totalNotasCredito) {
+        DB::transaction(function () use ($grupos, $almacenIdImportacion, &$totalCreadas, &$totalDetalles, &$totalCanjeadas, &$totalNotasCredito) {
             $cobranza = app(CobranzaService::class);
             $todosProductosAfectados = [];
 
@@ -375,6 +396,7 @@ class VentaImportController extends Controller
                     'vendedor_id'      => $g['vendedor_id'],
                     'cliente_id'       => $clienteId,
                     'caja_id'          => $cajaIdVenta,
+                    'almacen_id'       => $almacenIdImportacion,
                     'total'            => $totalReal,
                     'estado'           => $estadoInicial,
                     'documento_tipo'   => $tipoDoc,
@@ -383,17 +405,18 @@ class VentaImportController extends Controller
                     'fecha'            => $g['fecha'],
                 ]);
 
-                // Crear detalles
-                // NC usa 'entrada' (devolución), ventas normales y proformas usan 'salida'
-                $tipoMovStock = ($esNC) ? 'entrada' : 'salida';
-                // Facturas/boletas canjeadas (referencia fiscal) NO mueven stock.
-                // Las proformas SÍ mueven stock: son el documento principal de cobranza.
-                $moverStock = !$esCanjeada;
+                // Solo la proforma representa el vale ZENDY → CASADETS.
+                // Boletas, facturas y NC son operaciones comerciales/fiscales:
+                // no deben volver a descontar ni devolver el stock de ZENDY.
+                $moverStock = !$esCanjeada && $tipoDoc === 'proforma';
 
                 $productosDeEstaVenta = [];
                 foreach ($detallesCalc as $d) {
                     $producto = Producto::firstOrCreate(
-                        ['nombre' => trim($d['producto'])],
+                        [
+                            'nombre'  => trim($d['producto']),
+                            'empresa' => $moverStock ? 'zendy' : 'casadets',
+                        ],
                         ['precio_venta' => $d['precio_unitario']]
                     );
 
@@ -413,7 +436,8 @@ class VentaImportController extends Controller
                     if ($moverStock) {
                         StockMovimiento::create([
                             'producto_id'     => $producto->id,
-                            'tipo'            => $tipoMovStock,
+                            'almacen_id'      => $almacenIdImportacion,
+                            'tipo'            => 'salida',
                             'cantidad'        => $d['cantidad'],
                             'precio_unitario' => $d['precio_unitario'],
                             'referencia_tipo' => 'venta',

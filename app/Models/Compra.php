@@ -22,6 +22,7 @@ class Compra extends Model
     protected $fillable = [
         'empresa',
         'caja_id',
+        'almacen_id',
         'documento_tipo',
         'documento_numero',
         'fecha',
@@ -70,6 +71,11 @@ class Compra extends Model
     public function ventaAsignada(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Venta::class, 'venta_asignada_id');
+    }
+
+    public function almacen(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Almacen::class);
     }
 
     /** El registro de ajuste cuando esta compra es el vale supuesto. */

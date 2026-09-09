@@ -115,6 +115,17 @@
                         <input type="text" name="documento_numero" value="{{ old('documento_numero') }}" class="form-control">
                     @endif
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label">Almacén ZENDY <span class="text-danger">*</span> <small class="text-muted">(solo proforma)</small></label>
+                    <select name="almacen_id" class="form-select">
+                        <option value="">No aplica</option>
+                        @foreach($almacenes as $almacen)
+                            <option value="{{ $almacen->id }}" {{ old('almacen_id') == $almacen->id ? 'selected' : '' }}>
+                                {{ $almacen->codigo }} — {{ $almacen->nombre }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
 
                 <div class="col-md-5">
                     <label class="form-label">Observaciones</label>

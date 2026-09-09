@@ -14,9 +14,11 @@
             @endif
         </p>
     </div>
+    @if(auth()->user()->puedeHacer('productos.crear'))
     <a href="/casadets/productos/create" class="btn btn-primary">
         <i class="bi bi-plus-lg me-1"></i>Nuevo producto
     </a>
+    @endif
 </div>
 
 {{-- Filtros --}}
@@ -121,16 +123,20 @@
                         @endif
                     </td>
                     <td class="text-end">
+                        @if(auth()->user()->puedeHacer('productos.editar'))
                         <a href="/casadets/productos/{{ $p->id }}/edit" class="btn btn-xs btn-outline-secondary py-0 px-2" style="font-size:.75rem;">
                             <i class="bi bi-pencil"></i>
                         </a>
+                        @endif
                     </td>
                 </tr>
                 @empty
                 <tr>
                     <td colspan="9" class="text-center text-muted py-4">
                         No se encontraron productos.
+                        @if(auth()->user()->puedeHacer('productos.crear'))
                         <a href="/casadets/productos/create" class="ms-2">Crear el primero →</a>
+                        @endif
                     </td>
                 </tr>
                 @endforelse
