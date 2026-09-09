@@ -1,0 +1,425 @@
+# Resumen de todo lo hablado
+
+## Objetivo original
+
+Implementar correctamente en Laravel:
+
+- Salidas entre almacenes.
+- Transferencias internas.
+- Devoluciones parciales y totales.
+- Anulación de salidas sin eliminar historial.
+- Kardex y stock por almacén.
+- Importación de históricos desde Excel.
+- Integración con productos, compras, ventas y devoluciones existentes.
+
+---
+
+# Modelo real del negocio confirmado
+
+## ZENDY
+
+- Es la propietaria del inventario físico.
+- Tiene exactamente seis almacenes:
+  1. Pimpon
+  2. Casa
+  3. Impacto
+  4. Zapallal
+  5. Luna
+  6. Pizarro
+
+## CASADETS
+
+- No tiene almacenes.
+- No tiene inventario físico independiente.
+- No debe aparecer como almacén en ningún selector.
+- No debe convertirse en almacén virtual.
+- No debe crearse un séptimo almacén.
+- Sus ventas comerciales no deben descontar nuevamente el inventario de ZENDY.
+
+---
+
+# Flujos correctos definidos
+
+## Vale ZENDY → CASADETS
+
+El vale representa la salida física de mercadería desde ZENDY hacia CASADETS.
+
+Ejemplo:
+
+```text
+Pimpon: 100 → 80
+```
+
+El vale descuenta stock una sola vez.
+
+CASADETS no recibe una entrada en un almacén porque no tiene almacén físico dentro del sistema.
+
+## Venta CASADETS → cliente
+
+La venta comercial posterior no debe volver a descontar el stock de ZENDY.
+
+```text
+Pimpon: 80 → 80
+```
+
+No debe ocurrir:
+
+```text
+Pimpon: 80 → 60
+```
+
+## Transferencia interna ZENDY → ZENDY
+
+Debe generar dos movimientos:
+
+```text
+Almacén origen: salida
+Almacén destino: entrada
+```
+
+Ejemplo:
+
+```text
+Pimpon → Casa
+Pimpon: salida
+Casa: entrada
+```
+
+## Devolución física CASADETS → ZENDY
+
+Si CASADETS devuelve cinco unidades y se reciben en Pimpon:
+
+```text
+Pimpon: 80 → 85
+```
+
+Debe ser una operación de inventario independiente de:
+
+- La anulación comercial.
+- La devolución financiera.
+- La caja.
+- Los pagos.
+- Los saldos a favor.
+
+---
+
+# Implementación existente antes de la auditoría
+
+Ya existía una implementación inicial que creó:
+
+- `almacenes`
+- `producto_almacen`
+- `salidas_almacen`
+- `salida_almacen_detalles`
+- `devoluciones_salida`
+- `devolucion_salida_detalles`
+
+También agregó a `stock_movimientos`:
+
+- `almacen_id`
+- `usuario_id`
+- `saldo_anterior`
+- `saldo_posterior`
+
+Y creó:
+
+```text
+InventarioAlmacenService
+SalidaAlmacenController
+AlmacenController
+```
+
+También se agregaron rutas, vistas y permisos para salidas de almacén.
+
+Sin embargo, esa implementación fue genérica y no representa todavía el modelo ZENDY/CASADETS.
+
+---
+
+# Problemas principales encontrados
+
+## 1. `PRINCIPAL` no representa el modelo correcto
+
+La migración actual crea:
+
+```text
+codigo: PRINCIPAL
+nombre: Almacén Principal
+empresa: casadets
+```
+
+Esto contradice que CASADETS no tenga almacenes.
+
+Pero la instrucción explícita es:
+
+- No eliminar `PRINCIPAL`.
+- No cambiarle el nombre.
+- No convertirlo automáticamente en uno de los seis almacenes.
+- Primero auditar sus relaciones.
+- No copiar stock global a los seis almacenes.
+
+## 2. Las ventas actuales descuentan inventario
+
+`VentaController` crea movimientos tipo `salida`.
+
+`VentaImportController` también crea salidas para ventas y proformas importadas.
+
+Esto significa que actualmente una venta CASADETS puede descontar el stock global de ZENDY, lo cual no corresponde al negocio.
+
+## 3. El stock global mezcla operaciones
+
+`Producto::recalcularStock()` suma todos los movimientos de `stock_movimientos`.
+
+No filtra correctamente por:
+
+- Empresa.
+- Almacén.
+- Vale.
+- Venta comercial.
+- Transferencia.
+- Devolución física.
+
+## 4. Los productos se resuelven principalmente por nombre
+
+Ventas, compras e importaciones utilizan lógica similar a:
+
+```php
+Producto::firstOrCreate(['nombre' => $nombre]);
+```
+
+Esto puede mezclar productos con igual nombre pero distinto:
+
+- Código.
+- Empresa.
+- Producto físico.
+
+La resolución debe priorizar:
+
+1. Código.
+2. Empresa.
+3. Nombre como apoyo.
+
+## 5. Las transferencias solo descuentan el origen
+
+`InventarioAlmacenService::registrarSalida()` descuenta el almacén origen, pero no crea entrada en el destino.
+
+El destino queda guardado en la cabecera, pero no recibe stock.
+
+## 6. Las salidas permiten almacenes incorrectos
+
+`SalidaAlmacenController` muestra cualquier almacén activo y acepta cualquier combinación origen/destino.
+
+No restringe a:
+
+```text
+Pimpon
+Casa
+Impacto
+Zapallal
+Luna
+Pizarro
+```
+
+Tampoco impide que CASADETS sea registrado como almacén.
+
+## 7. Las devoluciones comerciales y físicas están mezcladas
+
+`DevolucionController` puede modificar:
+
+- Stock.
+- Caja.
+- Pagos.
+- Saldos a favor.
+- Total de la venta.
+- Movimientos financieros.
+
+Eso no debe confundirse con la devolución física de mercadería a ZENDY.
+
+## 8. Se eliminan movimientos históricos
+
+Editar o eliminar compras y ventas puede borrar movimientos de `stock_movimientos`.
+
+Esto contradice el requisito de conservar el historial.
+
+Las correcciones futuras deberían utilizar movimientos compensatorios o documentos de ajuste, no borrar movimientos históricos.
+
+## 9. Permisos incompletos
+
+Varias acciones dependen del rol del módulo, pero no aplican permisos específicos en backend.
+
+Faltan controles completos para:
+
+- Crear, editar y ajustar productos.
+- Crear, editar y eliminar compras.
+- Crear y anular movimientos.
+- Crear, aplicar y anular saldos a favor.
+- Gestionar almacenes y operaciones de inventario.
+
+---
+
+# Auditoría real de datos realizada
+
+Se verificó que Laravel usa:
+
+```text
+SQLite
+database/database.sqlite
+```
+
+No la base PostgreSQL administrada por Replit.
+
+## Estado actual de la base de desarrollo
+
+| Tabla | Registros |
+|---|---:|
+| `almacenes` | 1 |
+| `producto_almacen` | 0 |
+| `stock_movimientos` | 0 |
+| `productos` | 0 |
+| `ventas` | 0 |
+| `compras` | 0 |
+| `devoluciones` | 0 |
+| `salidas_almacen` | 0 |
+| `devoluciones_salida` | 0 |
+
+El único almacén existente es:
+
+```text
+PRINCIPAL / Almacén Principal / casadets
+```
+
+No existen actualmente:
+
+- Productos.
+- Stock.
+- Movimientos.
+- Ventas.
+- Compras.
+- Devoluciones.
+- Salidas.
+- Transferencias.
+- Saldos en `producto_almacen`.
+
+Por eso, en esta base de desarrollo no hay datos históricos que migrar todavía. Aun así, la lógica debe diseñarse con cuidado para no dañar futuras cargas históricas o datos de otros entornos.
+
+---
+
+# Clasificación de la auditoría
+
+## A. Ya funciona correctamente
+
+Se puede conservar como base:
+
+- La tabla `producto_almacen`.
+- La relación única producto/almacén.
+- Las claves foráneas.
+- El uso de `lockForUpdate()`.
+- La prevención de stock negativo.
+- Los campos `saldo_anterior` y `saldo_posterior`.
+- La separación de salidas y devoluciones de salida.
+- La validación de cantidades devueltas.
+- El uso de transacciones en el servicio de inventario.
+
+## B. Funciona pero debe adaptarse
+
+Debe reutilizarse con cambios:
+
+- `InventarioAlmacenService`.
+- `producto_almacen`.
+- `stock_movimientos`.
+- `productos.stock_actual`.
+- `salidas_almacen`.
+- `devoluciones_salida`.
+- Gestión de almacenes.
+- Ajustes manuales.
+- Compras.
+- Devoluciones físicas.
+- Sistema de permisos.
+
+## C. No cumple el modelo
+
+Debe modificarse posteriormente:
+
+- `PRINCIPAL` creado como almacén CASADETS.
+- Ventas que descuentan inventario.
+- Importaciones que crean salidas globales.
+- Resolución de productos solo por nombre.
+- Ajustes sin almacén.
+- Transferencias sin entrada en destino.
+- Almacenes libres sin restricción.
+- Eliminación de movimientos históricos.
+- Mezcla de devoluciones comerciales y físicas.
+- Falta de una operación explícita de vale ZENDY → CASADETS.
+
+---
+
+# Restricciones acordadas
+
+Todavía no se debe:
+
+- Ejecutar migraciones destructivas.
+- Eliminar `PRINCIPAL`.
+- Cambiar el nombre de `PRINCIPAL`.
+- Copiar el stock global a los seis almacenes.
+- Inventar cantidades iniciales.
+- Crear un séptimo almacén.
+- Convertir CASADETS en almacén.
+- Cambiar todavía la lógica de ventas.
+- Borrar movimientos históricos.
+- Implementar cambios sin aprobar primero el plan.
+
+---
+
+# Plan recomendado después de aprobar la auditoría
+
+## Fase 1: Catálogo y compatibilidad
+
+- Mantener `PRINCIPAL`.
+- Crear los seis almacenes oficiales de ZENDY.
+- Impedir nuevos almacenes fuera de esos seis.
+- Auditar cualquier dato histórico asociado a `PRINCIPAL`.
+
+## Fase 2: Productos e identificación
+
+- Centralizar la resolución de productos.
+- Priorizar código y empresa.
+- Detectar duplicados por nombre/código.
+- Evitar mezclar productos ZENDY y CASADETS.
+
+## Fase 3: Inventario por almacén
+
+- Usar únicamente los seis almacenes ZENDY.
+- Exigir almacén en operaciones físicas nuevas.
+- Mantener compatibilidad con movimientos históricos sin almacén.
+
+## Fase 4: Transferencias internas
+
+- Crear salida en origen.
+- Crear entrada en destino.
+- Mantener ambas operaciones dentro de una misma transacción.
+
+## Fase 5: Vales
+
+- Separar el vale físico de la venta comercial.
+- Descontar una sola vez desde ZENDY.
+- Registrar CASADETS como destino externo, no como almacén.
+
+## Fase 6: Ventas CASADETS
+
+- Evitar que las ventas comerciales descuenten stock ZENDY.
+- Mantener la información comercial y financiera separada del inventario físico.
+
+## Fase 7: Devoluciones físicas
+
+- Crear recepción física desde CASADETS.
+- Elegir el almacén ZENDY receptor.
+- Generar entrada de stock.
+- No modificar caja ni saldos automáticamente.
+
+## Fase 8: Historial y permisos
+
+- Dejar de borrar movimientos históricos.
+- Usar movimientos compensatorios.
+- Aplicar permisos específicos en backend.
+- Crear pruebas de concurrencia, duplicación y consistencia.
+
+Hasta este punto solo se realizó auditoría y análisis. No se han implementado nuevas migraciones ni modificaciones sobre este modelo.

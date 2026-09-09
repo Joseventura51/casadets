@@ -1,0 +1,887 @@
+# CONTEXTO COMPLETO DEL PROYECTO — CASADETS / ZENDY
+
+Voy a continuar el desarrollo de un sistema Laravel existente. Antes de modificar código, necesito que entiendas completamente el modelo de negocio y la arquitectura actual.
+
+## 1. TECNOLOGÍA DEL PROYECTO
+
+El proyecto es una aplicación web desarrollada con:
+
+* Laravel 12.55.1
+* PHP 8.2.12
+* Base de datos actualmente utilizada por Laravel: SQLite
+* Proyecto administrado mediante Git/Replit
+* Existe un módulo de inventario que ya tiene una base funcional.
+
+IMPORTANTE:
+
+NO quiero reconstruir el sistema desde cero.
+
+Quiero adaptar y mejorar el código existente, reutilizando las estructuras que ya funcionan y evitando duplicar sistemas.
+
+Antes de modificar código debes inspeccionar el proyecto real.
+
+---
+
+# 2. MODELO DE NEGOCIO
+
+La empresa trabaja con PORCELANATOS.
+
+Existen DOS empresas:
+
+### ZENDY
+
+ZENDY es la empresa que posee y controla físicamente el inventario.
+
+ZENDY tiene exactamente 6 almacenes:
+
+1. Pimpon
+2. Casa
+3. Impacto
+4. Zapallal
+5. Luna
+6. Pizarro
+
+Estos son los únicos almacenes operativos permitidos.
+
+### CASADETS
+
+CASADETS es principalmente la empresa/canal comercial que realiza ventas a clientes.
+
+CASADETS:
+
+* NO es un almacén.
+* NO tiene almacén propio.
+* NO es un almacén virtual.
+* NO es un séptimo almacén.
+* NO debe aparecer como almacén en los selectores de inventario.
+* NO debe tener stock físico independiente dentro del sistema.
+
+La frontera del inventario físico es ZENDY y sus seis almacenes.
+
+---
+
+# 3. MODELO DE INVENTARIO
+
+El inventario físico debe representarse como:
+
+PRODUCTO + ALMACÉN ZENDY + CANTIDAD
+
+Por ejemplo:
+
+Producto: Porcelanato X
+
+Pimpon: 50
+Casa: 20
+Impacto: 10
+Zapallal: 30
+Luna: 15
+Pizarro: 5
+
+Total físico ZENDY: 130
+
+No se debe duplicar el stock global en cada almacén.
+
+Si existe:
+
+stock_actual = 130
+
+NO significa:
+
+Pimpon = 130
+Casa = 130
+Impacto = 130
+Zapallal = 130
+Luna = 130
+Pizarro = 130
+
+Eso sería incorrecto.
+
+---
+
+# 4. FLUJO MÁS IMPORTANTE DEL NEGOCIO
+
+## VALE ZENDY → CASADETS
+
+ZENDY entrega físicamente mercadería a CASADETS mediante un VALE.
+
+El vale representa la salida física del inventario de ZENDY.
+
+Ejemplo:
+
+Pimpon tiene 100 unidades.
+
+Se genera:
+
+VALE ZENDY → CASADETS
+Cantidad: 20
+Almacén origen: Pimpon
+
+Resultado:
+
+Pimpon:
+100 → 80
+
+CASADETS NO recibe una entrada en un almacén porque CASADETS no es un almacén.
+
+---
+
+# 5. VENTA CASADETS → CLIENTE
+
+Después CASADETS puede vender esas mercaderías a sus clientes.
+
+Ejemplo:
+
+CASADETS vende 20 unidades.
+
+El inventario ZENDY debe permanecer:
+
+Pimpon = 80
+
+NO debe ocurrir:
+
+80 → 60
+
+La salida física ya ocurrió cuando se creó el vale.
+
+Por tanto:
+
+VALE = movimiento físico de inventario.
+
+VENTA CASADETS = operación comercial.
+
+Son conceptos diferentes.
+
+---
+
+# 6. TRANSFERENCIAS INTERNAS ZENDY
+
+Una transferencia entre almacenes de ZENDY es diferente de un vale.
+
+Ejemplo:
+
+Pimpon → Casa
+
+Si Pimpon tiene 100 y se transfieren 20:
+
+Pimpon:
+100 → 80
+
+Casa:
+50 → 70
+
+La transferencia debe generar:
+
+1. SALIDA del almacén origen.
+2. ENTRADA al almacén destino.
+
+Ambos movimientos deben pertenecer a la misma transferencia y ejecutarse de forma segura dentro de una transacción.
+
+CASADETS nunca participa como almacén en una transferencia interna.
+
+---
+
+# 7. DEVOLUCIÓN FÍSICA CASADETS → ZENDY
+
+Si CASADETS devuelve físicamente mercadería a ZENDY, debe existir una operación específica de devolución física.
+
+Ejemplo:
+
+CASADETS devuelve 5 unidades.
+
+Las recibe físicamente Pimpon.
+
+Pimpon:
+
+80 → 85
+
+Esta operación:
+
+* Sí modifica inventario.
+* Sí genera una entrada física.
+* Debe indicar el almacén ZENDY receptor.
+
+Pero NO debe automáticamente:
+
+* modificar caja,
+* crear saldo a favor,
+* modificar pagos,
+* modificar el total comercial de una venta,
+* confundirse con una devolución financiera.
+
+La devolución física y la devolución comercial pueden estar relacionadas, pero son operaciones conceptualmente distintas.
+
+---
+
+# 8. ANULACIÓN DE UNA VENTA
+
+Regla importante:
+
+Si CASADETS anula una venta pero la mercadería NO vuelve físicamente a ZENDY:
+
+NO modificar el inventario ZENDY.
+
+Ejemplo:
+
+Pimpon = 80
+
+Se anula una venta de CASADETS.
+
+Pimpon sigue:
+
+80
+
+Si posteriormente la mercadería vuelve físicamente a ZENDY:
+
+Debe registrarse una DEVOLUCIÓN FÍSICA.
+
+Ejemplo:
+
+Pimpon:
+
+80 → 85
+
+No se debe asumir que una anulación comercial significa automáticamente que la mercadería regresó físicamente.
+
+---
+
+# 9. ESTADO ACTUAL DE LA BASE DE DATOS
+
+Se realizó una auditoría completa antes de modificar el proyecto.
+
+La base SQLite que actualmente utiliza Laravel está prácticamente vacía.
+
+Registros actuales:
+
+almacenes: 1
+productos: 0
+producto_almacen: 0
+stock_movimientos: 0
+ventas: 0
+venta_detalles: 0
+compras: 0
+compra_lineas: 0
+devoluciones: 0
+devolucion_detalles: 0
+salidas_almacen: 0
+salida_almacen_detalles: 0
+devoluciones_salida: 0
+devolucion_salida_detalles: 0
+
+El único almacén existente actualmente es:
+
+ID: 1
+Código: PRINCIPAL
+Nombre: Almacén Principal
+Empresa: casadets
+Activo: Sí
+
+NO hay productos ni movimientos asociados.
+
+---
+
+# 10. IMPORTANTE SOBRE PRINCIPAL
+
+Actualmente existe:
+
+PRINCIPAL / Almacén Principal / casadets
+
+Esto NO representa el modelo real.
+
+Sin embargo:
+
+NO eliminarlo todavía.
+NO renombrarlo todavía.
+NO convertirlo automáticamente en Pimpon.
+NO copiar su stock a los seis almacenes.
+
+Actualmente está vacío, pero podría existir en otras bases/entornos con información histórica.
+
+Antes de modificarlo hay que comprobar:
+
+1. Registros relacionados.
+2. Stock asociado.
+3. Movimientos relacionados.
+4. Movimientos históricos sin almacén.
+5. Relaciones con ventas/compras/salidas.
+6. Si algún dato puede asociarse de forma segura a un almacén real.
+
+Si no se puede determinar el almacén real de un registro histórico, no inventar la ubicación.
+
+---
+
+# 11. ESTRUCTURAS EXISTENTES
+
+Ya existen estas estructuras:
+
+## almacenes
+
+Campos principales:
+
+id
+codigo
+nombre
+empresa
+activo
+observaciones
+
+## producto_almacen
+
+Campos:
+
+id
+producto_id
+almacen_id
+stock_actual
+created_at
+updated_at
+
+Tiene restricción única:
+
+producto_id + almacen_id
+
+Esta estructura es útil y debe conservarse.
+
+## stock_movimientos
+
+Campos:
+
+id
+producto_id
+tipo
+cantidad
+costo_unitario
+precio_unitario
+referencia_tipo
+referencia_id
+fecha
+observaciones
+created_at
+updated_at
+almacen_id
+usuario_id
+saldo_anterior
+saldo_posterior
+
+almacen_id actualmente puede ser NULL por compatibilidad histórica.
+
+## productos
+
+Campos relevantes:
+
+id
+nombre
+codigo
+precio_venta
+precio_costo
+stock_actual
+activo
+empresa
+
+---
+
+# 12. SERVICIO DE INVENTARIO EXISTENTE
+
+Existe:
+
+app/Services/InventarioAlmacenService.php
+
+Actualmente utiliza bloqueo de filas mediante:
+
+lockForUpdate()
+
+y tiene lógica para:
+
+* mover stock,
+* registrar salidas,
+* anular salidas,
+* registrar devoluciones.
+
+Esta estructura debe reutilizarse.
+
+NO crear un segundo sistema paralelo de inventario.
+
+El objetivo debe ser convertir este servicio en el punto central para las operaciones físicas de inventario.
+
+---
+
+# 13. PROBLEMAS ENCONTRADOS EN LA AUDITORÍA
+
+Actualmente existen varios problemas que deben corregirse progresivamente.
+
+### Problema 1 — Ventas descuentan stock
+
+VentaController actualmente crea:
+
+stock_movimiento = salida
+
+Esto es incorrecto para una venta comercial de CASADETS.
+
+Debe distinguirse:
+
+VALE = salida física ZENDY.
+
+VENTA CASADETS = operación comercial sin nueva salida de ZENDY.
+
+---
+
+### Problema 2 — Compras no indican almacén
+
+CompraController crea entradas sin almacén.
+
+Para inventario físico de ZENDY, una compra debe poder identificar el almacén receptor.
+
+No asumir automáticamente CASADETS.
+
+---
+
+### Problema 3 — Importación Excel
+
+VentaImportController actualmente crea movimientos según el documento.
+
+También puede resolver productos principalmente por nombre.
+
+Debe revisarse para distinguir:
+
+* venta comercial,
+* vale,
+* nota de crédito,
+* devolución física.
+
+No modificarlo sin analizar primero el formato real de Excel.
+
+---
+
+### Problema 4 — Productos identificados por nombre
+
+Actualmente existen métodos como:
+
+resolverProducto()
+
+y lógica equivalente a:
+
+firstOrCreate(['nombre' => $nombre])
+
+Esto es peligroso.
+
+Un producto debe resolverse preferentemente mediante:
+
+1. Código/SKU.
+2. Empresa.
+3. Nombre como apoyo.
+
+No mezclar productos ZENDY y CASADETS que tengan el mismo nombre.
+
+Idealmente crear un resolver centralizado.
+
+---
+
+### Problema 5 — Stock global
+
+Producto tiene:
+
+stock_actual
+
+y Producto.php contiene:
+
+stockDesdeKardex()
+recalcularStock()
+
+Actualmente se suman movimientos sin distinguir adecuadamente:
+
+* empresa,
+* almacén,
+* vale,
+* transferencia,
+* venta comercial.
+
+Debe definirse correctamente el stock físico ZENDY.
+
+---
+
+### Problema 6 — Movimientos sin almacén
+
+Actualmente algunas operaciones crean stock_movimientos sin almacén.
+
+El modelo actual tiene compatibilidad que puede asociarlos funcionalmente con PRINCIPAL.
+
+Eso no debe utilizarse para operaciones nuevas.
+
+Las nuevas operaciones físicas deben indicar explícitamente uno de los seis almacenes ZENDY.
+
+---
+
+### Problema 7 — Transferencias
+
+Actualmente salidas_almacen registra origen y destino, pero el servicio solo descuenta el origen.
+
+Esto es incorrecto para una transferencia interna ZENDY → ZENDY.
+
+Debe existir:
+
+SALIDA origen
++
+ENTRADA destino
+
+dentro de la misma operación/transacción.
+
+---
+
+### Problema 8 — Devoluciones
+
+Actualmente devolución comercial puede afectar simultáneamente:
+
+* inventario,
+* caja,
+* pagos,
+* saldos a favor,
+* movimientos financieros.
+
+Esto debe separarse conceptualmente de la devolución física CASADETS → ZENDY.
+
+---
+
+### Problema 9 — Creación libre de almacenes
+
+AlmacenController actualmente permite crear/editar almacenes de forma demasiado abierta.
+
+El sistema debe impedir:
+
+* crear CASADETS como almacén,
+* crear un séptimo almacén,
+* usar empresas arbitrarias para inventario.
+
+Los únicos almacenes operativos son:
+
+Pimpon
+Casa
+Impacto
+Zapallal
+Luna
+Pizarro
+
+---
+
+### Problema 10 — Historial
+
+Actualmente ventas y compras pueden eliminar y recrear movimientos de stock.
+
+También pueden eliminar movimientos al eliminar documentos.
+
+Esto no es ideal para un Kardex auditable.
+
+A futuro, las correcciones deberían utilizar movimientos compensatorios en lugar de destruir el historial.
+
+NO implementar esto todavía sin planificar la migración correctamente.
+
+---
+
+# 14. REGLA DEL KARDEX
+
+Debe existir un único sistema de Kardex.
+
+No crear un segundo Kardex paralelo.
+
+El Kardex debe poder responder:
+
+* qué producto,
+* qué almacén,
+* qué cantidad,
+* qué operación,
+* qué documento,
+* quién hizo la operación,
+* cuándo,
+* saldo anterior,
+* saldo posterior.
+
+Las operaciones físicas deben pasar por el servicio central.
+
+---
+
+# 15. PERMISOS
+
+Actualmente existen permisos por módulos y algunos permisos específicos.
+
+Se debe mejorar el control backend.
+
+No basta con ocultar botones.
+
+Un usuario sin permiso tampoco debe poder ejecutar directamente la URL.
+
+Deben revisarse permisos como:
+
+productos.crear
+productos.editar
+productos.ajuste
+
+compras.crear
+compras.editar
+compras.eliminar
+
+inventario.almacenes.ver
+inventario.almacenes.crear
+inventario.almacenes.editar
+
+inventario.transferencias.crear
+inventario.transferencias.anular
+
+inventario.vales.crear
+
+inventario.devoluciones.crear
+
+Los permisos deben validarse en backend.
+
+También revisar User::puedeVer() y User::puedeHacer(), porque actualmente existe un fallback basado en el nombre del rol que podría permitir acciones aunque el permiso haya sido retirado.
+
+---
+
+# 16. ARCHIVOS IMPORTANTES A REVISAR
+
+Antes de implementar, inspecciona especialmente:
+
+app/Models/Producto.php
+
+app/Models/StockMovimiento.php
+
+app/Services/InventarioAlmacenService.php
+
+app/Http/Controllers/VentaController.php
+
+app/Http/Controllers/CompraController.php
+
+app/Http/Controllers/VentaImportController.php
+
+app/Http/Controllers/ProductoController.php
+
+app/Http/Controllers/DevolucionController.php
+
+app/Http/Controllers/SalidaAlmacenController.php
+
+app/Http/Controllers/AlmacenController.php
+
+Modelos relacionados con:
+
+Producto
+Venta
+VentaDetalle
+Compra
+CompraLinea
+Almacen
+StockMovimiento
+SalidaAlmacen
+Devolucion
+
+También revisar:
+
+routes/web.php
+
+migraciones relacionadas con inventario
+
+middleware de permisos/roles
+
+vistas de inventario
+
+vistas de almacenes
+
+---
+
+# 17. OBJETIVO FINAL DEL MÓDULO
+
+Quiero terminar con un sistema de inventario profesional para una empresa de porcelanatos.
+
+Debe poder manejar:
+
+### INVENTARIO
+
+Dashboard
+Stock por almacén
+Kardex
+Ajustes
+Compras/entradas
+Transferencias internas
+Vales ZENDY → CASADETS
+Devoluciones físicas CASADETS → ZENDY
+Reportes
+
+### ALMACENES
+
+Solo:
+
+Pimpon
+Casa
+Impacto
+Zapallal
+Luna
+Pizarro
+
+### EMPRESAS
+
+ZENDY = propietaria del inventario físico.
+
+CASADETS = empresa/canal comercial.
+
+---
+
+# 18. PRUEBAS OBLIGATORIAS
+
+Antes de considerar terminada cualquier fase deben probarse como mínimo:
+
+1. Vale ZENDY → CASADETS descuenta stock una sola vez.
+
+2. Venta CASADETS → cliente NO descuenta nuevamente stock ZENDY.
+
+3. Anulación comercial sin devolución física NO cambia stock ZENDY.
+
+4. Devolución física CASADETS → Pimpon aumenta stock Pimpon.
+
+5. Transferencia Pimpon → Casa disminuye Pimpon y aumenta Casa.
+
+6. La transferencia no modifica el stock total ZENDY.
+
+7. CASADETS nunca aparece como almacén.
+
+8. No se puede crear un séptimo almacén operativo.
+
+9. Productos con mismo nombre pero distinto código/empresa no se mezclan.
+
+10. Usuario sin permiso no puede ejecutar acciones protegidas directamente por URL.
+
+11. Una importación repetida no duplica movimientos.
+
+12. Las operaciones concurrentes no producen stock incorrecto.
+
+13. Los movimientos deben conservar saldo anterior y saldo posterior.
+
+---
+
+# 19. REGLAS QUE NO DEBES ROMPER
+
+NO reconstruyas todo el sistema.
+
+NO crees un segundo sistema de inventario.
+
+NO crees un segundo Kardex.
+
+NO conviertas CASADETS en almacén.
+
+NO crees un séptimo almacén.
+
+NO copies stock global a los seis almacenes.
+
+NO inventes stock inicial.
+
+NO renombres PRINCIPAL sin analizarlo.
+
+NO elimines PRINCIPAL sin analizarlo.
+
+NO elimines movimientos históricos.
+
+NO hagas migraciones destructivas.
+
+NO hagas que una venta CASADETS vuelva a descontar ZENDY.
+
+NO asumas que anular una venta significa devolución física.
+
+NO mezcles devolución comercial con devolución física.
+
+NO uses nombre como única identificación del producto.
+
+NO implementes todo de golpe.
+
+---
+
+# 20. FORMA DE TRABAJO
+
+Quiero trabajar por fases.
+
+Primero:
+
+AUDITORÍA
+
+Después:
+
+DISEÑO / PLAN DE MIGRACIÓN
+
+Después:
+
+IMPLEMENTACIÓN DE UNA FASE PEQUEÑA
+
+Después:
+
+PRUEBAS
+
+Después:
+
+SIGUIENTE FASE
+
+No quiero que ejecutes una gran cantidad de cambios automáticamente.
+
+Primero explícame qué vas a cambiar y por qué.
+
+Si una migración puede afectar datos existentes, detente y explícame el riesgo antes de ejecutarla.
+
+---
+
+# 21. PRIMERA TAREA
+
+Esta conversación comienza desde cero.
+
+Por lo tanto, NO asumas que conoces el estado actual del proyecto.
+
+Primero inspecciona el código y la base de datos real disponible en este entorno.
+
+Quiero que hagas una auditoría inicial enfocada en:
+
+* inventario,
+* productos,
+* almacenes,
+* stock,
+* Kardex,
+* ventas,
+* compras,
+* vales,
+* transferencias,
+* devoluciones,
+* empresas,
+* permisos.
+
+No modifiques código todavía.
+
+No ejecutes migraciones.
+
+No elimines datos.
+
+Al finalizar, entrégame:
+
+### A. Lo que ya funciona.
+
+### B. Lo que funciona pero necesita adaptación.
+
+### C. Lo que no cumple el modelo.
+
+Para cada problema indica:
+
+* archivo,
+* método,
+* tabla,
+* comportamiento actual,
+* comportamiento esperado,
+* riesgo,
+* solución propuesta.
+
+Después de eso revisaremos juntos la Fase 1 antes de permitir cambios.
+
+Este modelo de negocio es definitivo:
+
+ZENDY = propietario del inventario físico.
+
+Pimpon, Casa, Impacto, Zapallal, Luna y Pizarro = únicos almacenes ZENDY.
+
+CASADETS = canal/empresa comercial, NO almacén.
+
+VALE ZENDY → CASADETS = salida física de inventario.
+
+VENTA CASADETS → CLIENTE = operación comercial, NO nueva salida de inventario.
+
+TRANSFERENCIA ZENDY → ZENDY = salida origen + entrada destino.
+
+DEVOLUCIÓN FÍSICA CASADETS → ZENDY = entrada al almacén ZENDY receptor.
