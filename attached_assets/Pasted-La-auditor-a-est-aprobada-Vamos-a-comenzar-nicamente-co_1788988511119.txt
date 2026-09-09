@@ -1,0 +1,175 @@
+La auditoría está aprobada.
+
+Vamos a comenzar únicamente con la FASE 1: estructura base de almacenes ZENDY.
+
+IMPORTANTE:
+La base de datos está prácticamente vacía y no contiene datos reales del negocio.
+Las migraciones de inventario todavía están pendientes.
+
+Quiero que implementes SOLO esta fase.
+
+### OBJETIVO
+
+Dejar preparada la estructura de almacenes para el modelo real:
+
+ZENDY posee exactamente estos 6 almacenes físicos:
+
+1. Pimpon
+2. Casa
+3. Impacto
+4. Zapallal
+5. Luna
+6. Pizarro
+
+CASADETS NO es un almacén y nunca debe aparecer como almacén de inventario.
+
+### CAMBIOS REQUERIDOS
+
+#### 1. Migración de almacenes
+
+Modifica:
+
+database/migrations/2026_08_21_000001_create_almacenes_and_salidas_almacen.php
+
+para que:
+
+* NO cree `PRINCIPAL`.
+* NO cree un almacén CASADETS.
+* NO copie `productos.stock_actual` hacia ningún almacén.
+* Cree únicamente los seis almacenes oficiales de ZENDY.
+* Los almacenes tengan empresa `zendy`.
+* Mantenga las claves foráneas y estructura necesarias para el Kardex.
+* Los códigos deben ser únicos y consistentes.
+
+Usa códigos claros y estables para los seis almacenes. Antes de decidir códigos diferentes a los nombres, revísalos y explícame cuáles utilizarás.
+
+#### 2. No inventar stock
+
+No crees productos.
+No crees stock.
+No copies `productos.stock_actual`.
+No generes movimientos Kardex.
+
+La tabla `producto_almacen` debe quedar vacía después de la migración porque todavía no tenemos stock inicial real.
+
+#### 3. Migración de cajas y series
+
+Revisa:
+
+database/migrations/2026_08_21_000002_add_almacen_to_cajas_and_series.php
+
+Elimina la lógica que intenta asignar automáticamente las cajas a `PRINCIPAL`.
+
+NO asignes automáticamente las cajas existentes a ningún almacén.
+
+La relación caja → almacén debe quedar nullable/opcional cuando corresponda.
+
+Las series relacionadas con operaciones físicas deberán poder trabajar posteriormente con un almacén ZENDY válido, pero NO inventes asignaciones ahora.
+
+#### 4. Modelo Almacen
+
+Revisa:
+
+app/Models/Almacen.php
+
+Asegúrate de que sus relaciones sean compatibles con:
+
+* producto_almacen
+* stock_movimientos
+* salidas_almacen
+* devoluciones_salida
+
+No crees un segundo sistema de inventario.
+
+#### 5. AlmacenController
+
+Revisa:
+
+app/Http/Controllers/AlmacenController.php
+
+En esta fase NO necesito todavía toda la lógica de inventario.
+
+Pero sí quiero evitar que el backend permita crear libremente almacenes que contradigan el modelo.
+
+Debe quedar preparado para que posteriormente:
+
+* CASADETS no pueda ser creado como almacén.
+* No se pueda crear un séptimo almacén operativo.
+* Los almacenes operativos pertenezcan a ZENDY.
+* No se pueda cambiar arbitrariamente un almacén ZENDY a CASADETS.
+
+No confíes únicamente en ocultar botones de la interfaz; las reglas importantes deben validarse en backend.
+
+### MUY IMPORTANTE SOBRE PRINCIPAL
+
+No renombres `PRINCIPAL`.
+No conviertas `PRINCIPAL` en Pimpon.
+No lo uses como almacén temporal.
+
+En la base actual `PRINCIPAL` todavía no existe porque la migración está pendiente.
+
+Simplemente corrige la migración para que nunca sea creado.
+
+### SERVICIO DE INVENTARIO
+
+No hagas todavía la implementación completa de transferencias, vales o devoluciones.
+
+Solo verifica que:
+
+app/Services/InventarioAlmacenService.php
+
+pueda trabajar posteriormente con los seis almacenes ZENDY y que no tenga una dependencia obligatoria de `PRINCIPAL`.
+
+No crees otro servicio de inventario.
+
+### PRUEBAS
+
+Antes de ejecutar cualquier migración destructiva, verifica que no existan datos reales que puedan verse afectados.
+
+Después de realizar los cambios, ejecuta únicamente las migraciones necesarias en el entorno de desarrollo.
+
+Comprueba:
+
+1. Existen exactamente 6 almacenes.
+2. Los seis pertenecen a ZENDY.
+3. No existe PRINCIPAL.
+4. No existe CASADETS como almacén.
+5. No existen almacenes adicionales.
+6. `producto_almacen` está vacío.
+7. `stock_movimientos` continúa vacío.
+8. No se creó stock ficticio.
+9. Las cajas NO fueron asignadas automáticamente a un almacén.
+10. Las relaciones y claves foráneas funcionan.
+
+### NO HACER TODAVÍA
+
+No modificar todavía:
+
+* VentaController
+* VentaImportController
+* CompraController
+* DevolucionController
+* lógica de ventas
+* lógica de compras
+* importación Excel
+* devoluciones físicas
+* devoluciones comerciales
+* transferencias
+* ajustes
+* Kardex completo
+* permisos completos
+
+Esas serán fases posteriores.
+
+### AL FINAL
+
+Entrégame:
+
+1. Archivos modificados.
+2. Cambios realizados.
+3. Migraciones ejecutadas.
+4. Resultado de las pruebas.
+5. Estado final de los seis almacenes.
+6. Cualquier problema o decisión que deba aprobar antes de continuar con la Fase 2.
+
+No continúes automáticamente con la Fase 2.

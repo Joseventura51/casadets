@@ -19,6 +19,11 @@ class Almacen extends Model
         return $this->hasMany(ProductoAlmacen::class);
     }
 
+    public function movimientosStock(): HasMany
+    {
+        return $this->hasMany(StockMovimiento::class);
+    }
+
     public function productos(): BelongsToMany
     {
         return $this->belongsToMany(Producto::class, 'producto_almacen')
@@ -34,5 +39,10 @@ class Almacen extends Model
     public function salidasDestino(): HasMany
     {
         return $this->hasMany(SalidaAlmacen::class, 'almacen_destino_id');
+    }
+
+    public function devolucionesRecepcion(): HasMany
+    {
+        return $this->hasMany(DevolucionSalida::class, 'almacen_recepcion_id');
     }
 }

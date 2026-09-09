@@ -13,7 +13,7 @@ return new class extends Migration
             $table->id();
             $table->string('codigo', 50)->unique();
             $table->string('nombre');
-            $table->string('empresa')->default('casadets');
+            $table->string('empresa')->default('zendy');
             $table->boolean('activo')->default(true);
             $table->text('observaciones')->nullable();
             $table->timestamps();
@@ -96,26 +96,60 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        // El stock global existente se considera inicialmente ubicado en el
-        // almacén principal. Los movimientos históricos quedan intactos.
-        $almacenId = DB::table('almacenes')->insertGetId([
-            'codigo' => 'PRINCIPAL',
-            'nombre' => 'Almacén Principal',
-            'empresa' => 'casadets',
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
+        // Catálogo operativo inicial de ZENDY.
+        // No se crea ningún almacén para CASADETS y no se copia stock global:
+        // la base comienza sin inventario físico inicial.
+        $ahora = now();
+        DB::table('almacenes')->insert([
+            [
+                'codigo' => 'PIMPON',
+                'nombre' => 'Pimpon',
+                'empresa' => 'zendy',
+                'activo' => true,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ],
+            [
+                'codigo' => 'CASA',
+                'nombre' => 'Casa',
+                'empresa' => 'zendy',
+                'activo' => true,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ],
+            [
+                'codigo' => 'IMPACTO',
+                'nombre' => 'Impacto',
+                'empresa' => 'zendy',
+                'activo' => true,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ],
+            [
+                'codigo' => 'ZAPALLAL',
+                'nombre' => 'Zapallal',
+                'empresa' => 'zendy',
+                'activo' => true,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ],
+            [
+                'codigo' => 'LUNA',
+                'nombre' => 'Luna',
+                'empresa' => 'zendy',
+                'activo' => true,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ],
+            [
+                'codigo' => 'PIZARRO',
+                'nombre' => 'Pizarro',
+                'empresa' => 'zendy',
+                'activo' => true,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ],
         ]);
-
-        DB::table('productos')->orderBy('id')->eachById(function ($producto) use ($almacenId) {
-            DB::table('producto_almacen')->insert([
-                'producto_id' => $producto->id,
-                'almacen_id' => $almacenId,
-                'stock_actual' => $producto->stock_actual ?? 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        });
     }
 
     public function down(): void

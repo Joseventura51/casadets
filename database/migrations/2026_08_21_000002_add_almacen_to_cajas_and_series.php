@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -18,11 +17,6 @@ return new class extends Migration
             $table->foreignId('almacen_id')->nullable()->after('caja_id')
                 ->constrained('almacenes')->nullOnDelete();
         });
-
-        $principal = DB::table('almacenes')->where('codigo', 'PRINCIPAL')->value('id');
-        if ($principal) {
-            DB::table('cajas')->whereNull('almacen_id')->update(['almacen_id' => $principal]);
-        }
     }
 
     public function down(): void
