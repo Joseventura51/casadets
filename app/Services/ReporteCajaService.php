@@ -92,13 +92,12 @@ class ReporteCajaService
 
     private static function recopilarDatos(CajaSesion $sesion, ?Caja $caja, \Carbon\Carbon $fecha): array
     {
-        $desde = $fecha->toDateString();
         [$inicioSesion, $finSesion] = self::limitesSesion($sesion, $fecha);
 
-        // Movimientos — acotados al rango temporal de esta sesión específica
-        // para que múltiples sesiones del mismo día no se mezclen en el reporte.
+        // Movimientos — acotados al rango temporal real de esta sesión.
+        // No filtrar por la fecha de negocio: una sesión puede cruzar medianoche
+        // y debe incluir todo lo registrado hasta su cierre.
         $movQuery = Movimiento::with('cliente:id,nombre')
-            ->whereDate('movimientos.fecha', $desde)
             ->where('movimientos.created_at', '>=', $inicioSesion)
             ->where('movimientos.created_at', '<=', $finSesion);
         if ($caja) {
@@ -113,7 +112,6 @@ class ReporteCajaService
         // apertura, pero cobradas aquí, se agregan más abajo a partir de sus
         // movimientos de pago.
         $ventasQuery = Venta::with(['vendedor', 'cliente', 'detalles'])
-            ->whereDate('ventas.fecha', $desde)
             ->where('ventas.created_at', '>=', $inicioSesion)
             ->where('ventas.created_at', '<=', $finSesion);
         if ($caja) {
@@ -247,7 +245,6 @@ class ReporteCajaService
         // La fecha de negocio no distingue dos sesiones del mismo día; created_at
         // delimita la devolución al turno que realmente la registró.
         $devQuery = Devolucion::with(['venta:id,documento_tipo,documento_numero', 'user:id,name'])
-            ->whereDate('devoluciones.fecha', $desde)
             ->where('devoluciones.created_at', '>=', $inicioSesion)
             ->where('devoluciones.created_at', '<=', $finSesion);
         if ($caja) {

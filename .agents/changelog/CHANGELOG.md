@@ -5,6 +5,13 @@ Formato: `[YYYY-MM-DD] Área — Descripción`
 
 ---
 
+## 2026-09-09 — Reportes de caja que cruzan medianoche
+
+- Los reportes ahora delimitan movimientos, ventas y devoluciones por el inicio y cierre reales de la sesión, sin excluir registros del día siguiente por su fecha calendario.
+- Se validó el flujo completo en una base SQLite temporal: cierre automático de una sesión vencida, generación del Excel e inclusión de un movimiento registrado después de medianoche.
+
+---
+
 ## 2026-08-22 — Display de detalle de cuentas por pagar
 
 - Se reorganizó el detalle de cada factura en pestañas de Pagos y letras y Documentos.
