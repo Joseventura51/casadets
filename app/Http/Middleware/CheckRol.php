@@ -12,21 +12,47 @@ class CheckRol
     {
         $user = $request->user();
 
-        // Usuario no autenticado
         if (!$user) {
             return redirect()->route('login');
         }
 
-        // Verificar permisos
         foreach ($modulos as $modulo) {
-
             if ($user->puedeVer($modulo)) {
                 return $next($request);
             }
         }
 
-        // Usuario autenticado pero sin permisos
+        foreach ($this->permisosDeLaRuta($request) as $permiso) {
+            if ($user->puedeHacer($permiso)) {
+                return $next($request);
+            }
+        }
+
         return redirect('/')
-            ->with('error', 'No tienes permisos para acceder a esta sección.');
+            ->with('error', 'No tienes permisos para acceder a esta seccion.');
+    }
+
+    private function permisosDeLaRuta(Request $request): array
+    {
+        $route = $request->route();
+        if (!$route) {
+            return [];
+        }
+
+        $permisos = [];
+        foreach ($route->gatherMiddleware() as $middleware) {
+            if (!str_starts_with($middleware, 'permiso:')) {
+                continue;
+            }
+
+            foreach (explode(',', substr($middleware, strlen('permiso:'))) as $permiso) {
+                $permiso = trim($permiso);
+                if ($permiso !== '') {
+                    $permisos[] = $permiso;
+                }
+            }
+        }
+
+        return array_values(array_unique($permisos));
     }
 }
