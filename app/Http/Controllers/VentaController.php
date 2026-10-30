@@ -765,15 +765,17 @@ class VentaController extends Controller
                 }
             }
 
-            if ($imagenesFallidas > 0){
-                $msg .= "Atencion: el pago si se registro pero {$imagenesFallidas} imagenes no se pudieron. ";           
-            }
+           
 
             $cobradas = $result['ventas_cobradas'];
             $total    = count($result['ventas_actualizadas']);
             $msg      = "Pago registrado: {$cobradas} de {$total} ventas quedaron pagadas.";
             if ($result['sobrante'] > 0) {
                 $msg .= ' Sobrante S/ ' . number_format($result['sobrante'], 2) . ' no aplicado (ventas sin cliente para saldo a favor).';
+            }
+            
+             if ($imagenesFallidas > 0){
+                $msg .= "Atencion: el pago si se registro pero {$imagenesFallidas} imagenes no se pudieron. ";           
             }
 
             return redirect('/casadets/pendientes')->with('success', $msg);
