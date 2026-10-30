@@ -174,6 +174,7 @@ class VentaController extends Controller
             'detalles.compras.lineas', 'detalles.producto',
             'devoluciones',
             'pagosAplicados.archivos',
+            'saldosFavorOrigen.pago.archivos',
             'nubefactComprobante',
         ]);
         return view('casadets.ventas.show', compact('venta'));
@@ -579,6 +580,11 @@ class VentaController extends Controller
                 return back()->withErrors(['error' => $e->getMessage()])->withInput();
             }
 
+            $imagenesFallidas = $this->guardarEvidenciasPago($request, $result['pago'] ?? null);
+            $msgEvidencias = $imagenesFallidas > 0
+                ? "No se pudieron guardar {$imagenesFallidas} evidencia(s)."
+                : null;
+
             $cobradas = $result['ventas_cobradas'];
             $total    = count($result['ventas_actualizadas']);
             $msg      = "Pago registrado: {$cobradas} de {$total} vales quedaron pagados.";
@@ -594,9 +600,13 @@ class VentaController extends Controller
                     'saldo_favor'     => 0,
                     'saldo_pendiente' => 0,
                     'msg_saldo_favor' => $msg,
+                    'msg_evidencias'  => $msgEvidencias,
                 ]);
             }
 
+            if ($msgEvidencias) {
+                $msg .= ' ' . $msgEvidencias;
+            }
             return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
         }
 
@@ -606,21 +616,13 @@ class VentaController extends Controller
             $data['estado_manual'] ?? null
         );
 
-        // ── Guardar evidencias de pago si se subieron archivos ──────────
         $pago = $result['pago'] ?? null;
-        if ($pago && $request->hasFile('evidencias')) {
-            $archivoService = app(\App\Services\CobranzaArchivoService::class);
-            foreach ($request->file('evidencias') as $file) {
-                try {
-                    $archivoService->guardar($file, $pago, auth()->id());
-                } catch (\Throwable $e) {
-                    \Log::warning('CobranzaArchivo: no se pudo guardar evidencia', [
-                        'pago_id' => $pago->id,
-                        'error'   => $e->getMessage(),
-                    ]);
-                }
-            }
-        }
+        $imagenesFallidas = $this->guardarEvidenciasPago($request, $pago);
+        $msgEvidencias = $imagenesFallidas > 0
+            ? ($pago
+                ? "No se pudieron guardar {$imagenesFallidas} evidencia(s)."
+                : "No se guardaron {$imagenesFallidas} evidencia(s) porque no se creó un pago.")
+            : null;
 
         if ($request->expectsJson()) {
             return response()->json([
@@ -632,6 +634,7 @@ class VentaController extends Controller
                 'msg_saldo_favor' => $result['saldo_favor'] > 0
                     ? 'Se generó un saldo a favor de S/ ' . number_format($result['saldo_favor'], 2)
                     : null,
+                'msg_evidencias'  => $msgEvidencias,
             ]);
         }
 
@@ -639,7 +642,42 @@ class VentaController extends Controller
         if ($result['saldo_favor'] > 0) {
             $msg .= ' Se generó un saldo a favor de S/ ' . number_format($result['saldo_favor'], 2) . '.';
         }
+        if ($msgEvidencias) {
+            $msg .= ' ' . $msgEvidencias;
+        }
         return redirect('/casadets/ventas/' . $venta->id)->with('success', $msg);
+    }
+
+    private function guardarEvidenciasPago(Request $request, ?\App\Models\Pago $pago): int
+    {
+        $archivos = $request->file('evidencias', []);
+        if (empty($archivos)) {
+            return 0;
+        }
+
+        if (!$pago) {
+            \Log::warning('No se guardaron evidencias porque la solicitud no creó un pago.', [
+                'cantidad' => count($archivos),
+            ]);
+            return count($archivos);
+        }
+
+        $archivoService = app(\App\Services\CobranzaArchivoService::class);
+        $fallidas = 0;
+
+        foreach ($archivos as $file) {
+            try {
+                $archivoService->guardar($file, $pago, auth()->id());
+            } catch (\Throwable $e) {
+                $fallidas++;
+                \Log::warning('CobranzaArchivo: no se pudo guardar evidencia', [
+                    'pago_id' => $pago->id,
+                    'error'   => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $fallidas;
     }
 
     /* ─── Reducción de sobrante ─────────────────────────────────── */

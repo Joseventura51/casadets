@@ -85,6 +85,11 @@ class Venta extends Model
                     ->withTimestamps();
     }
 
+    public function saldosFavorOrigen(): HasMany
+    {
+        return $this->hasMany(SaldoFavor::class, 'venta_origen_id');
+    }
+
     // ── Scopes ───────────────────────────────────────────────────────────────
 
     /** Excluye referencias fiscales de cualquier cálculo financiero */

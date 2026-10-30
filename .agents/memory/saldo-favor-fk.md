@@ -14,4 +14,5 @@ Previously, duplicate-conversion detection and NC filtering used `descripcion LI
 - `convertirNC()`: check duplicate via `SaldoFavor::where('venta_origen_id', $venta->id)->exists()`.
 - `registrarPago()` excedente: always set `venta_origen_id = $venta->id` when creating SaldoFavor.
 - `saldosCliente` JSON: derive `tipo_origen` from `venta_origen_id` + `ventaOrigen->documento_tipo`, not from description string.
+- Sale-detail evidence must also include `SaldoFavor.pago_id` for saldo favors originating from that sale; an overpayment on an already-paid sale may have no `detalle_pago_factura` row.
 - Model has `ventaOrigen()` BelongsTo and `esDeNC()` helper.

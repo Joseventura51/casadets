@@ -940,8 +940,11 @@ document.getElementById('formPago').addEventListener('submit', async (e) => {
         });
         const json = await res.json();
         if (json.success) {
-            const extra = json.msg_saldo_favor ? ' ' + json.msg_saldo_favor : '';
-            showToast('Pago guardado correctamente.' + extra, 'success');
+            const extras = [json.msg_saldo_favor, json.msg_evidencias].filter(Boolean).join(' ');
+            showToast(
+                'Pago guardado correctamente.' + (extras ? ' ' + extras : ''),
+                json.msg_evidencias ? 'warning' : 'success'
+            );
             setTimeout(() => { window.location.href = '/casadets/ventas/' + VENTA_ID; }, 1600);
         } else {
             const errs = json.errors

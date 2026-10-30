@@ -459,7 +459,10 @@
 
 {{-- ── Evidencias de pago ─────────────────────────────────────── --}}
 @php
-    $todosLosArchivos = $venta->pagosAplicados
+    $pagosConEvidencia = $venta->pagosAplicados
+        ->concat($venta->saldosFavorOrigen->pluck('pago')->filter())
+        ->unique('id');
+    $todosLosArchivos = $pagosConEvidencia
         ->flatMap(fn($p) => $p->archivos ?? collect());
 @endphp
 @if($todosLosArchivos->count() > 0)
