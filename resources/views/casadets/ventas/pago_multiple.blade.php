@@ -156,12 +156,12 @@
                             id="evidencias"
                             name="evidencias[]"
                             class="form-control"
-                            accept=".jpg,.jpeg,.png,.pdf"
+                            accept=".jpg,.jpeg,.png,.webp"
                             multiple
                         >
 
                         <small class="text-muted d-block mt-1">
-                        Puedes subir imágenes o PDF de los comprobantes de pago. Tamaño máximo por archivo: 5MB.
+                        imágenes JPG, PNG o WEBP 
                         </small>
                     </div>
 

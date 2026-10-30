@@ -764,7 +764,10 @@ class VentaController extends Controller
                     }
                 }
             }
-            
+
+            if ($imagenesFallidas > 0){
+                $msg .= "Atencion: el pago si se registro pero {$imagenesFallidas} imagenes no se pudieron. ";           
+            }
 
             $cobradas = $result['ventas_cobradas'];
             $total    = count($result['ventas_actualizadas']);
