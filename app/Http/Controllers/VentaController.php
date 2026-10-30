@@ -746,6 +746,25 @@ class VentaController extends Controller
                 $data['ventas'],
                 $data['pagos']
             );
+            $imagenesFallidas = 0;
+            if ($request->hasFile('evidencias') && isset($result['pago'])){
+                $archivoService = app(\App\Services\CobranzaArchivoService::class);
+                foreach ($request->file('evidencias') as $file) {
+                    try {
+                        $archivoService->guardar(
+                            $file,
+                            $result['pago'],
+                            auth()->id()
+                        );
+            } catch (\Throwable $e) {
+                        $imagenesFallidas++;
+                        \Log::warning('No se pudo guardar evidencia de pago múltiple', [
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+            
 
             $cobradas = $result['ventas_cobradas'];
             $total    = count($result['ventas_actualizadas']);
