@@ -30,7 +30,13 @@ class CobranzaArchivoService
         // Convertir a WebP con GD
         $webpContent = $this->convertirAWebp($file->getRealPath(), $extension);
 
-        Storage::disk('public')->put($ruta, $webpContent);
+        $guardado =Storage::disk('public')->put($ruta, $webpContent);
+
+        if (!$guardado) {
+            throw new \RuntimeException(
+                'No se pudo guardar el archivo de evidencia en el almacenamiento.'
+            );
+        }
 
         $tamano = strlen($webpContent);
 
