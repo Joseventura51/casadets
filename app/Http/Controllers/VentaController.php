@@ -719,6 +719,8 @@ class VentaController extends Controller
             'pagos.*.metodo'      => 'required|in:ninguno,efectivo,tarjeta,yape,plin,transferencia',
             'pagos.*.monto'       => 'required|numeric|min:0',
             'pagos.*.descripcion' => 'nullable|string|max:200',
+            'evidencias'          => 'nullable|array|max:10',
+            'evidencias.*'        => 'file|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
 
         $cajasIds = VendedorScope::cajaIds();

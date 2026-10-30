@@ -94,7 +94,7 @@
 
     {{-- Formulario de pago --}}
     <div class="col-md-6">
-        <form id="formPagoMultiple" action="/casadets/ventas/pago-multiple" method="POST">
+        <form id="formPagoMultiple" action="/casadets/ventas/pago-multiple" method="POST" enctype="multipart/form-data">
             @csrf
             {{-- Ventas seleccionadas (hidden) --}}
             @foreach($ventas as $v)
@@ -147,6 +147,23 @@
                     <button type="button" class="btn-add-pago" id="btnAgregarPago">
                         <i class="bi bi-plus-lg me-1"></i> Agregar método de pago
                     </button>
+                    <div class="mt-3 p-3 border rounded bg-light">
+                        <label for="evidencias" class="form-label fw-semibold small mb-1">
+                            Evidencias del pago
+                        </label>
+                        <input
+                            type="file"
+                            id="evidencias"
+                            name="evidencias[]"
+                            class="form-control"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            multiple
+                        >
+
+                        <small class="text-muted d-block mt-1">
+                        Puedes subir imágenes o PDF de los comprobantes de pago. Tamaño máximo por archivo: 5MB.
+                        </small>
+                    </div>
 
                     {{-- Resumen distribución (simulación FIFO) --}}
                     <div class="mt-3 p-3 bg-light rounded" id="simulacionFIFO">
