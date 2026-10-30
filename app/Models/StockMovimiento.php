@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use InvalidArgumentException;
 
 class StockMovimiento extends Model
 {
@@ -33,6 +34,35 @@ class StockMovimiento extends Model
         'costo_unitario'  => 'decimal:2',
         'precio_unitario' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $movimiento): void {
+            self::validarAlmacenFisico($movimiento);
+        });
+
+        static::updating(function (self $movimiento): void {
+            if ($movimiento->isDirty('almacen_id')) {
+                self::validarAlmacenFisico($movimiento);
+            }
+        });
+    }
+
+    private static function validarAlmacenFisico(self $movimiento): void
+    {
+        if (!$movimiento->almacen_id) {
+            throw new InvalidArgumentException(
+                'Todo movimiento físico nuevo debe indicar un almacén ZENDY.'
+            );
+        }
+
+        $almacen = Almacen::query()->find($movimiento->almacen_id);
+        if (!$almacen || !$almacen->esOficialActivo()) {
+            throw new InvalidArgumentException(
+                'El almacén del movimiento no pertenece al catálogo oficial activo de ZENDY.'
+            );
+        }
+    }
 
     public function producto(): BelongsTo
     {

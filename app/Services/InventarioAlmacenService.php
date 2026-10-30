@@ -30,61 +30,98 @@ class InventarioAlmacenService
         ?float $precioUnitario = null,
         bool $permitirStockNegativo = false
     ): StockMovimiento {
-        if (!in_array($tipo, ['entrada', 'salida'], true)) {
-            throw new RuntimeException('El tipo de movimiento de almacén no es válido.');
-        }
-        if ($cantidad <= 0) {
-            throw new RuntimeException('La cantidad del movimiento debe ser mayor que cero.');
-        }
+        return DB::transaction(function () use (
+            $producto,
+            $almacen,
+            $tipo,
+            $cantidad,
+            $referenciaTipo,
+            $referenciaId,
+            $observaciones,
+            $precioUnitario,
+            $permitirStockNegativo
+        ) {
+            if (!in_array($tipo, ['entrada', 'salida'], true)) {
+                throw new RuntimeException('El tipo de movimiento de almacén no es válido.');
+            }
+            if ($cantidad <= 0) {
+                throw new RuntimeException('La cantidad del movimiento debe ser mayor que cero.');
+            }
 
-        $saldo = ProductoAlmacen::where('producto_id', $producto->id)
-            ->where('almacen_id', $almacen->id)
-            ->lockForUpdate()
-            ->first();
+            $almacen = $this->obtenerAlmacenValido($almacen);
+            $producto = $this->obtenerProductoValido($producto);
 
-        if (!$saldo) {
-            $saldo = ProductoAlmacen::create([
+            $saldo = ProductoAlmacen::where('producto_id', $producto->id)
+                ->where('almacen_id', $almacen->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$saldo) {
+                $saldo = ProductoAlmacen::create([
+                    'producto_id' => $producto->id,
+                    'almacen_id' => $almacen->id,
+                    'stock_actual' => 0,
+                ]);
+                $saldo = ProductoAlmacen::whereKey($saldo->id)->lockForUpdate()->first();
+            }
+
+            $anterior = round((float) $saldo->stock_actual, 2);
+            $posterior = $tipo === 'entrada'
+                ? round($anterior + $cantidad, 2)
+                : round($anterior - $cantidad, 2);
+
+            if ($tipo === 'salida' && $posterior < 0 && !$permitirStockNegativo) {
+                throw new RuntimeException(
+                    "Stock insuficiente de {$producto->nombre} en {$almacen->nombre}. " .
+                    "Disponible: " . number_format($anterior, 2) .
+                    ", solicitado: " . number_format($cantidad, 2) . '.'
+                );
+            }
+
+            $saldo->update(['stock_actual' => $posterior]);
+
+            return StockMovimiento::create([
                 'producto_id' => $producto->id,
                 'almacen_id' => $almacen->id,
-                'stock_actual' => 0,
+                'tipo' => $tipo,
+                'cantidad' => $cantidad,
+                'saldo_anterior' => $anterior,
+                'saldo_posterior' => $posterior,
+                'precio_unitario' => $precioUnitario ?? $producto->precio_costo,
+                'referencia_tipo' => $referenciaTipo,
+                'referencia_id' => $referenciaId,
+                'usuario_id' => auth()->id(),
+                'fecha' => today(),
+                'observaciones' => $observaciones,
             ]);
-            $saldo = ProductoAlmacen::whereKey($saldo->id)->lockForUpdate()->first();
-        }
+        });
+    }
 
-        $anterior = round((float) $saldo->stock_actual, 2);
-        $posterior = $tipo === 'entrada'
-            ? round($anterior + $cantidad, 2)
-            : round($anterior - $cantidad, 2);
+    private function obtenerAlmacenValido(Almacen $almacen): Almacen
+    {
+        $actual = Almacen::query()->find($almacen->getKey());
 
-        if ($tipo === 'salida' && $posterior < 0 && !$permitirStockNegativo) {
+        if (!$actual || !$actual->esOficialActivo()) {
             throw new RuntimeException(
-                "Stock insuficiente de {$producto->nombre} en {$almacen->nombre}. " .
-                "Disponible: " . number_format($anterior, 2) .
-                ", solicitado: " . number_format($cantidad, 2) . '.'
+                'El almacén indicado no pertenece al catálogo oficial activo de ZENDY.'
             );
         }
 
-        $saldo->update(['stock_actual' => $posterior]);
+        return $actual;
+    }
 
-        $movimiento = StockMovimiento::create([
-            'producto_id' => $producto->id,
-            'almacen_id' => $almacen->id,
-            'tipo' => $tipo,
-            'cantidad' => $cantidad,
-            'saldo_anterior' => $anterior,
-            'saldo_posterior' => $posterior,
-            'precio_unitario' => $precioUnitario ?? $producto->precio_costo,
-            'referencia_tipo' => $referenciaTipo,
-            'referencia_id' => $referenciaId,
-            'usuario_id' => auth()->id(),
-            'fecha' => today(),
-            'observaciones' => $observaciones,
-        ]);
+    private function obtenerProductoValido(Producto $producto): Producto
+    {
+        $actual = Producto::query()->find($producto->getKey());
 
-        // Mantener el stock global existente sincronizado con el Kardex.
-        $producto->recalcularStock();
+        if (!$actual) {
+            throw new RuntimeException('El producto indicado no existe.');
+        }
+        if (!$actual->activo) {
+            throw new RuntimeException("El producto {$actual->nombre} está inactivo.");
+        }
 
-        return $movimiento;
+        return $actual;
     }
 
     public function registrarSalida(SalidaAlmacen $salida, array $lineas): void

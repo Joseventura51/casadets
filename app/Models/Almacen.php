@@ -8,11 +8,35 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Almacen extends Model
 {
+    public const CATALOGO_OFICIAL = [
+        'PIMPON' => 'Pimpon',
+        'CASA' => 'Casa',
+        'IMPACTO' => 'Impacto',
+        'ZAPALLAL' => 'Zapallal',
+        'LUNA' => 'Luna',
+        'PIZARRO' => 'Pizarro',
+    ];
+
     protected $table = 'almacenes';
 
     protected $fillable = ['codigo', 'nombre', 'empresa', 'activo', 'observaciones'];
 
     protected $casts = ['activo' => 'boolean'];
+
+    public function scopeOficialesActivos($query)
+    {
+        return $query
+            ->where('empresa', 'zendy')
+            ->where('activo', true)
+            ->whereIn('codigo', array_keys(self::CATALOGO_OFICIAL));
+    }
+
+    public function esOficialActivo(): bool
+    {
+        return $this->empresa === 'zendy'
+            && (bool) $this->activo
+            && array_key_exists(strtoupper(trim((string) $this->codigo)), self::CATALOGO_OFICIAL);
+    }
 
     public function stocks(): HasMany
     {
