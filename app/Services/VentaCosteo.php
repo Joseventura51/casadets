@@ -17,13 +17,30 @@ class VentaCosteo
             return collect();
         }
 
+        $ultimaRegularizacion = DB::table('regularizaciones_costo')
+            ->selectRaw('compra_venta_detalle_id, MAX(id) as regularizacion_id')
+            ->groupBy('compra_venta_detalle_id');
+
+        $costosPorDetalle = DB::table('compra_venta_detalle as cvd')
+            ->leftJoinSub($ultimaRegularizacion, 'ultima', function ($join) {
+                $join->on('ultima.compra_venta_detalle_id', '=', 'cvd.id');
+            })
+            ->leftJoin('regularizaciones_costo as rc', 'rc.id', '=', 'ultima.regularizacion_id')
+            ->selectRaw('cvd.venta_detalle_id,
+                SUM(cvd.cantidad) as cant_costeada,
+                SUM(CASE WHEN COALESCE(rc.costo_nuevo, cvd.costo_unitario) IS NULL THEN cvd.cantidad ELSE 0 END) as cant_sin_costo')
+            ->groupBy('cvd.venta_detalle_id');
+
         $sinCostearIds = DB::table('venta_detalles as vd')
             ->whereIn('vd.venta_id', $ventaIds)
-            ->leftJoin(
-                DB::raw('(SELECT venta_detalle_id, SUM(cantidad) as cant_costeada FROM compra_venta_detalle GROUP BY venta_detalle_id) as cvd_sum'),
-                'vd.id', '=', 'cvd_sum.venta_detalle_id'
-            )
-            ->whereRaw('COALESCE(cvd_sum.cant_costeada, 0) < vd.cantidad')
+            ->leftJoinSub($costosPorDetalle, 'costosPorDetalle', function ($join) {
+                $join->on('vd.id', '=', 'costosPorDetalle.venta_detalle_id');
+            })
+            ->where(function ($query) {
+                $query->whereRaw('COALESCE(costosPorDetalle.cant_costeada, 0) < vd.cantidad')
+                    ->orWhereRaw('COALESCE(costosPorDetalle.cant_costeada, 0) > vd.cantidad')
+                    ->orWhereRaw('COALESCE(costosPorDetalle.cant_sin_costo, 0) > 0');
+            })
             ->pluck('vd.venta_id')
             ->unique();
 

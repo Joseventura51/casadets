@@ -176,7 +176,24 @@ class VentaController extends Controller
             'pagosAplicados.archivos',
             'nubefactComprobante',
         ]);
-        return view('casadets.ventas.show', compact('venta'));
+        $resumenUtilidad = app(\App\Services\UtilidadVentaService::class)->resumen($venta);
+        $asignacionIds = $venta->detalles
+            ->flatMap(fn ($detalle) => $detalle->compras->map(fn ($compra) => $compra->pivot->id))
+            ->filter()
+            ->unique()
+            ->values();
+        $regularizacionesPorAsignacion = $asignacionIds->isEmpty()
+            ? collect()
+            : DB::table('regularizaciones_costo')
+                ->whereIn('compra_venta_detalle_id', $asignacionIds)
+                ->orderBy('id')
+                ->get()
+                ->groupBy('compra_venta_detalle_id');
+        return view('casadets.ventas.show', compact(
+            'venta',
+            'resumenUtilidad',
+            'regularizacionesPorAsignacion'
+        ));
     }
 
     /* ─── Crear ─────────────────────────────────────────────────── */

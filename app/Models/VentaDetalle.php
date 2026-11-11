@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
 class VentaDetalle extends Model
@@ -51,8 +52,18 @@ class VentaDetalle extends Model
     public function compras(): BelongsToMany
     {
         return $this->belongsToMany(Compra::class, 'compra_venta_detalle', 'venta_detalle_id', 'compra_id')
-            ->withPivot('cantidad', 'compra_linea_id', 'costo_unitario', 'costo_total')
+            ->withPivot('id', 'cantidad', 'compra_linea_id', 'costo_unitario', 'costo_total')
             ->withTimestamps();
+    }
+
+    public function despachoDetalles(): HasMany
+    {
+        return $this->hasMany(DespachoDetalle::class);
+    }
+
+    public function devolucionDetalles(): HasMany
+    {
+        return $this->hasMany(DevolucionDetalle::class);
     }
 
     public function cantidadCosteada(): float

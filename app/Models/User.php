@@ -115,6 +115,8 @@ class User extends Authenticatable
             'saldos-favor'   => ['Administrador', 'Supervisor', 'Cajero'],
             'movimientos'    => ['Administrador', 'Supervisor'],
             'devoluciones'   => ['Administrador', 'Supervisor', 'Cajero'],
+            'despachos'      => ['Administrador', 'Supervisor', 'Cajero'],
+            'comisiones'     => ['Administrador', 'Supervisor'],
             'zendy'          => ['Administrador', 'Supervisor'],
             'reportes'       => ['Administrador', 'Supervisor', 'Vendedor'],
             'admin.usuarios' => ['Administrador'],
@@ -166,6 +168,7 @@ class User extends Authenticatable
             'saldos.usar'              => ['Administrador', 'Supervisor', 'Cajero'],
             'reportes.ver'             => ['Administrador', 'Supervisor', 'Vendedor'],
             'devoluciones.procesar'    => ['Administrador', 'Supervisor', 'Cajero'],
+            'despachos.registrar'      => ['Administrador', 'Supervisor', 'Cajero'],
         ];
 
         return in_array($rol?->nombre, $defaults[$permiso] ?? ['Administrador']);

@@ -595,4 +595,95 @@ function abrirVisor(url, nombre) {
     </div>
 </div>
 @endif
+<div class="card mt-4 mb-4">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <strong>Utilidad, despachos y comisiones</strong>
+        @if(auth()->user()->puedeVer('despachos'))
+            <a href="/casadets/despachos/{{ $venta->id }}/registrar" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-truck me-1"></i>Ver despachos
+            </a>
+        @endif
+    </div>
+    <div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-md-3"><small class="text-muted d-block">Ingreso neto</small><strong>S/ {{ number_format((float) $resumenUtilidad['ingreso_neto'], 2) }}</strong></div>
+            <div class="col-md-3"><small class="text-muted d-block">Costo histórico conocido</small><strong>S/ {{ number_format((float) $resumenUtilidad['costo_historico'], 2) }}</strong></div>
+            <div class="col-md-3"><small class="text-muted d-block">Utilidad económica</small><strong>{{ $resumenUtilidad['utilidad_economica'] === null ? 'Pendiente de costeo' : 'S/ ' . number_format((float) $resumenUtilidad['utilidad_economica'], 2) }}</strong></div>
+            <div class="col-md-3"><small class="text-muted d-block">Costeo</small><span class="badge bg-{{ $resumenUtilidad['estado_costeo'] === 'costeada' ? 'success' : 'warning text-dark' }}">{{ ucfirst($resumenUtilidad['estado_costeo']) }}</span></div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-md-3"><small class="text-muted d-block">Tasa según fecha de venta</small><strong>{{ $resumenUtilidad['comision_porcentaje'] }}%</strong></div>
+            <div class="col-md-3"><small class="text-muted d-block">Comisión potencial</small><strong>{{ $resumenUtilidad['comision_potencial'] === null ? 'Indeterminada' : 'S/ ' . number_format((float) $resumenUtilidad['comision_potencial'], 2) }}</strong></div>
+            <div class="col-md-3"><small class="text-muted d-block">Saldo neto del ledger</small><strong>S/ {{ number_format((float) $resumenUtilidad['comision_liberada'], 2) }}</strong></div>
+            <div class="col-md-3"><small class="text-muted d-block">Comisión pendiente</small><strong>{{ $resumenUtilidad['comision_pendiente'] === null ? 'Indeterminada' : 'S/ ' . number_format((float) $resumenUtilidad['comision_pendiente'], 2) }}</strong></div>
+        </div>
+        @if($resumenUtilidad['comision_potencial'] !== null && $resumenUtilidad['comision_pendiente'] !== null && $resumenUtilidad['estado_pago'] !== 'pagado')
+            <div class="alert alert-info py-2 small">La comisión todavía no se libera porque falta completar el pago de la venta.</div>
+        @endif
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr><th>Producto</th><th class="text-end">Vendido</th><th class="text-end">Devuelto</th><th class="text-end">Despachado</th><th>Costeo</th><th class="text-end">Costo histórico</th></tr>
+                </thead>
+                <tbody>
+                    @foreach($resumenUtilidad['detalles'] as $linea)
+                        <tr>
+                            <td>{{ $linea['producto'] }}</td>
+                            <td class="text-end">{{ $linea['cantidad_vendida'] }}</td>
+                            <td class="text-end">{{ $linea['cantidad_devuelta'] }}</td>
+                            <td class="text-end">{{ $linea['cantidad_despachada'] }}</td>
+                            <td>{{ ucfirst(str_replace('_', ' ', $linea['estado_costeo'])) }}</td>
+                            <td class="text-end">S/ {{ number_format((float) $linea['costo_historico'], 2) }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@if(auth()->user()->puedeVer('compras'))
+<div class="card mb-4">
+    <div class="card-header fw-semibold">Regularizaciones históricas de costos</div>
+    <div class="card-body">
+        @php($hayAsignaciones = false)
+        @foreach($venta->detalles as $detalle)
+            @foreach($detalle->compras as $compra)
+                @php
+                    $asignacionId = $compra->pivot->id;
+                    $historialCosto = $regularizacionesPorAsignacion->get($asignacionId, collect());
+                    $ultimoCosto = $historialCosto->last()?->costo_nuevo ?? $compra->pivot->costo_unitario;
+                    $hayAsignaciones = true;
+                @endphp
+                <div class="border rounded p-3 mb-3">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <strong>{{ $detalle->producto }} · Asignación #{{ $asignacionId }}</strong>
+                        <span class="text-muted small">Costo actual: {{ $ultimoCosto === null ? 'Sin costo explícito' : 'S/ ' . number_format((float) $ultimoCosto, 4) }}</span>
+                    </div>
+                    @if($historialCosto->isNotEmpty())
+                        <ul class="small mt-2 mb-2">
+                            @foreach($historialCosto as $ajusteCosto)
+                                <li>{{ $ajusteCosto->created_at }}: {{ $ajusteCosto->costo_anterior === null ? 'sin costo anterior' : 'S/ ' . $ajusteCosto->costo_anterior }} → S/ {{ $ajusteCosto->costo_nuevo }}{{ $ajusteCosto->referencia ? ' · ' . $ajusteCosto->referencia : '' }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if(auth()->user()->puedeHacer('compras.editar'))
+                        <form method="POST" action="/casadets/ventas/{{ $venta->id }}/costos/{{ $asignacionId }}/regularizar" class="row g-2 align-items-end">
+                            @csrf
+                            <input type="hidden" name="idempotency_key" value="{{ \Illuminate\Support\Str::uuid() }}">
+                            <div class="col-sm-3"><label class="form-label small">Nuevo costo unitario</label><input class="form-control form-control-sm" type="number" min="0" step="0.0001" name="costo_nuevo" required></div>
+                            <div class="col-sm-3"><label class="form-label small">Referencia</label><input class="form-control form-control-sm" name="referencia" maxlength="150"></div>
+                            <div class="col-sm-4"><label class="form-label small">Motivo</label><input class="form-control form-control-sm" name="motivo" maxlength="2000"></div>
+                            <div class="col-sm-2"><button class="btn btn-sm btn-outline-primary w-100" type="submit">Registrar ajuste</button></div>
+                        </form>
+                    @endif
+                </div>
+            @endforeach
+        @endforeach
+        @unless($hayAsignaciones)
+            <p class="text-muted mb-0">Esta venta todavía no tiene asignaciones de costo en compras.</p>
+        @endunless
+    </div>
+</div>
+@endif
 @endsection

@@ -112,6 +112,19 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
     Route::get('/casadets/pendientes', [VentaController::class, 'pendientes'])
         ->middleware(['rol:pendientes', 'caja.abierta']);
 
+    // Despachos: registrar entregas sin generar una segunda salida de inventario.
+    Route::middleware('rol:despachos')->group(function () {
+        Route::get('/casadets/despachos', [\App\Http\Controllers\DespachoController::class, 'index']);
+        Route::get('/casadets/despachos/historial/{despacho}', [\App\Http\Controllers\DespachoController::class, 'historial']);
+        Route::get('/casadets/despachos/{venta}/registrar', [\App\Http\Controllers\DespachoController::class, 'show']);
+        Route::post('/casadets/despachos/{venta}', [\App\Http\Controllers\DespachoController::class, 'store'])
+            ->middleware('permiso:despachos.registrar');
+    });
+
+    Route::middleware('rol:comisiones')->group(function () {
+        Route::get('/comisiones', [\App\Http\Controllers\ComisionController::class, 'index']);
+    });
+
     // Ventas
     // Nivel 1: rol:ventas   → acceso al módulo Ventas
     // Nivel 2: permiso:X    → permiso de acción dentro de Ventas
@@ -226,6 +239,10 @@ Route::middleware(['auth', 'check.activo'])->group(function () {
 
     // Compras
     Route::middleware('rol:compras')->group(function () {
+        Route::post(
+            '/casadets/ventas/{venta}/costos/{asignacion}/regularizar',
+            [\App\Http\Controllers\RegularizacionCostoController::class, 'store']
+        )->middleware('permiso:compras.editar');
         Route::get('/casadets/ventas/{venta}/detalles.json', [CompraController::class, 'detallesVenta']);
         Route::get('/casadets/compras',                      [CompraController::class, 'index']);
         // create debe ir ANTES de {compra} para que el segmento literal no sea capturado por el wildcard

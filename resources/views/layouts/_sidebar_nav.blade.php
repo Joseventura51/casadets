@@ -15,7 +15,7 @@
             $user->puedeVer('caja') || $user->puedeVer('ventas') || $user->puedeVer('pendientes') ||
             $user->puedeVer('compras') || $user->puedeVer('productos') || $user->puedeVer('clientes') ||
             $user->puedeVer('vendedores') || $user->puedeVer('saldos-favor') || $user->puedeVer('movimientos') ||
-            $user->puedeVer('devoluciones')
+            $user->puedeVer('devoluciones') || $user->puedeVer('despachos')
         );
     @endphp
 
@@ -108,6 +108,14 @@
                 </li>
                 @endif
 
+                @if($user->puedeVer('despachos'))
+                <li>
+                    <a href="/casadets/despachos" class="nav-link {{ request()->is('casadets/despachos*') ? 'active' : '' }}">
+                        <i class="bi bi-truck me-2"></i>Despachos
+                    </a>
+                </li>
+                @endif
+
             </ul>
         </div>
     </li>
@@ -136,6 +144,14 @@
     <li class="nav-item mt-2">
         <a href="/reportes" class="nav-link {{ request()->is('reportes') || request()->is('reportes/*') ? 'active' : '' }}">
             <i class="bi bi-bar-chart-line me-2"></i>Reportes
+        </a>
+    </li>
+    @endif
+
+    @if($user && $user->puedeVer('comisiones'))
+    <li class="nav-item mt-1">
+        <a href="/comisiones" class="nav-link {{ request()->is('comisiones*') ? 'active' : '' }}">
+            <i class="bi bi-wallet2 me-2"></i>Comisiones
         </a>
     </li>
     @endif

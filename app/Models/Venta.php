@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Services\ComisionLedgerService;
 
 class Venta extends Model
 {
@@ -40,6 +41,15 @@ class Venta extends Model
         'igv_incluido'         => 'boolean',
         'igv_porcentaje'       => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        static::updated(function (Venta $venta): void {
+            if ($venta->wasChanged(['pagado', 'ajuste', 'estado'])) {
+                app(ComisionLedgerService::class)->sincronizarVenta($venta->getKey());
+            }
+        });
+    }
 
     // ── Relaciones ──────────────────────────────────────────────────────────
 
@@ -76,6 +86,16 @@ class Venta extends Model
     public function devoluciones(): HasMany
     {
         return $this->hasMany(Devolucion::class);
+    }
+
+    public function despachos(): HasMany
+    {
+        return $this->hasMany(Despacho::class);
+    }
+
+    public function comisionMovimientos(): HasMany
+    {
+        return $this->hasMany(ComisionMovimiento::class);
     }
 
     public function pagosAplicados()

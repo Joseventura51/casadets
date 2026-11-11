@@ -390,69 +390,48 @@ class ReporteController extends Controller
             return response()->json(['detalle' => []]);
         }
 
-        // Traer ventas con sus detalles y costos en una sola consulta
-        $detalles = DB::table('venta_detalles as vd')
-            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
-            ->whereIn('vd.venta_id', $ventaIds)
-            ->selectRaw("vd.venta_id,
-                         vd.producto_id,
-                         COALESCE(vd.producto,'Manual')      as nombre_producto,
-                         vd.codigo,
-                         vd.cantidad,
-                         vd.precio_unitario,
-                         vd.subtotal,
-                         COALESCE(p.precio_costo, 0)         as precio_costo,
-                         (vd.precio_unitario - COALESCE(p.precio_costo,0)) * vd.cantidad as ganancia")
-            ->orderBy('vd.venta_id')
-            ->get()
-            ->groupBy('venta_id');
-
         $ventas = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
             ->whereIn('v.id', $ventaIds)
-            ->selectRaw("v.id, v.documento_tipo, v.documento_numero, v.fecha, v.total,
-                         COALESCE(v.ajuste, 0) as ajuste,
-                         v.estado,
-                         COALESCE(c.nombre,'Sin cliente') as cliente")
+            ->selectRaw("v.id, v.documento_tipo, v.documento_numero, v.fecha, COALESCE(c.nombre,'Sin cliente') as cliente")
             ->orderByDesc('v.fecha')
-            ->get();
+            ->get()
+            ->keyBy('id');
 
-        $resultado = $ventas->map(function ($v) use ($detalles) {
-            $ajuste        = (float) $v->ajuste;
-            $totalACobrar  = (float) $v->total + $ajuste;
-            $ventaLineas   = $detalles[$v->id] ?? collect();
-
-            // Detectar si algún producto del catálogo (con producto_id) no tiene costo asignado
-            $sinCostear = $ventaLineas->contains(
-                fn($d) => $d->producto_id !== null && (float) $d->precio_costo == 0
-            );
-
-            $lineas = $ventaLineas->map(fn($d) => [
-                'producto'    => $d->nombre_producto,
-                'codigo'      => $d->codigo ?? '',
-                'cantidad'    => (float) $d->cantidad,
-                'precio_venta'=> (float) $d->precio_unitario,
-                'costo'       => (float) $d->precio_costo,
-                'subtotal'    => (float) $d->subtotal,
-                'ganancia'    => round((float) $d->ganancia, 2),
+        $resumenes = app(\App\Services\UtilidadVentaService::class)->resumenesPorIds($ventaIds);
+        $resultado = collect($resumenes)->map(function ($resumen, $id) use ($ventas) {
+            $v = $ventas->get($id);
+            if (!$v) {
+                return null;
+            }
+            $lineas = collect($resumen['detalles'])->map(fn ($linea) => [
+                'producto' => $linea['producto'],
+                'codigo' => $linea['codigo'],
+                'cantidad' => $linea['cantidad_neta'],
+                'precio_venta' => $linea['precio_unitario'],
+                'costo' => $linea['costo_historico'],
+                'subtotal' => $linea['subtotal'],
+                'ganancia' => $linea['utilidad_conocida'],
+                'estado_costeo' => $linea['estado_costeo'],
             ])->values();
-
-            // La ganancia real = ganancias por línea + ajuste (el recorte reduce ingresos, no costos)
-            $gananciaReal = round($lineas->sum('ganancia') + $ajuste, 2);
-
             $numero = trim(ucfirst($v->documento_tipo ?? 'Venta') . ' ' . ($v->documento_numero ?? '#' . $v->id));
             return [
                 'id'          => $v->id,
                 'numero'      => $numero,
                 'fecha'       => Carbon::parse($v->fecha)->format('d/m/Y'),
                 'cliente'     => $v->cliente,
-                'total'       => round($totalACobrar, 2),
-                'ganancia'    => $gananciaReal,
-                'estado'      => $v->estado ?? 'pagado',
-                'sin_costear' => $sinCostear,
+                'total'       => $resumen['ingreso_neto'],
+                'ganancia'    => $resumen['utilidad_economica'],
+                'estado'      => $resumen['estado_pago'],
+                'estado_despacho' => $resumen['estado_despacho'],
+                'comision_potencial' => $resumen['comision_potencial'],
+                'comision_liberada' => $resumen['comision_liberada'],
+                'comision_pendiente' => $resumen['comision_pendiente'],
+                'estado_costeo' => $resumen['estado_costeo'],
+                'sin_costear' => $resumen['estado_costeo'] !== 'costeada',
                 'lineas'      => $lineas,
             ];
-        });
+        })->filter()->values();
 
         return response()->json(['detalle' => $resultado]);
     }
