@@ -163,7 +163,7 @@
                                         <th class="text-end">Ya devuelto</th>
                                         <th class="text-end">Disponible</th>
                                         <th class="text-end">Precio unit.</th>
-                                        <th style="min-width:110px;">Cant. a devolver</th>
+                                        <th style="min-width:280px;">Cantidad y origen de devolución</th>
                                         <th class="text-end">Subtotal</th>
                                     </tr>
                                 </thead>
@@ -177,7 +177,7 @@
                                         $precioJs       = number_format((float) $detalle->getRawOriginal('precio_unitario'), 4, '.', '');
                                         $disponibleJs   = number_format($disponible, 4, '.', '');
                                     @endphp
-                                    <tr class="{{ $disponible <= 0 ? 'table-secondary text-muted' : '' }}">
+                                    <tr class="{{ $disponible <= 0 ? 'table-secondary text-muted' : '' }}" data-maxline="{{ $disponibleJs }}">
                                         <td>
                                             <div class="fw-semibold small">{{ $detalle->getRawOriginal('producto') ?? $detalle->producto }}</div>
                                             {{-- getRelation() evita conflicto entre columna 'producto' y relación 'producto()' --}}
@@ -198,15 +198,64 @@
                                         <td class="text-end small">S/ {{ number_format((float) $detalle->precio_unitario, 2) }}</td>
                                         <td>
                                             @if($disponible > 0)
-                                            <input type="number"
-                                                   name="cantidades[{{ $detalle->id }}]"
-                                                   class="form-control form-control-sm text-end cant-input"
-                                                   min="0"
-                                                   max="{{ $disponibleJs }}"
-                                                   step="0.01"
-                                                   value="{{ old("cantidades.{$detalle->id}", '') }}"
-                                                   data-precio="{{ $precioJs }}"
-                                                   data-max="{{ $disponibleJs }}">
+                                                @php $fuentes = $fuentesPorDetalle->get($detalle->id, collect()); @endphp
+                                                <div class="small text-muted mb-1">
+                                                    Unidades a devolver: <strong class="cantidad-total-linea">0.00</strong>
+                                                </div>
+                                                @if($fuentes->isNotEmpty())
+                                                    <details class="small">
+                                                        <summary class="text-primary">Asignar al despacho y costo de origen</summary>
+                                                        <div class="ps-2 pt-2">
+                                                            @foreach($fuentes as $fuente)
+                                                                @php
+                                                                    $costoTexto = $fuente->costo_efectivo === null
+                                                                        ? 'sin costo registrado'
+                                                                        : 'costo S/ ' . number_format((float) $fuente->costo_efectivo, 4);
+                                                                @endphp
+                                                                <label class="form-label mb-1">
+                                                                    Despacho #{{ $fuente->despacho_id }} ·
+                                                                    {{ \Carbon\Carbon::parse($fuente->fecha_hora)->format('d/m/Y') }} ·
+                                                                    {{ $costoTexto }} · disponibles {{ number_format((float) $fuente->cantidad_disponible, 2) }}
+                                                                </label>
+                                                                <input type="number"
+                                                                       name="cantidades_fuente[{{ $detalle->id }}][{{ $fuente->id }}]"
+                                                                       class="form-control form-control-sm text-end cant-input mb-2"
+                                                                       min="0"
+                                                                       max="{{ number_format((float) $fuente->cantidad_disponible, 2, '.', '') }}"
+                                                                       step="0.01"
+                                                                       value="{{ old('cantidades_fuente.'.$detalle->id.'.'.$fuente->id, '') }}"
+                                                                       data-precio="{{ $precioJs }}"
+                                                                       data-max="{{ number_format((float) $fuente->cantidad_disponible, 2, '.', '') }}">
+                                                            @endforeach
+                                                            <label class="form-label mb-1 text-warning-emphasis">
+                                                                Sin origen identificado: usar el último costo despachado como respaldo
+                                                            </label>
+                                                            <input type="number"
+                                                                   name="cantidades_respaldo[{{ $detalle->id }}]"
+                                                                   class="form-control form-control-sm text-end cant-input mb-2"
+                                                                   min="0" max="{{ $disponibleJs }}" step="0.01"
+                                                                   value="{{ old('cantidades_respaldo.'.$detalle->id, '') }}"
+                                                                   data-precio="{{ $precioJs }}" data-max="{{ $disponibleJs }}">
+                                                            <label class="form-label mb-1 text-muted">
+                                                                Sin despacho previo identificado
+                                                            </label>
+                                                            <input type="number"
+                                                                   name="cantidades_sin_despacho[{{ $detalle->id }}]"
+                                                                   class="form-control form-control-sm text-end cant-input mb-2"
+                                                                   min="0" max="{{ $disponibleJs }}" step="0.01"
+                                                                   value="{{ old('cantidades_sin_despacho.'.$detalle->id, '') }}"
+                                                                   data-precio="{{ $precioJs }}" data-max="{{ $disponibleJs }}">
+                                                        </div>
+                                                    </details>
+                                                @else
+                                                    <label class="form-label small mb-1">Sin despacho previo identificado</label>
+                                                    <input type="number"
+                                                           name="cantidades_sin_despacho[{{ $detalle->id }}]"
+                                                           class="form-control form-control-sm text-end cant-input"
+                                                           min="0" max="{{ $disponibleJs }}" step="0.01"
+                                                           value="{{ old('cantidades_sin_despacho.'.$detalle->id, '') }}"
+                                                           data-precio="{{ $precioJs }}" data-max="{{ $disponibleJs }}">
+                                                @endif
                                             @else
                                                 <span class="text-muted small">Agotado</span>
                                             @endif
@@ -364,24 +413,27 @@ function recalcTotal() {
     let hayItems = false;
 
     rows.forEach(function(row) {
-        const input = row.querySelector('.cant-input');
+        const inputs = Array.from(row.querySelectorAll('.cant-input'));
         const cell  = row.querySelector('.subtotal-cell');
-        if (!input || !cell) return;
+        if (!inputs.length || !cell) return;
 
-        const cant     = parseNum(input.value);
-        const precio   = parseNum(input.getAttribute('data-precio'));
-        const max      = parseNum(input.getAttribute('data-max'));
-        const subtotal = Math.round(cant * precio * 100) / 100;
+        const cantidadLinea = inputs.reduce((sum, input) => sum + parseNum(input.value), 0);
+        const precio = parseNum(inputs[0].getAttribute('data-precio'));
+        const maxLinea = parseNum(row.getAttribute('data-maxline'));
+        const subtotal = Math.round(cantidadLinea * precio * 100) / 100;
 
         cell.textContent = 'S/ ' + subtotal.toFixed(2);
+        const quantityLabel = row.querySelector('.cantidad-total-linea');
+        if (quantityLabel) quantityLabel.textContent = cantidadLinea.toFixed(2);
 
-        if (cant > 0 && max > 0 && cant > max) {
-            input.classList.add('is-invalid');
-        } else {
-            input.classList.remove('is-invalid');
-        }
+        inputs.forEach(function(input) {
+            const cant = parseNum(input.value);
+            const max = parseNum(input.getAttribute('data-max'));
+            input.classList.toggle('is-invalid', cant < 0 || (cant > 0 && max > 0 && cant > max));
+        });
+        if (cantidadLinea > maxLinea) inputs.forEach(input => input.classList.add('is-invalid'));
 
-        if (cant > 0 && cant <= max) {
+        if (cantidadLinea > 0 && cantidadLinea <= maxLinea) {
             hayItems = true;
             total += subtotal;
         }

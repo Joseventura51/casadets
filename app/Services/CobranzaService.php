@@ -169,6 +169,7 @@ class CobranzaService
             ]);
 
             $venta->refresh();
+            app(ComisionLedgerService::class)->sincronizarVenta($venta);
             return [
                 'pago'            => $pago,
                 'estado'          => $venta->estado,
@@ -281,6 +282,7 @@ class CobranzaService
                 $venta->update(['pagado' => $nuevoPagado, 'metodo_pago' => $metodoStr]);
                 $venta->refresh();
                 $venta->recalcularEstado();
+                app(ComisionLedgerService::class)->sincronizarVenta($venta);
 
                 $totalAplicado += $aplicar;
                 $ventasActualizadas[] = [
@@ -384,6 +386,7 @@ class CobranzaService
             $venta->update(['ajuste' => $nuevoAjuste]);
             $venta->refresh();
             $venta->recalcularEstado();
+            app(ComisionLedgerService::class)->sincronizarVenta($venta);
 
             $docStr = trim(ucfirst($venta->documento_tipo ?? '') . ' ' . ($venta->documento_numero ?? ''));
             Movimiento::create([

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CompraVentaDetalle;
 use App\Models\RegularizacionCosto;
+use App\Models\Venta;
 use App\Support\DecimalMoney;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,13 +24,20 @@ class RegularizacionCostoService
             ]);
         }
 
+        $ventaId = CompraVentaDetalle::query()
+            ->whereKey($asignacionId)
+            ->join('venta_detalles', 'venta_detalles.id', '=', 'compra_venta_detalle.venta_detalle_id')
+            ->value('venta_detalles.venta_id');
+
         return DB::transaction(function () use (
             $asignacionId,
+            $ventaId,
             $costoNuevo,
             $idempotencyKey,
             $referencia,
             $motivo
         ): RegularizacionCosto {
+            $venta = $ventaId ? Venta::query()->whereKey($ventaId)->lockForUpdate()->first() : null;
             $existente = RegularizacionCosto::query()
                 ->where('idempotency_key', $idempotencyKey)
                 ->first();
@@ -67,6 +75,9 @@ class RegularizacionCostoService
             ]);
 
             app(ComisionLedgerService::class)->registrarAjusteRegularizacion($registro);
+            if ($venta) {
+                app(ComisionLedgerService::class)->sincronizarVenta($venta);
+            }
 
             return $registro;
         }, 3);

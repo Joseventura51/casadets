@@ -70,7 +70,7 @@ tbody tr:nth-child(even) { background:#f8fafc; }
             <div class="kpi-sub">{{ $cantCompras }} compras · IGV S/ {{ number_format($igvCompras, 2) }}</div>
         </div>
         <div class="kpi-cell">
-            <div class="kpi-label">Utilidad</div>
+            <div class="kpi-label">Utilidad conocida</div>
             <div class="kpi-value {{ $utilidad >= 0 ? 'purple' : 'red' }}">S/ {{ number_format($utilidad, 2) }}</div>
             <div class="kpi-sub">Costo: S/ {{ number_format($totalCosto, 2) }}</div>
         </div>
@@ -95,14 +95,22 @@ tbody tr:nth-child(even) { background:#f8fafc; }
             <div class="u-val red">S/ {{ number_format($totalCosto, 2) }}</div>
         </div>
         <div class="u-cell">
-            <div class="u-label">Utilidad neta</div>
-            <div class="u-val {{ $utilidad >= 0 ? 'purple' : 'red' }}">S/ {{ number_format($utilidad, 2) }}</div>
+            <div class="u-label">Utilidad económica (costeo completo)</div>
+            <div class="u-val {{ ($utilidadEconomica ?? 0) >= 0 ? 'purple' : 'red' }}">S/ {{ number_format($utilidadEconomica ?? 0, 2) }}</div>
         </div>
     </div>
     <div class="u-grid" style="margin-top:8px;">
         <div class="u-cell">
-            <div class="u-label">Comisión sobre Utilidad (35% / 50% dom.)</div>
+            <div class="u-label">Comisión liberada (35% / 50% dom.)</div>
             <div class="u-val amber">S/ {{ number_format($comisionUtilidad ?? 0, 2) }}</div>
+        </div>
+        <div class="u-cell">
+            <div class="u-label">Utilidad despachada</div>
+            <div class="u-val">S/ {{ number_format($utilidadDespachada ?? 0, 2) }}</div>
+        </div>
+        <div class="u-cell">
+            <div class="u-label">Comisión pendiente</div>
+            <div class="u-val">S/ {{ number_format($comisionPendiente ?? 0, 2) }}</div>
         </div>
     </div>
 </div>

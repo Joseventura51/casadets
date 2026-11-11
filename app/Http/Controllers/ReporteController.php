@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -32,6 +33,58 @@ class ReporteController extends Controller
         if ($r->filled('desde')) $d = Carbon::parse($r->desde)->startOfDay();
         if ($r->filled('hasta')) $h = Carbon::parse($r->hasta)->endOfDay();
         return [$d, $h];
+    }
+
+    private function empresasReportables(): \Illuminate\Support\Collection
+    {
+        $cajaIds = \App\Services\VendedorScope::cajaIds();
+        $vendedorIds = \App\Services\VendedorScope::ids();
+        $query = DB::table('cajas')->select('empresa')->distinct();
+        if ($cajaIds !== null) {
+            $query->whereIn('id', $cajaIds);
+        } elseif ($vendedorIds !== null) {
+            $query->whereIn('id', DB::table('ventas')
+                ->whereIn('vendedor_id', $vendedorIds)
+                ->whereNotNull('caja_id')
+                ->select('caja_id')
+                ->distinct());
+        }
+
+        return $query->orderBy('empresa')->pluck('empresa');
+    }
+
+    private function empresaReporte(Request $r): string
+    {
+        $disponibles = $this->empresasReportables();
+        $seleccionada = $r->input('empresa');
+        if (!$seleccionada && session()->has('caja_id')) {
+            $seleccionada = DB::table('cajas')->where('id', session('caja_id'))->value('empresa');
+        }
+        if (!$seleccionada && $disponibles->count() === 1) {
+            $seleccionada = $disponibles->first();
+        }
+        if (!$seleccionada && $disponibles->count() > 1) {
+            throw ValidationException::withMessages([
+                'empresa' => 'Selecciona una empresa para evitar mezclar sus reportes.',
+            ]);
+        }
+        if (!$seleccionada || !$disponibles->contains($seleccionada)) {
+            abort(403, 'No tienes acceso a los reportes de esa empresa.');
+        }
+
+        return $seleccionada;
+    }
+
+    private function aplicarEmpresaReporte($query, Request $r, string $cajaColumn)
+    {
+        $empresa = $this->empresaReporte($r);
+
+        return $query->whereExists(function ($subquery) use ($empresa, $cajaColumn): void {
+            $subquery->selectRaw('1')
+                ->from('cajas as empresa_scope')
+                ->whereColumn('empresa_scope.id', $cajaColumn)
+                ->where('empresa_scope.empresa', $empresa);
+        });
     }
 
     /**
@@ -64,7 +117,7 @@ class ReporteController extends Controller
         if ($r->filled('metodo_pago')) $q->where('ventas.metodo_pago', $r->metodo_pago);
         if ($r->filled('cliente_id'))  $q->where('ventas.cliente_id',  $r->cliente_id);
 
-        return $q;
+        return $this->aplicarEmpresaReporte($q, $r, 'ventas.caja_id');
     }
 
     /**
@@ -109,7 +162,7 @@ class ReporteController extends Controller
         if ($r->filled('metodo_pago')) $q->where('v.metodo_pago', $r->metodo_pago);
         if ($r->filled('cliente_id'))  $q->where('v.cliente_id', $r->cliente_id);
 
-        return $q;
+        return $this->aplicarEmpresaReporte($q, $r, 'v.caja_id');
     }
 
     // ── Controllers ────────────────────────────────────────
@@ -117,7 +170,12 @@ class ReporteController extends Controller
     {
         $vendedores = Vendedor::orderBy('nombre')->get(['id', 'nombre']);
         $clientes   = Cliente::orderBy('nombre')->limit(300)->get(['id', 'nombre']);
-        return view('reportes', compact('vendedores', 'clientes'));
+        $empresasReportables = $this->empresasReportables();
+        $empresaInicial = session()->has('caja_id')
+            ? DB::table('cajas')->where('id', session('caja_id'))->value('empresa')
+            : ($empresasReportables->count() === 1 ? $empresasReportables->first() : '');
+
+        return view('reportes', compact('vendedores', 'clientes', 'empresasReportables', 'empresaInicial'));
     }
 
     public function datos(Request $r): JsonResponse
@@ -178,48 +236,32 @@ class ReporteController extends Controller
             ->get()
             ->keyBy('fecha');
 
-        // ── IDs válidas para utilidad (pagado + 100% costeado) ──────────────
-        $validIds = $this->ventaIdsParaUtilidad($r, $desde, $hasta);
-
-        // ── Costo por día (solo ventas válidas) ─────────────────────────────
-        $costoPorDia = $validIds->isEmpty() ? collect() :
-            DB::table('venta_detalles as vd')
-                ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
-                ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
-                ->whereIn('vd.venta_id', $validIds)
-                ->selectRaw("DATE(v.fecha) as fecha, SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total_costo")
-                ->groupByRaw('DATE(v.fecha)')
-                ->get()
-                ->keyBy('fecha');
+        // Financial KPIs come from historical CVD allocations; current catalog
+        // costs are intentionally not used in economic reporting.
+        $ventaIdsReporte = $this->qVentas($r, $desde, $hasta)->pluck('ventas.id');
+        $finanzas = app(\App\Services\UtilidadVentaService::class)->agregados($ventaIdsReporte);
+        $finanzasPorDia = collect($finanzas['por_fecha'])->keyBy('fecha');
 
         // ── Merge por fecha ──────────────────────────────────────────────────────
-        $porDia = $ventasPorDia->map(function ($v) use ($costoPorDia) {
-            $costo = (float) ($costoPorDia[$v->fecha]->total_costo ?? 0);
+        $porDia = $ventasPorDia->map(function ($v) use ($finanzasPorDia) {
+            $f = $finanzasPorDia->get($v->fecha, []);
             return [
                 'fecha'    => $v->fecha,
                 'count'    => (int)   $v->count,
                 'total'    => (float) $v->total_ventas,
-                'costo'    => round($costo, 2),
-                'utilidad' => round((float)$v->total_ventas - $costo, 2),
+                'costo'    => (float) ($f['costo_historico'] ?? 0),
+                'utilidad' => (float) ($f['utilidad_conocida'] ?? 0),
+                'utilidad_economica' => (float) ($f['utilidad_economica'] ?? 0),
+                'utilidad_despachada' => (float) ($f['utilidad_despachada'] ?? 0),
+                'comision_liberada' => (float) ($f['comision_liberada'] ?? 0),
             ];
         })->values();
 
-        // ── Costo y utilidad totales (solo ventas válidas) ───────────────────
-        $totalVentasValidas = $validIds->isEmpty() ? 0.0 :
-            (float) DB::table('ventas')
-                ->whereIn('id', $validIds)
-                ->selectRaw('COALESCE(SUM(total + COALESCE(ajuste,0)),0) as total')
-                ->value('total');
-
-        $totalCosto = $validIds->isEmpty() ? 0.0 :
-            (float) DB::table('venta_detalles as vd')
-                ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
-                ->whereIn('vd.venta_id', $validIds)
-                ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo, 0)) as total')
-                ->value('total');
-
-        $utilidad = round($totalVentasValidas - $totalCosto, 2);
-        $margen   = $totalVentasValidas > 0 ? round($utilidad / $totalVentasValidas * 100, 1) : 0;
+        $totalVentasValidas = (float) $finanzas['ingreso_costeado'];
+        $totalCosto = (float) $finanzas['costo_costeado'];
+        $utilidad = (float) $finanzas['utilidad_economica'];
+        $utilidadConocida = (float) $finanzas['utilidad_conocida'];
+        $margen = $totalVentasValidas > 0 ? round($utilidad / $totalVentasValidas * 100, 1) : 0;
 
         // ── Compras ──────────────────────────────────────
         $cmpSum = DB::table('compras')
@@ -272,22 +314,17 @@ class ReporteController extends Controller
             ->selectRaw('COALESCE(SUM((v.total + COALESCE(v.ajuste, 0)) * COALESCE(vend.comision_porcentaje, 0) / 100), 0) as total')
             ->value('total');
 
-        // ── FASE 4: Utilidad Real (costo congelado, solo ventas válidas) ──
-        $utilRealData = $validIds->isEmpty() ? null :
-            DB::table('compra_venta_detalle as cvd')
-                ->join('venta_detalles as vd', 'cvd.venta_detalle_id', '=', 'vd.id')
-                ->whereIn('vd.venta_id', $validIds)
-                ->whereNotNull('cvd.costo_total')
-                ->selectRaw('SUM(cvd.cantidad * vd.precio_unitario) as ingreso_real, SUM(cvd.costo_total) as costo_real')
-                ->first();
-
-        $ingresoReal  = (float) ($utilRealData->ingreso_real ?? 0);
-        $costoReal    = (float) ($utilRealData->costo_real   ?? 0);
-        $utilidadReal = round($ingresoReal - $costoReal, 2);
+        // Fully costed economic profit is distinct from known partial profit,
+        // dispatched profit, and commissions released by the ledger.
+        $ingresoReal  = (float) $finanzas['ingreso_costeado'];
+        $costoReal    = (float) $finanzas['costo_costeado'];
+        $utilidadReal = (float) $finanzas['utilidad_economica'];
         $margenReal   = $ingresoReal > 0 ? round($utilidadReal / $ingresoReal * 100, 1) : 0;
 
-        // Comisión sobre utilidad: domingo 50%, resto de días 35% (por venta)
-        $comisionUtilidad = \App\Services\ComisionUtilidad::calcular($validIds);
+        // Released commission is the ledger net; pending is limited to
+        // fully costed dispatched units and remains separate from potential.
+        $comisionUtilidad = (float) $finanzas['comision_liberada'];
+        $comisionPendiente = (float) $finanzas['comision_pendiente'];
 
         // ── FASE 2: Cobertura de costeo (sobre todas las ventas del período, informativo) ──
         $cajas = \App\Services\VendedorScope::cajaIds();
@@ -354,7 +391,13 @@ class ReporteController extends Controller
                 'invertido'      => round($totalCompras, 2),
                 'recuperado'     => round($totalVentas, 2),
                 'comision_total' => round($comisionTotal, 2),
+                'comision_comercial' => round($comisionTotal, 2),
                 'comision_utilidad' => round($comisionUtilidad, 2),
+                'comision_pendiente' => round($comisionPendiente, 2),
+                'comision_despachada_potencial' => (float) $finanzas['comision_despachada_potencial'],
+                'utilidad_conocida' => round($utilidadConocida, 2),
+                'utilidad_despachada' => (float) $finanzas['utilidad_despachada'],
+                'costo_despachado' => (float) $finanzas['costo_despachado'],
                 // FASE 4: Utilidad Real
                 'utilidad_real'  => $utilidadReal,
                 'margen_real'    => $margenReal,
@@ -383,8 +426,8 @@ class ReporteController extends Controller
         $periodo        = $r->input('periodo', 'diario');
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
-        // Solo ventas pagadas y con todos sus costos completos
-        $ventaIds = $this->ventaIdsParaUtilidad($r, $desde, $hasta);
+        // Show economic and known profit separately, including unpaid sales.
+        $ventaIds = $this->qVentas($r, $desde, $hasta)->pluck('ventas.id');
 
         if ($ventaIds->isEmpty()) {
             return response()->json(['detalle' => []]);
@@ -422,6 +465,14 @@ class ReporteController extends Controller
                 'cliente'     => $v->cliente,
                 'total'       => $resumen['ingreso_neto'],
                 'ganancia'    => $resumen['utilidad_economica'],
+                'utilidad_conocida' => $resumen['utilidad_conocida'],
+                'utilidad_despachada' => $resumen['utilidad_despachada'],
+                'cantidad_despachada' => $resumen['cantidad_despachada'],
+                'cantidad_despachada_costeada' => $resumen['cantidad_despachada_costeada'],
+                'cantidad_pendiente' => array_sum(array_map(
+                    fn ($linea) => (float) $linea['cantidad_pendiente'],
+                    $resumen['detalles']
+                )),
                 'estado'      => $resumen['estado_pago'],
                 'estado_despacho' => $resumen['estado_despacho'],
                 'comision_potencial' => $resumen['comision_potencial'],
@@ -475,11 +526,13 @@ class ReporteController extends Controller
         [$desde, $hasta] = $this->resolverRango($r, $periodo);
 
         $cajaIds = \App\Services\VendedorScope::cajaIds();
+        $empresaReporte = $this->empresaReporte($r);
 
         $compras = DB::table('compras')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNull('deleted_at')
             ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
+            ->whereIn('caja_id', DB::table('cajas')->where('empresa', $empresaReporte)->select('id'))
             ->selectRaw("id, fecha, empresa, documento_tipo, documento_numero,
                          COALESCE(metodo_pago,'No especificado') as metodo_pago, monto_total")
             ->orderByDesc('fecha')
@@ -507,6 +560,7 @@ class ReporteController extends Controller
 
         $vendorIds = \App\Services\VendedorScope::ids();
         $cajaIds   = \App\Services\VendedorScope::cajaIds();
+        $empresaReporte = $this->empresaReporte($r);
 
         $ventas = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
@@ -516,6 +570,7 @@ class ReporteController extends Controller
             ->whereNull('v.deleted_at')
             ->whereNull('v.reporte_semanal_id')
             ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
+            ->whereIn('v.caja_id', DB::table('cajas')->where('empresa', $empresaReporte)->select('id'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
             ->when($cajaIds === null && $vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
@@ -533,33 +588,16 @@ class ReporteController extends Controller
             ->whereNull('deleted_at')
             ->whereNull('reporte_semanal_id')
             ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
+            ->whereIn('caja_id', DB::table('cajas')->where('empresa', $empresaReporte)->select('id'))
             ->selectRaw("fecha, empresa, documento_tipo, documento_numero, metodo_pago, monto_total")
             ->orderBy('fecha')
             ->get();
 
-        // Resumen utilidad (mismos filtros que ventas: excluye anulado + nota_credito)
         $totalV  = $ventas->sum('total');
-        $costoT  = (float) DB::table('venta_detalles as vd')
-            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
-            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
-            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
-            ->whereNotIn('v.estado', ['anulado', 'anulado_nc'])
-            ->whereNull('v.deleted_at')
-            ->whereNull('v.reporte_semanal_id')
-            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
-            ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
-            ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
-            ->when($cajaIds === null && $vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
-            ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
-            ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
-            ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
-            ->value('total');
+        $finanzasExcel = app(\App\Services\UtilidadVentaService::class)
+            ->agregados($ventas->pluck('id'));
+        $costoT  = (float) $finanzasExcel['costo_historico'];
         $totalC = $compras->sum('monto_total');
-
-        $validIdsExcel = \App\Services\VentaCosteo::idsCompletamenteCosteados(
-            $ventas->where('estado', 'pagado')->pluck('id')
-        );
-        $comisionUtilidadExcel = \App\Services\ComisionUtilidad::calcular($validIdsExcel);
 
         $spreadsheet = new Spreadsheet();
 
@@ -629,14 +667,23 @@ class ReporteController extends Controller
             ['Total Compras',   round($totalC, 2)],
             ['Cantidad Compras',$compras->count()],
             ['',''],
-            ['Costo Productos', round($costoT, 2)],
-            ['Utilidad',        round($totalV - $costoT, 2)],
-            ['Margen %',        $totalV > 0 ? round(($totalV - $costoT) / $totalV * 100, 1) : 0],
+            ['Costo histórico conocido', round($costoT, 2)],
+            ['Utilidad conocida (parcial incluida)', (float) $finanzasExcel['utilidad_conocida']],
+            ['Utilidad económica (costeo completo)', (float) $finanzasExcel['utilidad_economica']],
+            ['Ingreso de ventas completamente costeadas', (float) $finanzasExcel['ingreso_costeado']],
+            ['Margen de utilidad económica %', (float) $finanzasExcel['ingreso_costeado'] > 0
+                ? round((float) $finanzasExcel['utilidad_economica'] / (float) $finanzasExcel['ingreso_costeado'] * 100, 1)
+                : 0],
+            ['Utilidad de productos despachados y costeados', (float) $finanzasExcel['utilidad_despachada']],
+            ['Costo de productos despachados', (float) $finanzasExcel['costo_despachado']],
             ['',''],
-            ['Comisión sobre Utilidad (35%/50% dom.)', round($comisionUtilidadExcel, 2)],
+            ['Comisión liberada (ledger)', (float) $finanzasExcel['comision_liberada']],
+            ['Comisión pendiente de unidades despachadas', (float) $finanzasExcel['comision_pendiente']],
+            ['Comisión potencial despachada y costeada', (float) $finanzasExcel['comision_despachada_potencial']],
         ], null, 'A2');
         $sr->getColumnDimension('A')->setWidth(22);
         $sr->getColumnDimension('B')->setAutoSize(true);
+        $sr->getStyle('B2:B30')->getNumberFormat()->setFormatCode('#,##0.00');
 
         $spreadsheet->setActiveSheetIndex(0);
         $filename = 'reporte-' . $periodo . '-' . now()->format('Y-m-d') . '.xlsx';
@@ -653,6 +700,7 @@ class ReporteController extends Controller
         // Reusa la misma lógica de datos pero con colección pequeña para el PDF
         $vendorIds = \App\Services\VendedorScope::ids();
         $cajaIds   = \App\Services\VendedorScope::cajaIds();
+        $empresaReporte = $this->empresaReporte($r);
 
         $ventasSummary = DB::table('ventas')
             ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
@@ -665,7 +713,7 @@ class ReporteController extends Controller
             ->when($cajaIds === null && $vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('vendedor_id', $r->vendedor_id))
             ->when($r->filled('metodo_pago'), fn($q) => $q->where('metodo_pago', $r->metodo_pago))
             ->when($r->filled('cliente_id'),  fn($q) => $q->where('cliente_id',  $r->cliente_id))
-            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total),0) as total')
+            ->selectRaw('COUNT(*) as cantidad, COALESCE(SUM(total + COALESCE(ajuste, 0)),0) as total')
             ->first();
 
         $totalVentas = (float) ($ventasSummary->total    ?? 0);
@@ -682,39 +730,28 @@ class ReporteController extends Controller
         $totalCompras = (float) ($comprasSummary->total    ?? 0);
         $cantCompras  = (int)   ($comprasSummary->cantidad ?? 0);
 
-        $totalCosto = (float) DB::table('venta_detalles as vd')
-            ->join('ventas as v', 'vd.venta_id', '=', 'v.id')
-            ->leftJoin('productos as p', 'vd.producto_id', '=', 'p.id')
-            ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
-            ->whereNotIn('v.estado', ['anulado', 'anulado_nc'])
-            ->whereNull('v.deleted_at')
-            ->whereNull('v.reporte_semanal_id')
-            ->where(fn($q) => $q->whereNull('v.documento_tipo')->orWhere('v.documento_tipo', '!=', 'nota_credito'))
-            ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
-            ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
-            ->when($cajaIds === null && $vendorIds === null && $r->filled('vendedor_id'), fn($q) => $q->where('v.vendedor_id', $r->vendedor_id))
-            ->when($r->filled('metodo_pago'), fn($q) => $q->where('v.metodo_pago', $r->metodo_pago))
-            ->when($r->filled('cliente_id'),  fn($q) => $q->where('v.cliente_id',  $r->cliente_id))
-            ->selectRaw('SUM(vd.cantidad * COALESCE(p.precio_costo,0)) as total')
-            ->value('total');
-
-        $validIdsPdf = \App\Services\VentaCosteo::idsCompletamenteCosteados(
-            DB::table('ventas')
+        $ventaIdsPdf = DB::table('ventas')
                 ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
-                ->where('estado', 'pagado')
+                ->whereNotIn('estado', ['anulado', 'anulado_nc'])
                 ->whereNull('deleted_at')
                 ->whereNull('reporte_semanal_id')
+                ->where('es_referencia_fiscal', false)
+                ->where(fn($q) => $q->whereNull('documento_tipo')->orWhere('documento_tipo', '!=', 'nota_credito'))
+                ->whereIn('caja_id', DB::table('cajas')->where('empresa', $empresaReporte)->select('id'))
                 ->when($cajaIds !== null, fn($q) => $q->whereIn('caja_id', $cajaIds))
                 ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('vendedor_id', $vendorIds))
-                ->pluck('id')
-        );
-        $comisionUtilidadPdf = \App\Services\ComisionUtilidad::calcular($validIdsPdf);
+                ->when($r->filled('metodo_pago'), fn($q) => $q->where('metodo_pago', $r->metodo_pago))
+                ->when($r->filled('cliente_id'), fn($q) => $q->where('cliente_id', $r->cliente_id))
+                ->pluck('id');
+        $finanzasPdf = app(\App\Services\UtilidadVentaService::class)->agregados($ventaIdsPdf);
+        $totalCosto = (float) $finanzasPdf['costo_historico'];
 
         $topClientes = DB::table('ventas as v')
             ->leftJoin('clientes as c', 'v.cliente_id', '=', 'c.id')
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNotIn('v.estado', ['anulado', 'anulado_nc'])
             ->whereNull('v.deleted_at')
+            ->whereIn('v.caja_id', DB::table('cajas')->where('empresa', $empresaReporte)->select('id'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
             ->selectRaw("COALESCE(c.nombre,'Sin cliente') as nombre, COUNT(*) as count, SUM(v.total + COALESCE(v.ajuste,0)) as total")
@@ -728,6 +765,7 @@ class ReporteController extends Controller
             ->whereBetween('v.fecha', [$desde->toDateString(), $hasta->toDateString()])
             ->whereNotIn('v.estado', ['anulado', 'anulado_nc'])
             ->whereNull('v.deleted_at')
+            ->whereIn('v.caja_id', DB::table('cajas')->where('empresa', $empresaReporte)->select('id'))
             ->when($cajaIds !== null, fn($q) => $q->whereIn('v.caja_id', $cajaIds))
             ->when($cajaIds === null && $vendorIds !== null, fn($q) => $q->whereIn('v.vendedor_id', $vendorIds))
             ->selectRaw("COALESCE(vd.producto,'Manual') as nombre, SUM(vd.cantidad) as cantidad, SUM(vd.subtotal) as total")
@@ -742,11 +780,17 @@ class ReporteController extends Controller
             'totalCompras', 'cantCompras',
             'totalCosto', 'topClientes', 'topProductos'
         );
-        $data['utilidad'] = round($totalVentas - $totalCosto, 2);
-        $data['margen']   = $totalVentas > 0 ? round($data['utilidad'] / $totalVentas * 100, 1) : 0;
+        $data['utilidad'] = (float) $finanzasPdf['utilidad_conocida'];
+        $data['utilidadEconomica'] = (float) $finanzasPdf['utilidad_economica'];
+        $data['utilidadDespachada'] = (float) $finanzasPdf['utilidad_despachada'];
+        $data['comisionLiberada'] = (float) $finanzasPdf['comision_liberada'];
+        $data['comisionPendiente'] = (float) $finanzasPdf['comision_pendiente'];
+        $data['margen'] = (float) $finanzasPdf['ingreso_costeado'] > 0
+            ? round((float) $finanzasPdf['utilidad_economica'] / (float) $finanzasPdf['ingreso_costeado'] * 100, 1)
+            : 0;
         $data['igvVentas']  = round($totalVentas * 18 / 118, 2);
         $data['igvCompras'] = round($totalCompras * 18 / 118, 2);
-        $data['comisionUtilidad'] = round($comisionUtilidadPdf, 2);
+        $data['comisionUtilidad'] = round((float) $finanzasPdf['comision_liberada'], 2);
 
         $pdf = app('dompdf.wrapper');
         $pdf->loadView('reportes-pdf', $data);

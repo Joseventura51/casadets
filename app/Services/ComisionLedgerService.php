@@ -30,76 +30,99 @@ class ComisionLedgerService
                 return;
             }
 
-            $total = DecimalMoney::cents($venta->total) + DecimalMoney::cents($venta->ajuste);
-            if (DecimalMoney::cents($venta->pagado) < $total || $total < 0) {
-                return;
-            }
-
-            // venta.ajuste is a sale-level amount. Until its line-level meaning is
-            // known, attributing it to dispatched products would invent accounting data.
-            if (DecimalMoney::cents($venta->ajuste) !== 0 || !$venta->vendedor_id) {
-                return;
-            }
-
             $fechaVenta = Carbon::parse($venta->fecha);
             $porcentaje = $fechaVenta->isSunday() ? 50 : 35;
+            $ventaEmpresa = $venta->caja_id
+                ? DB::table('cajas')->where('id', $venta->caja_id)->value('empresa')
+                : null;
+            $montoDevoluciones = DecimalMoney::cents(
+                DB::table('devoluciones')->where('venta_id', $venta->id)->sum('monto_devuelto')
+            );
+            $ajusteSoloDevoluciones = DecimalMoney::cents($venta->ajuste) === -$montoDevoluciones;
+            $total = DecimalMoney::cents($venta->total) + DecimalMoney::cents($venta->ajuste);
+            $ventaElegible = $venta->vendedor_id
+                && $ventaEmpresa !== null
+                && DecimalMoney::cents($venta->pagado) >= $total
+                && $total >= 0
+                && $ajusteSoloDevoluciones;
 
+            $devolucionesPorOrigen = DB::table('devolucion_detalle_costos')
+                ->selectRaw('despacho_detalle_costo_id, SUM(cantidad_devuelta) as cantidad_devuelta')
+                ->groupBy('despacho_detalle_costo_id');
             $costosDespachados = DB::table('despacho_detalle_costos as ddc')
                 ->join('despacho_detalles as dd', 'dd.id', '=', 'ddc.despacho_detalle_id')
                 ->join('despachos as d', 'd.id', '=', 'dd.despacho_id')
                 ->join('venta_detalles as vd', 'vd.id', '=', 'dd.venta_detalle_id')
                 ->join('compra_venta_detalle as cvd', 'cvd.id', '=', 'ddc.compra_venta_detalle_id')
+                ->leftJoin('compras as compra', 'compra.id', '=', 'cvd.compra_id')
+                ->leftJoin('cajas as compra_caja', 'compra_caja.id', '=', 'compra.caja_id')
+                ->leftJoinSub($devolucionesPorOrigen, 'dev', function ($join): void {
+                    $join->on('dev.despacho_detalle_costo_id', '=', 'ddc.id');
+                })
                 ->where('d.venta_id', $venta->id)
                 ->where('vd.venta_id', $venta->id)
                 ->select([
                     'ddc.id as origen_id',
                     'ddc.cantidad',
+                    DB::raw('COALESCE(dev.cantidad_devuelta, 0) as cantidad_devuelta'),
                     'dd.id as despacho_detalle_id',
+                    'dd.cantidad as cantidad_despachada',
                     'd.id as despacho_id',
                     'vd.id as venta_detalle_id',
                     'vd.precio_unitario',
                     'cvd.id as cvd_id',
                     'cvd.costo_unitario',
+                    'compra_caja.empresa as compra_empresa',
                 ])
                 ->orderBy('ddc.id')
                 ->get();
 
-            foreach ($costosDespachados as $origen) {
-                $costo = $this->costoActual((int) $origen->cvd_id, $origen->costo_unitario);
-                if ($costo === null) {
-                    continue;
-                }
-
-                $cantidad = DecimalMoney::quantityHundredths($origen->cantidad);
-                $ingreso = DecimalMoney::multiplyCentsByQuantity(
-                    DecimalMoney::cents($origen->precio_unitario),
-                    $cantidad
+            foreach ($costosDespachados->groupBy('despacho_detalle_id') as $costosLinea) {
+                $cantidadDespachada = DecimalMoney::quantityHundredths($costosLinea->first()->cantidad_despachada);
+                $cantidadCosteada = $costosLinea->sum(
+                    fn ($origen) => DecimalMoney::quantityHundredths($origen->cantidad)
                 );
-                $costoCents = DecimalMoney::multiplyCostByQuantity(
-                    DecimalMoney::costUnits($costo),
-                    $cantidad
-                );
-                $utilidad = $ingreso - $costoCents;
-                $comision = DecimalMoney::commissionCents($utilidad, $porcentaje * 100);
-                $origenClave = 'despacho-costo:' . $origen->origen_id;
-
-                DB::table('comision_movimientos')->insertOrIgnore([
-                    'vendedor_id' => $venta->vendedor_id,
-                    'venta_id' => $venta->id,
-                    'venta_detalle_id' => $origen->venta_detalle_id,
-                    'despacho_id' => $origen->despacho_id,
-                    'despacho_detalle_costo_id' => $origen->origen_id,
-                    'user_id' => auth()->id(),
-                    'tipo' => 'liberacion',
-                    'importe' => DecimalMoney::formatCents($comision),
-                    'porcentaje' => $porcentaje . '.00',
-                    'utilidad_base' => DecimalMoney::formatCents($utilidad),
-                    'fecha_origen' => $fechaVenta->toDateString(),
-                    'fecha_efectiva' => today()->toDateString(),
-                    'origen_clave' => $origenClave,
-                    'observaciones' => 'Liberación por unidades despachadas, costeadas y venta pagada.',
-                    'created_at' => now(),
+                $costosEfectivos = $costosLinea->mapWithKeys(fn ($origen) => [
+                    $origen->origen_id => $this->costoActual((int) $origen->cvd_id, $origen->costo_unitario),
                 ]);
+                $lineaCosteadaCompleta = $cantidadCosteada === $cantidadDespachada
+                    && !$costosEfectivos->contains(null)
+                    && $ventaEmpresa !== null
+                    && !$costosLinea->contains(
+                        fn ($origen) => $origen->compra_empresa !== $ventaEmpresa
+                    );
+
+                foreach ($costosLinea as $origen) {
+                    $costo = $costosEfectivos[$origen->origen_id];
+                    $cantidad = max(
+                        0,
+                        DecimalMoney::quantityHundredths($origen->cantidad)
+                            - DecimalMoney::quantityHundredths($origen->cantidad_devuelta)
+                    );
+                    $utilidad = 0;
+                    $comision = 0;
+                    if ($ventaElegible && $lineaCosteadaCompleta && $cantidad > 0) {
+                        $ingreso = DecimalMoney::multiplyCentsByQuantity(
+                            DecimalMoney::cents($origen->precio_unitario),
+                            $cantidad
+                        );
+                        $costoCents = DecimalMoney::multiplyCostByQuantity(
+                            DecimalMoney::costUnits($costo),
+                            $cantidad
+                        );
+                        $utilidad = $ingreso - $costoCents;
+                        $comision = DecimalMoney::commissionCents($utilidad, $porcentaje * 100);
+                    }
+
+                    $this->reconciliarFuenteDespachada(
+                        $venta,
+                        $origen,
+                        $fechaVenta,
+                        $porcentaje,
+                        $utilidad,
+                        $comision
+                    );
+                }
             }
         }, 3);
     }
@@ -182,6 +205,82 @@ class ComisionLedgerService
             ->value(DB::raw('COALESCE(SUM(importe), 0)'));
 
         return DecimalMoney::formatCents(DecimalMoney::cents($sum));
+    }
+
+    private function reconciliarFuenteDespachada(
+        Venta $venta,
+        object $origen,
+        Carbon $fechaVenta,
+        int $porcentaje,
+        int $utilidadObjetivo,
+        int $comisionObjetivo
+    ): void {
+        $origenClave = 'despacho-costo:' . $origen->origen_id;
+        $original = DB::table('comision_movimientos')->where('origen_clave', $origenClave)->first();
+
+        if (!$original && $comisionObjetivo !== 0) {
+            DB::table('comision_movimientos')->insertOrIgnore([
+                'vendedor_id' => $venta->vendedor_id,
+                'venta_id' => $venta->id,
+                'venta_detalle_id' => $origen->venta_detalle_id,
+                'despacho_id' => $origen->despacho_id,
+                'despacho_detalle_costo_id' => $origen->origen_id,
+                'user_id' => auth()->id(),
+                'tipo' => 'liberacion',
+                'importe' => DecimalMoney::formatCents($comisionObjetivo),
+                'porcentaje' => $porcentaje . '.00',
+                'utilidad_base' => DecimalMoney::formatCents($utilidadObjetivo),
+                'fecha_origen' => $fechaVenta->toDateString(),
+                'fecha_efectiva' => today()->toDateString(),
+                'origen_clave' => $origenClave,
+                'observaciones' => 'Liberación de utilidad de unidades despachadas, costeadas y pagadas.',
+                'created_at' => now(),
+            ]);
+            $original = DB::table('comision_movimientos')->where('origen_clave', $origenClave)->first();
+        }
+
+        if (!$original) {
+            return;
+        }
+
+        if ((int) $original->vendedor_id !== (int) $venta->vendedor_id) {
+            $comisionObjetivo = 0;
+            $utilidadObjetivo = 0;
+        }
+
+        $movimientos = DB::table('comision_movimientos')
+            ->where(function ($query) use ($original): void {
+                $query->where('id', $original->id)
+                    ->orWhere('movimiento_original_id', $original->id);
+            });
+        $saldoActual = DecimalMoney::cents((clone $movimientos)->sum('importe'));
+        $diferencia = $comisionObjetivo - $saldoActual;
+        if ($diferencia === 0) {
+            return;
+        }
+
+        $secuencia = (clone $movimientos)->count();
+        $deltaUtilidad = $utilidadObjetivo - DecimalMoney::cents(
+            (clone $movimientos)->sum('utilidad_base')
+        );
+        DB::table('comision_movimientos')->insertOrIgnore([
+            'vendedor_id' => $original->vendedor_id,
+            'venta_id' => $venta->id,
+            'venta_detalle_id' => $origen->venta_detalle_id,
+            'despacho_id' => $origen->despacho_id,
+            'despacho_detalle_costo_id' => $origen->origen_id,
+            'movimiento_original_id' => $original->id,
+            'user_id' => auth()->id(),
+            'tipo' => $diferencia < 0 ? 'ajuste_negativo' : 'ajuste_positivo',
+            'importe' => DecimalMoney::formatCents($diferencia),
+            'porcentaje' => $original->porcentaje,
+            'utilidad_base' => DecimalMoney::formatCents($deltaUtilidad),
+            'fecha_origen' => Carbon::parse($original->fecha_origen)->toDateString(),
+            'fecha_efectiva' => today()->toDateString(),
+            'origen_clave' => 'reconciliacion:' . $origen->origen_id . ':' . $secuencia,
+            'observaciones' => 'Ajuste de comisión por pago, devolución o regularización.',
+            'created_at' => now(),
+        ]);
     }
 
     private function revertirAnulada(Venta $venta): void

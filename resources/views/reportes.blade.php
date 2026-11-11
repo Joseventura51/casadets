@@ -96,6 +96,15 @@
         {{-- Filtros adicionales --}}
         <div class="row g-2 align-items-end">
             <div class="col-6 col-md-2">
+                <label class="rpt-filter-label">Empresa</label>
+                <select id="fEmpresa" class="form-select form-select-sm">
+                    <option value="">Seleccionar empresa</option>
+                    @foreach($empresasReportables as $empresa)
+                        <option value="{{ $empresa }}" @selected($empresaInicial === $empresa)>{{ strtoupper($empresa) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
                 <label class="rpt-filter-label">Desde</label>
                 <input type="date" id="fDesde" class="form-control form-control-sm">
             </div>
@@ -205,7 +214,7 @@
             <div class="card kpi-card kpi-margen p-3 h-100">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <div class="kpi-label">Comisión Utilidad (35%/50% dom.)</div>
+                        <div class="kpi-label">Comisión liberada (35%/50% dom.)</div>
                         <div class="kpi-value text-warning" id="kpiMargen">S/ 0.00</div>
                         <div class="kpi-sub">Utilidad total: <span id="kpiInvertido">S/ 0.00</span></div>
                     </div>
@@ -328,8 +337,8 @@
                                 <th class="text-center"># Ventas</th>
                                 <th class="text-end">Total Vendido</th>
                                 <th class="text-end">Costo</th>
-                                <th class="text-end">Utilidad Bruta</th>
-                                <th class="text-end">Comisión</th>
+                                <th class="text-end">Utilidad conocida</th>
+                                <th class="text-end">Comisión liberada</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyPorDia">
@@ -789,6 +798,7 @@ function cargarDatos() {
         periodo:     periodoActual,
         desde:       document.getElementById('fDesde').value,
         hasta:       document.getElementById('fHasta').value,
+        empresa:     document.getElementById('fEmpresa').value,
         vendedor_id: document.getElementById('fVendedor').value,
         metodo_pago: document.getElementById('fMetodo').value,
         cliente_id:  document.getElementById('fCliente').value,
@@ -890,7 +900,7 @@ function renderDatos(data) {
     // Gráficos
     renderChartVentas(v.por_dia, periodoLabel);
     renderChartMetodos(v.por_metodo);
-    renderTablaPorDia(v.por_dia, u.comision_total ?? 0);
+    renderTablaPorDia(v.por_dia);
 
     // Listas
     renderBarras('listaTopClientes',   v.top_clientes,   'nombre', 'total', '#2563eb');
@@ -915,7 +925,7 @@ function renderDatos(data) {
 }
 
 /* ── Tabla Ventas por día con totales ───────────────────── */
-function renderTablaPorDia(porDia, comisionTotal) {
+function renderTablaPorDia(porDia) {
     const tbody = document.getElementById('tbodyPorDia');
     const tfoot = document.getElementById('tfootPorDia');
     if (!porDia || !porDia.length) {
@@ -924,12 +934,13 @@ function renderTablaPorDia(porDia, comisionTotal) {
         return;
     }
 
-    let sumVentas = 0, sumCount = 0, sumCosto = 0, sumUtil = 0;
+    let sumVentas = 0, sumCount = 0, sumCosto = 0, sumUtil = 0, sumComision = 0;
     tbody.innerHTML = porDia.map(d => {
         sumCount  += d.count;
         sumVentas += d.total;
         sumCosto  += d.costo   ?? 0;
         sumUtil   += d.utilidad ?? 0;
+        sumComision += d.comision_liberada ?? 0;
         const util   = d.utilidad ?? 0;
         const costo  = d.costo   ?? 0;
         const cls    = util >= 0 ? 'text-success' : 'text-danger';
@@ -939,7 +950,7 @@ function renderTablaPorDia(porDia, comisionTotal) {
             <td class="text-end">${fmt(d.total)}</td>
             <td class="text-end text-danger">${fmt(costo)}</td>
             <td class="text-end ${cls}">${fmt(util)}</td>
-            <td class="text-end text-muted">—</td>
+            <td class="text-end">${fmt(d.comision_liberada ?? 0)}</td>
         </tr>`;
     }).join('');
 
@@ -950,7 +961,7 @@ function renderTablaPorDia(porDia, comisionTotal) {
         <td class="text-end fw-bold">${fmt(sumVentas)}</td>
         <td class="text-end text-danger fw-bold">${fmt(sumCosto)}</td>
         <td class="text-end ${clsTotal} fw-bold">${fmt(sumUtil)}</td>
-        <td class="text-end fw-bold text-primary">${fmt(comisionTotal)}</td>
+        <td class="text-end fw-bold text-primary">${fmt(sumComision)}</td>
     </tr>`;
 }
 
@@ -1088,6 +1099,7 @@ function abrirModalUtilidad() {
         periodo:     periodoActual,
         desde:       document.getElementById('fDesde').value,
         hasta:       document.getElementById('fHasta').value,
+        empresa:     document.getElementById('fEmpresa').value,
         vendedor_id: document.getElementById('fVendedor').value,
         metodo_pago: document.getElementById('fMetodo').value,
         cliente_id:  document.getElementById('fCliente').value,
@@ -1364,6 +1376,7 @@ function _params() {
         periodo:     periodoActual,
         desde:       document.getElementById('fDesde').value,
         hasta:       document.getElementById('fHasta').value,
+        empresa:     document.getElementById('fEmpresa').value,
         vendedor_id: document.getElementById('fVendedor').value,
         metodo_pago: document.getElementById('fMetodo').value,
         cliente_id:  document.getElementById('fCliente').value,

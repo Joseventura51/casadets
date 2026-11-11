@@ -106,68 +106,131 @@ class DevolucionController extends Controller
             ->where('venta_id', $venta->id)
             ->orderByDesc('created_at')
             ->get();
+        $fuentesPorDetalle = $this->fuentesDespachoVenta((int) $venta->id);
 
-        return view('casadets.devoluciones.show', compact('venta', 'yaDevuelto', 'devoluciones'));
+        return view('casadets.devoluciones.show', compact('venta', 'yaDevuelto', 'devoluciones', 'fuentesPorDetalle'));
     }
 
     /* ─── Procesar devolución parcial ────────────────────────────── */
 
     public function store(Request $request, Venta $venta)
     {
-        if ($venta->estado === 'anulado') {
-            return back()->with('error', 'Este vale ya está anulado.');
-        }
-
         $request->validate([
-            'cantidades'      => 'required|array',
+            'cantidades_fuente' => 'sometimes|array',
+            'cantidades_fuente.*' => 'sometimes|array',
+            'cantidades_fuente.*.*' => 'nullable|numeric|min:0',
+            'cantidades_respaldo' => 'sometimes|array',
+            'cantidades_respaldo.*' => 'nullable|numeric|min:0',
+            'cantidades_sin_despacho' => 'sometimes|array',
+            'cantidades_sin_despacho.*' => 'nullable|numeric|min:0',
+            // Older forms can still post this field during a rolling deploy.
+            'cantidades'      => 'sometimes|array',
             'cantidades.*'    => 'nullable|numeric|min:0',
             'motivo'          => 'nullable|string|max:255',
         ]);
 
-        $cantidades = $request->input('cantidades', []);
-
-        // Calcular monto a devolver y validar cantidades
-        $venta->load(['detalles', 'caja']);
-
-        $yaDevuelto = DevolucionDetalle::whereHas('devolucion', fn ($d) => $d->where('venta_id', $venta->id))
-            ->selectRaw('venta_detalle_id, SUM(cantidad_devuelta) as total_devuelto')
-            ->groupBy('venta_detalle_id')
-            ->pluck('total_devuelto', 'venta_detalle_id')
-            ->toArray();
-
-        $lineas = [];
-        $montoDevuelto = 0;
-
-        foreach ($venta->detalles as $detalle) {
-            $cantDevolver = (float) ($cantidades[$detalle->id] ?? 0);
-            if ($cantDevolver <= 0) {
-                continue;
+        $montoDevuelto = DB::transaction(function () use ($venta, $request): float {
+            $venta = Venta::query()->whereKey($venta->id)->lockForUpdate()->firstOrFail();
+            if (in_array($venta->estado, ['anulado', 'anulado_nc'], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'venta' => 'Este vale ya está anulado.',
+                ]);
             }
-            $maxDevolvible = (float) $detalle->cantidad - (float) ($yaDevuelto[$detalle->id] ?? 0);
-            if ($cantDevolver > $maxDevolvible) {
-                return back()->withErrors([
-                    "cantidades.{$detalle->id}" => "La cantidad a devolver ({$cantDevolver}) supera lo disponible ({$maxDevolvible}) para " . ($detalle->getRawOriginal('producto') ?? "detalle #{$detalle->id}") . ".",
-                ])->withInput();
-            }
-            $subtotal = round($cantDevolver * (float) $detalle->precio_unitario, 2);
-            $lineas[] = [
-                'detalle'          => $detalle,
-                'cantidad_devuelta' => $cantDevolver,
-                'precio_unitario'  => (float) $detalle->precio_unitario,
-                'subtotal'         => $subtotal,
-            ];
-            $montoDevuelto += $subtotal;
-        }
-
-        if (empty($lineas)) {
-            return back()->with('error', 'Debe seleccionar al menos un producto con cantidad mayor a 0.');
-        }
-
-        $montoDevuelto = round($montoDevuelto, 2);
-
-        DB::transaction(function () use ($venta, $lineas, $montoDevuelto, $request) {
+            $venta->load(['detalles', 'caja']);
+            $fuentesPorDetalle = $this->fuentesDespachoVenta((int) $venta->id);
+            $yaDevuelto = DevolucionDetalle::whereHas('devolucion', fn ($q) => $q->where('venta_id', $venta->id))
+                ->selectRaw('venta_detalle_id, SUM(cantidad_devuelta) as total_devuelto')
+                ->groupBy('venta_detalle_id')
+                ->pluck('total_devuelto', 'venta_detalle_id');
+            $cantidadesFuente = $request->input('cantidades_fuente', []);
+            $cantidadesRespaldo = $request->input('cantidades_respaldo', []);
+            $cantidadesSinDespacho = $request->input('cantidades_sin_despacho', []);
+            $cantidadesLegacy = $request->input('cantidades', []);
             $cajaId  = session('caja_id');
             $empresa = $venta->caja?->empresa ?? session('empresa', 'casadets');
+            $lineas = [];
+            $montoDevuelto = 0;
+
+            foreach ($venta->detalles as $detalle) {
+                $fuentes = $fuentesPorDetalle->get($detalle->id, collect())->keyBy('id');
+                $cantidadExacta = 0.0;
+                $asignaciones = [];
+
+                foreach (($cantidadesFuente[$detalle->id] ?? []) as $fuenteId => $cantidad) {
+                    $cantidad = (float) ($cantidad ?? 0);
+                    if ($cantidad <= 0) {
+                        continue;
+                    }
+                    $fuente = $fuentes->get((int) $fuenteId);
+                    if (!$fuente) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            "cantidades_fuente.{$detalle->id}.{$fuenteId}" => 'El costo seleccionado no pertenece a este producto despachado.',
+                        ]);
+                    }
+                    if ($cantidad > (float) $fuente->cantidad_disponible) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            "cantidades_fuente.{$detalle->id}.{$fuenteId}" => 'La cantidad supera las unidades disponibles de este costo despachado.',
+                        ]);
+                    }
+                    $cantidadExacta += $cantidad;
+                    $asignaciones[] = [
+                        'source_id' => (int) $fuente->id,
+                        'cvd_id' => (int) $fuente->compra_venta_detalle_id,
+                        'cantidad' => $cantidad,
+                        'costo' => $fuente->costo_efectivo,
+                        'metodo' => 'despacho_identificado',
+                    ];
+                }
+
+                $cantidadRespaldo = (float) ($cantidadesRespaldo[$detalle->id] ?? 0);
+                $cantidadSinDespacho = (float) ($cantidadesSinDespacho[$detalle->id] ?? 0);
+                if (empty($fuentes->all())) {
+                    $cantidadSinDespacho += (float) ($cantidadesLegacy[$detalle->id] ?? 0);
+                } elseif ($cantidadRespaldo <= 0 && empty($cantidadesFuente[$detalle->id])) {
+                    // Preserve old submissions by using the explicit fallback
+                    // when the form has not yet been refreshed.
+                    $cantidadSinDespacho += (float) ($cantidadesLegacy[$detalle->id] ?? 0);
+                }
+
+                $maxDevolvible = max(0, (float) $detalle->cantidad - (float) ($yaDevuelto[$detalle->id] ?? 0));
+                $cantidadTotal = $cantidadExacta + $cantidadRespaldo + $cantidadSinDespacho;
+                if ($cantidadTotal > $maxDevolvible) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        "cantidades_fuente.{$detalle->id}" => "La cantidad a devolver ({$cantidadTotal}) supera lo disponible ({$maxDevolvible}) para " . ($detalle->getRawOriginal('producto') ?? "detalle #{$detalle->id}") . '.',
+                    ]);
+                }
+                if ($cantidadRespaldo > 0 && $fuentes->isNotEmpty()) {
+                    $ultimaFuente = $fuentes->first();
+                    $asignaciones[] = [
+                        'source_id' => (int) $ultimaFuente->id,
+                        'cvd_id' => (int) $ultimaFuente->compra_venta_detalle_id,
+                        'cantidad' => $cantidadRespaldo,
+                        'costo' => $ultimaFuente->costo_efectivo,
+                        'metodo' => 'ultimo_costo_respaldo',
+                    ];
+                }
+                if ($cantidadTotal <= 0) {
+                    continue;
+                }
+
+                $subtotal = round($cantidadTotal * (float) $detalle->precio_unitario, 2);
+                $lineas[] = [
+                    'detalle' => $detalle,
+                    'cantidad_devuelta' => $cantidadTotal,
+                    'precio_unitario' => (float) $detalle->precio_unitario,
+                    'subtotal' => $subtotal,
+                    'asignaciones' => $asignaciones,
+                ];
+                $montoDevuelto += $subtotal;
+            }
+
+            if (empty($lineas)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'cantidades_fuente' => 'Debe seleccionar al menos un producto con cantidad mayor a 0.',
+                ]);
+            }
+
+            $montoDevuelto = round($montoDevuelto, 2);
 
             // 1. Crear registro de devolución
             $devolucion = Devolucion::create([
@@ -184,7 +247,7 @@ class DevolucionController extends Controller
 
             // 2. Detalle de la devolución + stock
             foreach ($lineas as $linea) {
-                DevolucionDetalle::create([
+                $devolucionDetalle = DevolucionDetalle::create([
                     'devolucion_id'     => $devolucion->id,
                     'venta_detalle_id'  => $linea['detalle']->id,
                     'producto_id'       => $linea['detalle']->producto_id,
@@ -192,6 +255,18 @@ class DevolucionController extends Controller
                     'precio_unitario'   => $linea['precio_unitario'],
                     'subtotal'          => $linea['subtotal'],
                 ]);
+                foreach ($linea['asignaciones'] as $asignacion) {
+                    DB::table('devolucion_detalle_costos')->insert([
+                        'devolucion_detalle_id' => $devolucionDetalle->id,
+                        'despacho_detalle_costo_id' => $asignacion['source_id'],
+                        'compra_venta_detalle_id' => $asignacion['cvd_id'],
+                        'cantidad_devuelta' => $asignacion['cantidad'],
+                        'costo_unitario' => $asignacion['costo'],
+                        'metodo_asignacion' => $asignacion['metodo'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
 
                 // Retornar stock al inventario
                 if ($linea['detalle']->producto_id) {
@@ -257,10 +332,55 @@ class DevolucionController extends Controller
 
             // 6. Recalcular estado del vale
             $venta->recalcularEstado();
-        });
+
+            return $montoDevuelto;
+        }, 3);
 
         return redirect("/casadets/devoluciones/{$venta->id}")
             ->with('success', 'Devolución registrada por S/ ' . number_format($montoDevuelto, 2) . '.');
+    }
+
+    private function fuentesDespachoVenta(int $ventaId): \Illuminate\Support\Collection
+    {
+        $devoluciones = DB::table('devolucion_detalle_costos')
+            ->selectRaw('despacho_detalle_costo_id, SUM(cantidad_devuelta) as cantidad_devuelta')
+            ->groupBy('despacho_detalle_costo_id');
+        $ultimaRegularizacion = DB::table('regularizaciones_costo')
+            ->selectRaw('compra_venta_detalle_id, MAX(id) as ultima_id')
+            ->groupBy('compra_venta_detalle_id');
+
+        return DB::table('despacho_detalle_costos as ddc')
+            ->join('despacho_detalles as dd', 'dd.id', '=', 'ddc.despacho_detalle_id')
+            ->join('despachos as d', 'd.id', '=', 'dd.despacho_id')
+            ->join('venta_detalles as vd', 'vd.id', '=', 'dd.venta_detalle_id')
+            ->join('compra_venta_detalle as cvd', 'cvd.id', '=', 'ddc.compra_venta_detalle_id')
+            ->leftJoinSub($ultimaRegularizacion, 'ur', function ($join): void {
+                $join->on('ur.compra_venta_detalle_id', '=', 'cvd.id');
+            })
+            ->leftJoin('regularizaciones_costo as rc', 'rc.id', '=', 'ur.ultima_id')
+            ->leftJoinSub($devoluciones, 'dev', function ($join): void {
+                $join->on('dev.despacho_detalle_costo_id', '=', 'ddc.id');
+            })
+            ->where('vd.venta_id', $ventaId)
+            ->selectRaw(
+                'ddc.id, ddc.compra_venta_detalle_id, ddc.cantidad,
+                 vd.id as venta_detalle_id,
+                 COALESCE(dev.cantidad_devuelta, 0) as cantidad_ya_devuelta,
+                 COALESCE(rc.costo_nuevo, cvd.costo_unitario) as costo_efectivo,
+                 d.id as despacho_id, d.fecha_hora'
+            )
+            ->orderByDesc('d.fecha_hora')
+            ->orderByDesc('ddc.id')
+            ->get()
+            ->map(function ($fuente) {
+                $fuente->cantidad_disponible = max(
+                    0,
+                    (float) $fuente->cantidad - (float) $fuente->cantidad_ya_devuelta
+                );
+
+                return $fuente;
+            })
+            ->groupBy('venta_detalle_id');
     }
 
     /* ─── Anular vale completo ───────────────────────────────────── */
