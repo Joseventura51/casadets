@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Caja;
 use App\Models\CompraVentaDetalle;
+use App\Models\Devolucion;
+use App\Models\DevolucionDetalle;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Models\Vendedor;
 use App\Services\DespachoService;
 use App\Services\RegularizacionCostoService;
+use App\Services\UtilidadVentaService;
 use App\Support\DecimalMoney;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -109,6 +113,100 @@ class DespachoCommissionTest extends TestCase
         ));
     }
 
+    public function test_mixed_cost_allocations_are_summed_per_historical_source(): void
+    {
+        [$venta, $detalle, $firstAssignment] = $this->ventaCosteadaPagada('2026-11-09');
+        DB::table('compra_venta_detalle')->where('id', $firstAssignment->id)->update([
+            'cantidad' => '5.00',
+            'costo_total' => '50.0000',
+        ]);
+        $secondAssignmentId = $this->crearAsignacion($venta, $detalle, '5.00', '15.0000');
+
+        $summary = app(UtilidadVentaService::class)->resumen($venta->fresh());
+
+        $this->assertSame('10.00', $summary['detalles'][0]['cantidad_costeada']);
+        $this->assertSame('125.00', $summary['costo_historico']);
+        $this->assertSame('75.00', $summary['utilidad_economica']);
+        $this->assertSame('costeada', $summary['estado_costeo']);
+        $this->assertNotSame($firstAssignment->id, $secondAssignmentId);
+    }
+
+    public function test_mixed_cost_return_uses_the_exact_cost_assignment(): void
+    {
+        [$venta, $detalle, $firstAssignment] = $this->ventaCosteadaPagada('2026-11-09');
+        DB::table('compra_venta_detalle')->where('id', $firstAssignment->id)->update([
+            'cantidad' => '5.00',
+            'costo_total' => '50.0000',
+        ]);
+        $this->crearAsignacion($venta, $detalle, '5.00', '15.0000');
+        $devolucion = Devolucion::create([
+            'venta_id' => $venta->id,
+            'tipo' => 'parcial',
+            'monto_devuelto' => '40.00',
+            'saldo_generado' => '0.00',
+            'fecha' => '2026-11-09',
+            'empresa' => 'casadets',
+            'caja_id' => $venta->caja_id,
+        ]);
+        $devolucionDetalle = DevolucionDetalle::create([
+            'devolucion_id' => $devolucion->id,
+            'venta_detalle_id' => $detalle->id,
+            'cantidad_devuelta' => '2.00',
+            'precio_unitario' => '20.00',
+            'subtotal' => '40.00',
+        ]);
+        DB::table('devolucion_detalle_costos')->insert([
+            'devolucion_detalle_id' => $devolucionDetalle->id,
+            'compra_venta_detalle_id' => $firstAssignment->id,
+            'cantidad_devuelta' => '2.00',
+            'costo_unitario' => '10.0000',
+            'metodo_asignacion' => 'despacho_identificado',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $venta->update(['ajuste' => '-40.00']);
+
+        $summary = app(UtilidadVentaService::class)->resumen($venta->fresh());
+
+        $this->assertSame('8.00', $summary['detalles'][0]['cantidad_neta']);
+        $this->assertSame('105.00', $summary['costo_historico']);
+        $this->assertSame('55.00', $summary['utilidad_economica']);
+        $this->assertSame('costeada', $summary['estado_costeo']);
+        $this->assertSame('19.25', $summary['comision_potencial']);
+    }
+
+    public function test_unmapped_return_is_ambiguous_when_multiple_costs_exist(): void
+    {
+        [$venta, $detalle, $firstAssignment] = $this->ventaCosteadaPagada('2026-11-09');
+        DB::table('compra_venta_detalle')->where('id', $firstAssignment->id)->update([
+            'cantidad' => '5.00',
+            'costo_total' => '50.0000',
+        ]);
+        $this->crearAsignacion($venta, $detalle, '5.00', '15.0000');
+        $devolucion = Devolucion::create([
+            'venta_id' => $venta->id,
+            'tipo' => 'parcial',
+            'monto_devuelto' => '40.00',
+            'saldo_generado' => '0.00',
+            'fecha' => '2026-11-09',
+            'empresa' => 'casadets',
+            'caja_id' => $venta->caja_id,
+        ]);
+        DevolucionDetalle::create([
+            'devolucion_id' => $devolucion->id,
+            'venta_detalle_id' => $detalle->id,
+            'cantidad_devuelta' => '2.00',
+            'precio_unitario' => '20.00',
+            'subtotal' => '40.00',
+        ]);
+        $venta->update(['ajuste' => '-40.00']);
+
+        $summary = app(UtilidadVentaService::class)->resumen($venta->fresh());
+
+        $this->assertSame('ambiguo_devolucion', $summary['detalles'][0]['estado_costeo']);
+        $this->assertNull($summary['utilidad_economica']);
+    }
+
     public function test_dispatch_cannot_exceed_the_remaining_quantity(): void
     {
         [$venta, $detalle, $asignacion] = $this->ventaCosteadaPagada('2026-11-09');
@@ -127,8 +225,15 @@ class DespachoCommissionTest extends TestCase
     private function ventaCosteadaPagada(string $fecha, string $pagado = '200.00'): array
     {
         $vendedor = Vendedor::create(['nombre' => 'Vendedor de prueba']);
+        $caja = Caja::create([
+            'codigo' => 'C01',
+            'nombre' => 'Caja de prueba',
+            'empresa' => 'casadets',
+            'activa' => true,
+        ]);
         $venta = Venta::create([
             'vendedor_id' => $vendedor->id,
+            'caja_id' => $caja->id,
             'total' => '200.00',
             'ajuste' => '0.00',
             'pagado' => $pagado,
@@ -148,6 +253,7 @@ class DespachoCommissionTest extends TestCase
         ]);
         $compraId = DB::table('compras')->insertGetId([
             'empresa' => 'casadets',
+            'caja_id' => $caja->id,
             'fecha' => $fecha,
             'monto_total' => '100.00',
             'created_at' => now(),
@@ -165,5 +271,27 @@ class DespachoCommissionTest extends TestCase
         $asignacion = CompraVentaDetalle::findOrFail($asignacionId);
 
         return [$venta, $detalle, $asignacion];
+    }
+
+    private function crearAsignacion(Venta $venta, VentaDetalle $detalle, string $cantidad, string $costo): int
+    {
+        $purchaseId = DB::table('compras')->insertGetId([
+            'empresa' => 'casadets',
+            'caja_id' => $venta->caja_id,
+            'fecha' => $venta->fecha->toDateString(),
+            'monto_total' => number_format((float) $cantidad * (float) $costo, 2, '.', ''),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return DB::table('compra_venta_detalle')->insertGetId([
+            'compra_id' => $purchaseId,
+            'venta_detalle_id' => $detalle->id,
+            'cantidad' => $cantidad,
+            'costo_unitario' => $costo,
+            'costo_total' => number_format((float) $cantidad * (float) $costo, 4, '.', ''),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 }

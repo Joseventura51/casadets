@@ -198,6 +198,7 @@ class UtilidadVentaService
         $returnedByCvd = empty($detailIds) ? collect() : DB::table('devolucion_detalle_costos as ddc')
             ->join('devolucion_detalles as dd', 'dd.id', '=', 'ddc.devolucion_detalle_id')
             ->whereIn('dd.venta_detalle_id', $detailIds)
+            ->whereNotNull('ddc.compra_venta_detalle_id')
             ->selectRaw('ddc.compra_venta_detalle_id, SUM(ddc.cantidad_devuelta) as cantidad')
             ->groupBy('ddc.compra_venta_detalle_id')
             ->get()
@@ -205,6 +206,7 @@ class UtilidadVentaService
         $returnedMappedByDetail = empty($detailIds) ? collect() : DB::table('devolucion_detalle_costos as ddc')
             ->join('devolucion_detalles as dd', 'dd.id', '=', 'ddc.devolucion_detalle_id')
             ->whereIn('dd.venta_detalle_id', $detailIds)
+            ->whereNotNull('ddc.compra_venta_detalle_id')
             ->selectRaw('dd.venta_detalle_id, SUM(ddc.cantidad_devuelta) as cantidad')
             ->groupBy('dd.venta_detalle_id')
             ->get()
@@ -260,7 +262,7 @@ class UtilidadVentaService
             ->select([
                 'ddc.id as source_id',
                 'ddc.cantidad as costed_quantity',
-                'COALESCE(dev.cantidad_devuelta, 0) as returned_quantity',
+                DB::raw('COALESCE(dev.cantidad_devuelta, 0) as returned_quantity'),
                 'dd.id as dispatch_detail_id',
                 'dd.cantidad as dispatched_quantity',
                 'd.id as dispatch_id',
@@ -310,93 +312,108 @@ class UtilidadVentaService
                 $quantityReturned += $returnedQty;
                 $quantityDispatched += $deliveredQty;
 
-                $sources = [];
-                $costedQty = 0;
-                $lineCostCents = 0;
                 $allSources = $costos->get($detalle->id, collect());
                 $sources = $allSources->filter(
                     fn ($allocation) => !$allocation->venta_empresa
                         || $allocation->compra_empresa === $allocation->venta_empresa
-                );
-                $crossCompanyCost = $sources->count() !== $allSources->count();
-                foreach ($sources as $allocation) {
-                    $effectiveCost = $this->effectiveCost(
-                        $allocation->costo_unitario,
-                        $regularizaciones->get($allocation->id, collect())
-                    );
+                )->map(function ($allocation) use ($regularizaciones, $returnedByCvd): array {
                     $allocationQty = DecimalMoney::quantityHundredths($allocation->cantidad);
-                    $sources[] = [
-                        'cantidad' => $allocationQty,
-                        'costo' => $effectiveCost,
+                    $returnedFromSource = DecimalMoney::quantityHundredths(
+                        $returnedByCvd->get($allocation->id)?->cantidad ?? 0
+                    );
+
+                    return [
+                        'asignacion_id' => (int) $allocation->id,
+                        'cantidad_original' => $allocationQty,
+                        'cantidad_devuelta' => $returnedFromSource,
+                        'cantidad' => max(0, $allocationQty - $returnedFromSource),
+                        'costo' => $this->effectiveCost(
+                            $allocation->costo_unitario,
+                            $regularizaciones->get($allocation->id, collect())
+                        ),
                     ];
-                    if ($effectiveCost !== null && $allocationQty > 0) {
-                        $costedQty += $allocationQty;
-                        $lineCostCents += DecimalMoney::multiplyCostByQuantity(
-                            DecimalMoney::costUnits($effectiveCost),
-                            $allocationQty
-                        );
+                })->values()->all();
+                $crossCompanyCost = count($sources) !== $allSources->count();
+                $assignedQty = array_sum(array_column($sources, 'cantidad_original'));
+                $returnedFromAssignments = array_sum(array_column($sources, 'cantidad_devuelta'));
+                $costedQty = 0;
+                $lineCostCents = 0;
+                $hasUncostedRemainingSource = false;
+                $returnSourceInconsistent = false;
+                foreach ($sources as $source) {
+                    if ($source['cantidad_devuelta'] > $source['cantidad_original']) {
+                        $returnSourceInconsistent = true;
                     }
+                    if ($source['cantidad'] <= 0) {
+                        continue;
+                    }
+                    if ($source['costo'] === null) {
+                        $hasUncostedRemainingSource = true;
+                        continue;
+                    }
+                    $costedQty += $source['cantidad'];
+                    $lineCostCents += DecimalMoney::multiplyCostByQuantity(
+                        DecimalMoney::costUnits($source['costo']),
+                        $source['cantidad']
+                    );
                 }
 
                 $costState = 'sin_costear';
                 $lineProfitCents = 0;
-                if ($returnedQty > 0 && $netQty > 0) {
-                    $knownCosts = collect($sources)
-                        ->filter(fn ($source) => $source['costo'] !== null)
-                        ->pluck('costo')
-                        ->unique()
-                        ->values();
-                    if ($knownCosts->count() > 1) {
-                        $hasAmbiguousReturn = true;
-                        $costState = 'ambiguo_devolucion';
-                    } elseif ($costedQty >= $soldQty && $knownCosts->count() === 1) {
-                        $singleCost = DecimalMoney::costUnits($knownCosts->first());
-                        $lineCostCents = DecimalMoney::multiplyCostByQuantity($singleCost, $netQty);
-                        $costedQty = $netQty;
-                        $costState = 'costeada';
-                    } else {
-                        $allCosted = false;
-                        $costState = $costedQty > 0 ? 'parcial' : 'sin_costear';
-                        if ($knownCosts->count() === 1) {
-                            $costedQty = min($costedQty, $netQty);
-                            $lineCostCents = DecimalMoney::multiplyCostByQuantity(
-                                DecimalMoney::costUnits($knownCosts->first()),
-                                $costedQty
-                            );
-                        } else {
-                            $hasAmbiguousReturn = true;
-                        }
-                    }
-                } elseif ($costedQty >= $netQty && $netQty > 0) {
+                $mappedReturnedQty = DecimalMoney::quantityHundredths(
+                    $returnedMappedByDetail->get($detalle->id)?->cantidad ?? 0
+                );
+                $unmappedReturnedQty = max(0, $returnedQty - $mappedReturnedQty);
+                $returnMappingInconsistent = $returnSourceInconsistent
+                    || $returnedFromAssignments !== $mappedReturnedQty
+                    || $mappedReturnedQty > $returnedQty;
+
+                if (
+                    $assignedQty > 0
+                    && ($unmappedReturnedQty > 0 || $returnMappingInconsistent)
+                ) {
+                    $hasAmbiguousReturn = true;
+                    $allCosted = false;
+                    $costState = 'ambiguo_devolucion';
+                    $costedQty = 0;
+                    $lineCostCents = 0;
+                } elseif ($returnedQty > $soldQty || $assignedQty > $soldQty) {
+                    $allCosted = false;
+                    $costState = 'inconsistente';
+                    $costedQty = 0;
+                    $lineCostCents = 0;
+                } elseif ($netQty === 0) {
                     $costState = 'costeada';
+                } elseif (
+                    $assignedQty - $returnedFromAssignments === $netQty
+                    && $costedQty === $netQty
+                    && !$hasUncostedRemainingSource
+                ) {
+                    $costState = 'costeada';
+                    $lineIncomeCents = DecimalMoney::multiplyCentsByQuantity(
+                        DecimalMoney::cents($detalle->precio_unitario),
+                        $netQty
+                    );
+                    $lineProfitCents = $lineIncomeCents - $lineCostCents;
+                    $profitKnownCents += $lineProfitCents;
                 } elseif ($costedQty > 0) {
                     $allCosted = false;
                     $costState = 'parcial';
-                } else {
-                    $allCosted = false;
-                }
-
-                if ($costedQty > $netQty && $returnedQty === 0) {
-                    $costState = 'inconsistente';
-                    $allCosted = false;
-                }
-
-                $usableQty = min($netQty, $costedQty);
-                if ($costState === 'costeada' && $netQty > 0) {
-                    $usableQty = $netQty;
-                    $costCents += $lineCostCents;
-                } elseif ($usableQty > 0 && $returnedQty === 0) {
-                    $lineCostCents = $this->capCostToQuantity($sources, $usableQty);
-                    $costCents += $lineCostCents;
-                }
-
-                if ($usableQty > 0 && $costState !== 'ambiguo_devolucion' && $costState !== 'inconsistente') {
+                    $usableQty = min($netQty, $costedQty);
                     $lineIncomeCents = DecimalMoney::multiplyCentsByQuantity(
                         DecimalMoney::cents($detalle->precio_unitario),
                         $usableQty
                     );
-                    $profitKnownCents += $lineIncomeCents - $lineCostCents;
                     $lineProfitCents = $lineIncomeCents - $lineCostCents;
+                    $profitKnownCents += $lineProfitCents;
+                } else {
+                    $allCosted = false;
+                }
+
+                if ($costState === 'costeada' && $netQty > 0) {
+                    $costCents += $lineCostCents;
+                } elseif ($costState === 'parcial') {
+                    $costCents += $lineCostCents;
                 }
 
                 if ($costState !== 'costeada' || $crossCompanyCost) {
@@ -589,21 +606,4 @@ class UtilidadVentaService
         return $base === null ? null : (string) $base;
     }
 
-    private function capCostToQuantity(array $sources, int $quantityHundredths): int
-    {
-        $remaining = $quantityHundredths;
-        $total = 0;
-        foreach ($sources as $source) {
-            if ($source['costo'] === null || $remaining <= 0) {
-                continue;
-            }
-            $take = min($remaining, $source['cantidad']);
-            $total += DecimalMoney::multiplyCostByQuantity(
-                DecimalMoney::costUnits($source['costo']),
-                $take
-            );
-            $remaining -= $take;
-        }
-        return $total;
-    }
 }
