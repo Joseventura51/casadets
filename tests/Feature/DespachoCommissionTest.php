@@ -2,19 +2,26 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\SaldoFavorController;
 use App\Models\Caja;
+use App\Models\Cliente;
 use App\Models\CompraVentaDetalle;
 use App\Models\Devolucion;
 use App\Models\DevolucionDetalle;
+use App\Models\SaldoFavor;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Models\Vendedor;
+use App\Services\CobranzaService;
+use App\Services\ComisionLedgerService;
 use App\Services\DespachoService;
 use App\Services\RegularizacionCostoService;
 use App\Services\UtilidadVentaService;
 use App\Support\DecimalMoney;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -220,6 +227,175 @@ class DespachoCommissionTest extends TestCase
             (string) \Illuminate\Support\Str::uuid(),
             null
         );
+    }
+
+    public function test_credit_note_balance_completes_a_paid_dispatched_sale_without_cash_or_duplicate_commission(): void
+    {
+        [$venta, $detalle, $asignacion] = $this->ventaCosteadaPagada('2026-11-08', '0.00');
+        $cliente = Cliente::create([
+            'nombre' => 'Cliente NC de prueba',
+            'documento' => 'NC-TEST-001',
+            'activo' => true,
+        ]);
+        $venta->update(['cliente_id' => $cliente->id]);
+
+        app(DespachoService::class)->registrar(
+            $venta,
+            [$detalle->id => '2.00'],
+            [$detalle->id => [$asignacion->id => '2.00']],
+            (string) Str::uuid(),
+            null
+        );
+        app(CobranzaService::class)->registrarPago(
+            $venta->fresh(),
+            [['metodo' => 'efectivo', 'monto' => '100.00']],
+            null,
+            null,
+            'casadets'
+        );
+        $this->assertSame(0, DB::table('comision_movimientos')->where('venta_id', $venta->id)->count());
+
+        $saldo = $this->convertirNotaCreditoEnSaldo($venta, $cliente, 'NC-TEST-001');
+        $resultado = app(CobranzaService::class)->aplicarSaldoFavor($saldo, $venta->fresh(), 100.00);
+
+        $this->assertSame(100.0, $resultado['aplicado']);
+        $this->assertSame('200.00', $venta->fresh()->pagado);
+        $this->assertSame('pagado', $venta->fresh()->estado);
+        $this->assertSame(1, DB::table('movimientos')->where('tipo', 'ingreso')->count());
+        $this->assertSame(10000, DecimalMoney::cents(
+            DB::table('movimientos')->where('tipo', 'ingreso')->sum('monto')
+        ));
+        $this->assertSame(1, DB::table('movimientos')
+            ->where('tipo', 'contable')
+            ->where('subtipo', 'saldo_favor_usado')
+            ->count());
+
+        app(ComisionLedgerService::class)->sincronizarVenta($venta->fresh());
+        $movimientos = DB::table('comision_movimientos')->where('venta_id', $venta->id)->get();
+        $this->assertCount(1, $movimientos);
+        $this->assertSame('10.00', DecimalMoney::formatCents(DecimalMoney::cents($movimientos[0]->importe)));
+        $this->assertSame(5000, DecimalMoney::scaledInt($movimientos[0]->porcentaje, 2));
+        $this->assertSame('2026-11-08', $movimientos[0]->fecha_origen);
+    }
+
+    public function test_credit_note_application_uses_adjusted_amount_due(): void
+    {
+        [$venta] = $this->ventaCosteadaPagada('2026-11-09', '0.00');
+        $cliente = Cliente::create([
+            'nombre' => 'Cliente con ajuste',
+            'documento' => 'AJUSTE-TEST-001',
+            'activo' => true,
+        ]);
+        $venta->update([
+            'cliente_id' => $cliente->id,
+            'ajuste' => '10.00',
+        ]);
+
+        app(CobranzaService::class)->registrarPago(
+            $venta->fresh(),
+            [['metodo' => 'efectivo', 'monto' => '110.00']],
+            null,
+            null,
+            'casadets'
+        );
+        $pendiente = app(CobranzaService::class)
+            ->ventasPendientesCliente($cliente->id)
+            ->firstWhere('id', $venta->id);
+        $this->assertSame(100.0, $pendiente->saldo_pendiente);
+
+        $saldo = $this->convertirNotaCreditoEnSaldo($venta, $cliente, 'NC-AJUSTE-001');
+        $resultado = app(CobranzaService::class)->aplicarSaldoFavor($saldo, $venta->fresh(), 100.00);
+
+        $this->assertSame(100.0, $resultado['aplicado']);
+        $this->assertSame('210.00', $venta->fresh()->pagado);
+        $this->assertSame('pagado', $venta->fresh()->estado);
+    }
+
+    public function test_unknown_historical_dispatch_cost_waits_for_regularization_and_is_idempotent(): void
+    {
+        [$venta, $detalle, $asignacion] = $this->ventaCosteadaPagada('2026-11-08');
+        DB::table('compra_venta_detalle')->where('id', $asignacion->id)->update([
+            'costo_unitario' => null,
+            'costo_total' => null,
+        ]);
+
+        $despachoId = DB::table('despachos')->insertGetId([
+            'venta_id' => $venta->id,
+            'idempotency_key' => (string) Str::uuid(),
+            'fecha_hora' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $despachoDetalleId = DB::table('despacho_detalles')->insertGetId([
+            'despacho_id' => $despachoId,
+            'venta_detalle_id' => $detalle->id,
+            'cantidad' => '2.00',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('despacho_detalle_costos')->insert([
+            'despacho_detalle_id' => $despachoDetalleId,
+            'compra_venta_detalle_id' => $asignacion->id,
+            'cantidad' => '2.00',
+            'created_at' => now(),
+        ]);
+
+        app(ComisionLedgerService::class)->sincronizarVenta($venta);
+        $this->assertNull(DB::table('compra_venta_detalle')
+            ->where('id', $asignacion->id)
+            ->value('costo_unitario'));
+        $this->assertSame(0, DB::table('comision_movimientos')->where('venta_id', $venta->id)->count());
+
+        $key = (string) Str::uuid();
+        $service = app(RegularizacionCostoService::class);
+        $regularizacion = $service->regularizar(
+            $asignacion->id,
+            '10.0000',
+            $key,
+            'Factura real',
+            'Costo confirmado'
+        );
+        $repetida = $service->regularizar(
+            $asignacion->id,
+            '10.0000',
+            $key,
+            'Factura real',
+            'Costo confirmado'
+        );
+
+        $this->assertSame($regularizacion->id, $repetida->id);
+        $this->assertNull($regularizacion->costo_anterior);
+        $this->assertSame(1, DB::table('regularizaciones_costo')
+            ->where('compra_venta_detalle_id', $asignacion->id)
+            ->count());
+        $movimientos = DB::table('comision_movimientos')->where('venta_id', $venta->id)->get();
+        $this->assertCount(1, $movimientos);
+        $this->assertSame('10.00', DecimalMoney::formatCents(DecimalMoney::cents($movimientos[0]->importe)));
+        $this->assertSame(5000, DecimalMoney::scaledInt($movimientos[0]->porcentaje, 2));
+        $this->assertSame('2026-11-08', $movimientos[0]->fecha_origen);
+    }
+
+    private function convertirNotaCreditoEnSaldo(Venta $venta, Cliente $cliente, string $numero): SaldoFavor
+    {
+        $notaCredito = Venta::create([
+            'vendedor_id' => $venta->vendedor_id,
+            'caja_id' => $venta->caja_id,
+            'cliente_id' => $cliente->id,
+            'total' => '-100.00',
+            'ajuste' => '0.00',
+            'pagado' => '0.00',
+            'documento_tipo' => 'nota_credito',
+            'documento_numero' => $numero,
+            'fecha' => '2026-11-09',
+            'estado' => 'pagado',
+            'es_referencia_fiscal' => false,
+        ]);
+
+        app(SaldoFavorController::class)->convertirNC(Request::create('/'), $notaCredito);
+
+        return SaldoFavor::query()
+            ->where('venta_origen_id', $notaCredito->id)
+            ->firstOrFail();
     }
 
     private function ventaCosteadaPagada(string $fecha, string $pagado = '200.00'): array
