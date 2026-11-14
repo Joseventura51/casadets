@@ -469,7 +469,7 @@ class CobranzaService
             }
 
             $disponible = (float) $saldo->monto_disponible;
-            $deuda      = max(0.0, (float) bcsub((string) $venta->total, (string) $venta->pagado, 2));
+            $deuda      = max(0.0, (float) bcsub((string) $venta->total_a_cobrar, (string) $venta->pagado, 2));
             $aplicar    = round(min($monto, $disponible, $deuda), 2);
 
             if ($aplicar <= 0) {
@@ -565,11 +565,14 @@ class CobranzaService
     {
         return Venta::where('cliente_id', $clienteId)
             ->whereIn('estado', ['pendiente', 'parcial'])
-            ->select('id', 'fecha', 'total', 'pagado', 'documento_tipo', 'documento_numero', 'estado')
+            ->select('id', 'fecha', 'total', 'ajuste', 'pagado', 'documento_tipo', 'documento_numero', 'estado')
             ->orderBy('fecha', 'asc')
             ->get()
             ->map(function ($v) {
-                $v->saldo_pendiente = (float) bcsub((string) $v->total, (string) $v->pagado, 2);
+                $v->saldo_pendiente = max(
+                    0,
+                    (float) bcsub((string) $v->total_a_cobrar, (string) $v->pagado, 2)
+                );
                 return $v;
             });
     }
